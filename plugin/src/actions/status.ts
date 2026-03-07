@@ -56,12 +56,12 @@ export class StatusAction extends SingletonAction {
     await this.updateAll(bridgeClientRef.getConnectionStatus(), bridgeClientRef.getLastSnapshot());
 
     // Subscribe to changes
-    this.unsubConnection = bridgeClientRef.onConnectionChange(async (status) => {
-      await this.updateAll(status, bridgeClientRef!.getLastSnapshot());
+    this.unsubConnection = bridgeClientRef.onConnectionChange((status) => {
+      this.updateAll(status, bridgeClientRef!.getLastSnapshot()).catch(() => {});
     });
 
-    this.unsubState = bridgeClientRef.onStateChange(async (snapshot) => {
-      await this.updateAll(bridgeClientRef!.getConnectionStatus(), snapshot);
+    this.unsubState = bridgeClientRef.onStateChange((snapshot) => {
+      this.updateAll(bridgeClientRef!.getConnectionStatus(), snapshot).catch(() => {});
     });
   }
 
@@ -89,8 +89,12 @@ export class StatusAction extends SingletonAction {
 
     // Update all visible instances of this action
     for (const instance of this.actions) {
-      await instance.setImage(imageData);
-      await instance.setTitle(title);
+      try {
+        await instance.setImage(imageData);
+        await instance.setTitle(title);
+      } catch {
+        // SDK may throw if the action disappeared mid-render; safe to ignore.
+      }
     }
   }
 }

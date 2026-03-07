@@ -40,12 +40,12 @@ export class ApproveAction extends SingletonAction {
 
     await this.render(bridgeRef.getConnectionStatus(), bridgeRef.getLastSnapshot());
 
-    this.unsubConnection = bridgeRef.onConnectionChange(async (status) => {
-      await this.render(status, bridgeRef!.getLastSnapshot());
+    this.unsubConnection = bridgeRef.onConnectionChange((status) => {
+      this.render(status, bridgeRef!.getLastSnapshot()).catch(() => {});
     });
 
-    this.unsubState = bridgeRef.onStateChange(async (snapshot) => {
-      await this.render(bridgeRef!.getConnectionStatus(), snapshot);
+    this.unsubState = bridgeRef.onStateChange((snapshot) => {
+      this.render(bridgeRef!.getConnectionStatus(), snapshot).catch(() => {});
     });
   }
 
@@ -69,8 +69,12 @@ export class ApproveAction extends SingletonAction {
     const imageData = `data:image/svg+xml,${encodeURIComponent(svg)}`;
 
     for (const instance of this.actions) {
-      await instance.setImage(imageData);
-      await instance.setTitle(active ? "Approve" : "");
+      try {
+        await instance.setImage(imageData);
+        await instance.setTitle(active ? "Approve" : "");
+      } catch {
+        // SDK may throw if the action disappeared mid-render; safe to ignore.
+      }
     }
   }
 }

@@ -73,7 +73,7 @@ export class BridgeClient {
       console.log(`[bridge] state: ${snapshot.state} (event=${snapshot.lastEvent})`);
       this.lastSnapshot = snapshot;
       for (const listener of this.stateListeners) {
-        listener(snapshot);
+        try { listener(snapshot); } catch { /* listener errors must not crash the client */ }
       }
     });
 
@@ -81,7 +81,7 @@ export class BridgeClient {
       console.log(`[bridge] config: ${config.macros.length} macros`);
       this.lastConfig = config;
       for (const listener of this.configListeners) {
-        listener(config);
+        try { listener(config); } catch { /* listener errors must not crash the client */ }
       }
     });
   }
@@ -137,7 +137,7 @@ export class BridgeClient {
     if (status !== this.connectionStatus) {
       this.connectionStatus = status;
       for (const listener of this.connectionListeners) {
-        listener(status);
+        try { listener(status); } catch { /* listener errors must not crash the client */ }
       }
     }
   }

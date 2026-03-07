@@ -74,20 +74,20 @@ export class SlotAction extends SingletonAction {
 
     // Subscribe to changes (only once — first instance sets up listeners)
     if (!this.unsubConnection) {
-      this.unsubConnection = bridgeRef.onConnectionChange(async (status) => {
-        await this.renderAll(status, bridgeRef!.getLastSnapshot());
+      this.unsubConnection = bridgeRef.onConnectionChange((status) => {
+        this.renderAll(status, bridgeRef!.getLastSnapshot()).catch(() => {});
       });
     }
 
     if (!this.unsubState) {
-      this.unsubState = bridgeRef.onStateChange(async (snapshot) => {
-        await this.renderAll(bridgeRef!.getConnectionStatus(), snapshot);
+      this.unsubState = bridgeRef.onStateChange((snapshot) => {
+        this.renderAll(bridgeRef!.getConnectionStatus(), snapshot).catch(() => {});
       });
     }
 
     if (!this.unsubConfig) {
-      this.unsubConfig = bridgeRef.onConfigChange(async () => {
-        await this.renderAll(bridgeRef!.getConnectionStatus(), bridgeRef!.getLastSnapshot());
+      this.unsubConfig = bridgeRef.onConfigChange(() => {
+        this.renderAll(bridgeRef!.getConnectionStatus(), bridgeRef!.getLastSnapshot()).catch(() => {});
       });
     }
   }
@@ -156,8 +156,12 @@ export class SlotAction extends SingletonAction {
       const config = getSlotConfig(state, rank, toolName, macros);
       const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
 
-      await instance.setImage(imageData);
-      await instance.setTitle("");
+      try {
+        await instance.setImage(imageData);
+        await instance.setTitle("");
+      } catch {
+        // SDK may throw if the action disappeared mid-render; safe to ignore.
+      }
     }
   }
 }
