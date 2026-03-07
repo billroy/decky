@@ -36,7 +36,7 @@ Decky has two parts: a **bridge server** and a **StreamDeck plugin**.
 
 | State | Deck shows | Available actions |
 |---|---|---|
-| **idle** | Macro buttons (up to 6) | Press to inject text into Claude |
+| **idle** | Macro buttons (up to 36) | Press to inject text into selected app |
 | **thinking** | Thinking indicator + Stop | Stop |
 | **awaiting-approval** | Approve, Deny, Cancel, tool name | Approve / Deny / Cancel |
 | **tool-executing** | Stop + tool name | Stop |
@@ -48,7 +48,7 @@ When Claude Code wants to run a tool, the `PreToolUse` hook fires and the bridge
 
 ### Macros
 
-In the idle state, the deck shows up to 6 configurable text macros. Press one and the text is typed into Claude via the clipboard (pbcopy + Cmd+V). The default macros are: Continue, Yes, No, Stop & Think, Summarize, Make it so.
+In the idle state, the deck shows up to 36 configurable text macros. Press one and the text is typed into the selected target app via the clipboard (pbcopy + Cmd+V). Supported targets are Claude, Codex, ChatGPT, Cursor, and Windsurf.
 
 Edit macros in the Stream Deck app by selecting a Decky Slot button and using the Property Inspector, or edit `~/.decky/config.json` directly.
 
@@ -59,16 +59,20 @@ Config lives at `~/.decky/config.json` (created with defaults on first run):
 ```json
 {
   "macros": [
-    { "label": "Continue", "text": "Continue" },
-    { "label": "Yes", "text": "Yes" },
-    { "label": "No", "text": "No" }
+    { "label": "Continue", "text": "Continue", "targetApp": "claude" },
+    { "label": "Ship", "text": "Ship it", "targetApp": "codex" }
   ],
-  "approvalTimeout": 30
+  "approvalTimeout": 30,
+  "defaultTargetApp": "claude",
+  "showTargetBadge": false
 }
 ```
 
-- **macros**: Up to 6 entries. `label` shows on the button, `text` is sent to Claude.
+- **macros**: Up to 36 entries. `label` shows on the button, `text` is sent to the selected app.
+- **macro.targetApp**: Optional per-macro target override (`claude`, `codex`, `chatgpt`, `cursor`, `windsurf`).
 - **approvalTimeout**: Seconds the hook waits for a button press before auto-approving (default 30).
+- **defaultTargetApp**: Global default target used when a macro has no explicit `targetApp`.
+- **showTargetBadge**: Toggle compact 3-letter target badges on macro icons (for example `CLD`, `CDX`).
 
 ## Development
 

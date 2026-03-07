@@ -56,6 +56,12 @@
       outline: none;
       border-color: rgba(100,160,255,0.5);
     }
+    .setting-row input[type="checkbox"] {
+      flex: 0 0 auto;
+      width: auto;
+      margin: 0;
+      accent-color: #3b82f6;
+    }
     .setting-row select {
       cursor: pointer;
     }
@@ -337,6 +343,20 @@
       <input type="number" id="timeout" min="5" max="300" step="5" />
     </div>
     <div class="setting-hint">Auto-deny tool requests after this many seconds</div>
+    <div class="setting-row">
+      <label>Default target</label>
+      <select id="default-target">
+        <option value="claude">Claude</option>
+        <option value="codex">Codex</option>
+        <option value="chatgpt">ChatGPT</option>
+        <option value="cursor">Cursor</option>
+        <option value="windsurf">Windsurf</option>
+      </select>
+    </div>
+    <div class="setting-row">
+      <label>Target badge</label>
+      <input type="checkbox" id="show-target-badge" />
+    </div>
   </div>
 
   <hr />
@@ -391,6 +411,14 @@
       { value: "rocket", label: "\u2500 Rocket" },
       { value: "thumbs-up", label: "\u2500 Thumbs Up" },
     ];
+    const TARGETS = [
+      { value: "", label: "Use default" },
+      { value: "claude", label: "Claude (CLD)" },
+      { value: "codex", label: "Codex (CDX)" },
+      { value: "chatgpt", label: "ChatGPT (CGP)" },
+      { value: "cursor", label: "Cursor (CSR)" },
+      { value: "windsurf", label: "Windsurf (WDF)" },
+    ];
     const COLOR_PALETTE = [
       { value: "", label: "None" },
       { value: "#0f172a", label: "Dark Navy" },
@@ -403,7 +431,13 @@
       { value: "#64748b", label: "Slate" },
     ];
     let macros = [];
-    let settings = { theme: "light", editor: "", approvalTimeout: 30 };
+    let settings = {
+      theme: "light",
+      editor: "",
+      approvalTimeout: 30,
+      defaultTargetApp: "claude",
+      showTargetBadge: false,
+    };
     let defaultColors = { bg: "", text: "", icon: "" };
     let configLoaded = false;
     const client = SDPIComponents.streamDeckClient;
@@ -416,12 +450,15 @@
             label: m.label || "",
             text: m.text || "",
             icon: m.icon || "",
+            targetApp: m.targetApp || "",
             colors: { bg: (m.colors && m.colors.bg) || "", text: (m.colors && m.colors.text) || "", icon: (m.colors && m.colors.icon) || "" },
           }));
         }
         settings.theme = msg.theme || "light";
         if (msg.editor !== undefined) settings.editor = msg.editor || "";
         if (msg.approvalTimeout !== undefined) settings.approvalTimeout = msg.approvalTimeout;
+        if (msg.defaultTargetApp) settings.defaultTargetApp = msg.defaultTargetApp;
+        if (msg.showTargetBadge !== undefined) settings.showTargetBadge = !!msg.showTargetBadge;
         if (msg.colors) {
           defaultColors.bg = msg.colors.bg || "";
           defaultColors.text = msg.colors.text || "";
@@ -432,6 +469,8 @@
         document.getElementById("theme").value = settings.theme;
         document.getElementById("editor").value = settings.editor;
         document.getElementById("timeout").value = settings.approvalTimeout;
+        document.getElementById("default-target").value = settings.defaultTargetApp;
+        document.getElementById("show-target-badge").checked = settings.showTargetBadge;
         document.getElementById("btn-save").disabled = false;
         var connEl = document.getElementById("conn-status");
         connEl.textContent = "Connected to bridge";
@@ -497,6 +536,16 @@
         const iconOptions = ICONS.map(
           (ic) => '<option value="' + esc(ic.value) + '"' + (macro.icon === ic.value ? " selected" : "") + ">" + esc(ic.label) + "</option>"
         ).join("");
+        const targetOptions = TARGETS.map(
+          (target) =>
+            '<option value="' +
+            esc(target.value) +
+            '"' +
+            ((macro.targetApp || "") === target.value ? " selected" : "") +
+            ">" +
+            esc(target.label) +
+            "</option>"
+        ).join("");
 
         item.innerHTML =
           '<div class="header">' +
@@ -514,6 +563,10 @@
             '<div class="field-group icon-group">' +
               "<label>Icon</label>" +
               '<select data-field="icon" data-index="' + i + '">' + iconOptions + "</select>" +
+            "</div>" +
+            '<div class="field-group icon-group">' +
+              "<label>Target</label>" +
+              '<select data-field="targetApp" data-index="' + i + '">' + targetOptions + "</select>" +
             "</div>" +
           "</div>" +
           "<label>Text to send</label>" +
@@ -659,12 +712,15 @@
         macros: macros.map(function (m) {
           var o = { label: m.label, text: m.text };
           if (m.icon) o.icon = m.icon;
+          if (m.targetApp) o.targetApp = m.targetApp;
           if (m.colors && (m.colors.bg || m.colors.text || m.colors.icon)) o.colors = m.colors;
           return o;
         }),
         theme: document.getElementById("theme").value,
         editor: document.getElementById("editor").value,
         approvalTimeout: parseInt(document.getElementById("timeout").value) || 30,
+        defaultTargetApp: document.getElementById("default-target").value,
+        showTargetBadge: document.getElementById("show-target-badge").checked,
       };
       if (defaultColors.bg || defaultColors.text || defaultColors.icon) {
         payload.colors = defaultColors;
@@ -676,7 +732,7 @@
     // --- Add macro ---
     document.getElementById("btn-add").addEventListener("click", function () {
       if (macros.length < MAX_MACROS) {
-        macros.push({ label: "", text: "", icon: "", colors: { bg: "", text: "", icon: "" } });
+        macros.push({ label: "", text: "", icon: "", targetApp: "", colors: { bg: "", text: "", icon: "" } });
         renderMacros();
         // Scroll to bottom
         var list = document.getElementById("macro-list");
