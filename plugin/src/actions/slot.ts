@@ -130,13 +130,16 @@ export class SlotAction extends SingletonAction {
   }
 
   override async onPropertyInspectorDidAppear(_ev: PropertyInspectorDidAppearEvent): Promise<void> {
-    // Send immediately (may be lost if PI hasn't subscribed yet)
     await this.sendConfigSnapshot();
-    // Retry after a short delay to cover the PI initialization race
-    setTimeout(() => { this.sendConfigSnapshot().catch(() => {}); }, 200);
   }
 
   private async sendConfigSnapshot(): Promise<void> {
+    // Wait for the SDK's UIController to have the PI action reference;
+    // without it, sendToPropertyInspector silently drops the message.
+    for (let i = 0; i < 20 && !streamDeck.ui.action; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+
     const cfg = bridgeRef?.getLastConfig();
     const macros = cfg?.macros ?? [];
     const snapshot: Record<string, unknown> = {
