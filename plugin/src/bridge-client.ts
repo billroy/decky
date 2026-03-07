@@ -15,10 +15,17 @@ export interface StateSnapshot {
   timestamp: number;
 }
 
+export interface ColorOverrides {
+  bg?: string;
+  text?: string;
+  icon?: string;
+}
+
 export interface MacroDef {
   label: string;
   text: string;
   icon?: string;
+  colors?: ColorOverrides;
 }
 
 export interface DeckyConfig {
@@ -26,6 +33,7 @@ export interface DeckyConfig {
   approvalTimeout: number;
   theme: "light" | "dark";
   editor?: string;
+  colors?: ColorOverrides;
 }
 
 export type ConnectionStatus = "connected" | "disconnected" | "connecting";

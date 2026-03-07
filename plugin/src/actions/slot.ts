@@ -19,7 +19,7 @@ import streamDeck, {
 import type { JsonValue, JsonObject } from "@elgato/utils";
 import { exec } from "node:child_process";
 import { type BridgeClient, type ConnectionStatus, type StateSnapshot } from "../bridge-client.js";
-import { getSlotConfig, setTheme, type MacroInput } from "../layouts.js";
+import { getSlotConfig, setTheme, setDefaultColors, type MacroInput } from "../layouts.js";
 
 let bridgeRef: BridgeClient | null = null;
 
@@ -119,7 +119,7 @@ export class SlotAction extends SingletonAction {
     const config = getSlotConfig(state, rank, snapshot?.tool, macros);
 
     if (config.action === "openConfig") {
-      const editor = bridgeRef.getLastConfig()?.editor ?? "open";
+      const editor = bridgeRef.getLastConfig()?.editor ?? "bbedit";
       exec(`${editor} ~/.decky/config.json`);
       return;
     }
@@ -130,25 +130,41 @@ export class SlotAction extends SingletonAction {
   }
 
   override async onPropertyInspectorDidAppear(_ev: PropertyInspectorDidAppearEvent): Promise<void> {
+    await this.sendConfigSnapshot();
+  }
+
+  private async sendConfigSnapshot(): Promise<void> {
     const cfg = bridgeRef?.getLastConfig();
     const macros = cfg?.macros ?? [];
-    await streamDeck.ui.sendToPropertyInspector({
+    const snapshot: Record<string, unknown> = {
       type: "configSnapshot",
-      macros: macros.map((m) => ({ label: m.label, text: m.text, icon: m.icon })),
+      macros: macros.map((m) => {
+        const entry: Record<string, unknown> = { label: m.label, text: m.text, icon: m.icon };
+        if (m.colors) entry.colors = m.colors;
+        return entry;
+      }),
       theme: cfg?.theme ?? "light",
-      editor: cfg?.editor ?? "",
+      editor: cfg?.editor ?? "bbedit",
       approvalTimeout: cfg?.approvalTimeout ?? 30,
-    });
+    };
+    if (cfg?.colors) snapshot.colors = cfg.colors;
+    await streamDeck.ui.sendToPropertyInspector(snapshot as JsonObject);
   }
 
   override async onSendToPlugin(ev: SendToPluginEvent<JsonValue, JsonObject>): Promise<void> {
     const payload = ev.payload as Record<string, unknown>;
+    if (payload?.type === "piReady") {
+      // PI is ready to receive — send the config snapshot now
+      await this.sendConfigSnapshot();
+      return;
+    }
     if (payload?.type === "updateConfig") {
       const update: Record<string, unknown> = {};
       if (Array.isArray(payload.macros)) update.macros = payload.macros;
       if (typeof payload.theme === "string") update.theme = payload.theme;
       if (typeof payload.editor === "string") update.editor = payload.editor;
       if (typeof payload.approvalTimeout === "number") update.approvalTimeout = payload.approvalTimeout;
+      if (payload.colors && typeof payload.colors === "object") update.colors = payload.colors;
       bridgeRef?.sendAction("updateConfig", update);
     }
   }
@@ -156,8 +172,14 @@ export class SlotAction extends SingletonAction {
   private getMacros(): MacroInput[] | undefined {
     const cfg = bridgeRef?.getLastConfig();
     if (cfg?.theme) setTheme(cfg.theme);
+    if (cfg?.colors) setDefaultColors(cfg.colors);
     if (!cfg?.macros?.length) return undefined;
-    return cfg.macros.map((m) => ({ label: m.label, text: m.text, icon: m.icon }));
+    return cfg.macros.map((m) => ({
+      label: m.label,
+      text: m.text,
+      icon: m.icon,
+      colors: m.colors,
+    }));
   }
 
   private async renderAll(connStatus: ConnectionStatus, snapshot: StateSnapshot | null): Promise<void> {

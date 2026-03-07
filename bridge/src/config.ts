@@ -9,17 +9,25 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
+export interface ColorOverrides {
+  bg?: string;
+  text?: string;
+  icon?: string;
+}
+
 export interface MacroDef {
   label: string;
   text: string;
   icon?: string;
+  colors?: ColorOverrides;
 }
 
 export interface DeckyConfig {
   macros: MacroDef[];
   approvalTimeout: number;
   theme: "light" | "dark";
-  editor?: string;
+  editor: string;
+  colors?: ColorOverrides;
 }
 
 const DECKY_DIR = join(homedir(), ".decky");
@@ -40,6 +48,7 @@ const DEFAULT_CONFIG: DeckyConfig = {
   ],
   approvalTimeout: 30,
   theme: "light",
+  editor: "bbedit",
 };
 
 let currentConfig: DeckyConfig = { ...DEFAULT_CONFIG };
@@ -65,6 +74,7 @@ export function loadConfig(): DeckyConfig {
     const parsed = JSON.parse(raw) as Partial<DeckyConfig>;
 
     const raw_obj = parsed as Record<string, unknown>;
+    const colors = raw_obj.colors as ColorOverrides | undefined;
     currentConfig = {
       macros: Array.isArray(parsed.macros) ? parsed.macros : DEFAULT_CONFIG.macros,
       approvalTimeout:
@@ -72,14 +82,15 @@ export function loadConfig(): DeckyConfig {
           ? parsed.approvalTimeout
           : DEFAULT_CONFIG.approvalTimeout,
       theme: raw_obj.theme === "dark" ? "dark" : "light",
-      ...(typeof raw_obj.editor === "string" ? { editor: raw_obj.editor } : {}),
+      editor: typeof raw_obj.editor === "string" ? raw_obj.editor : DEFAULT_CONFIG.editor,
+      ...(colors && typeof colors === "object" ? { colors } : {}),
     };
 
     console.log(`[config] loaded ${currentConfig.macros.length} macros from ${CONFIG_PATH}`);
     return currentConfig;
   } catch (err) {
     console.error(`[config] failed to parse config, using defaults:`, err);
-    currentConfig = { ...DEFAULT_CONFIG, theme: "light" };
+    currentConfig = { ...DEFAULT_CONFIG };
     return currentConfig;
   }
 }
@@ -106,7 +117,8 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
         ? update.approvalTimeout
         : currentConfig.approvalTimeout,
     theme: update_obj.theme === "dark" ? "dark" : update_obj.theme === "light" ? "light" : currentConfig.theme,
-    ...(typeof update_obj.editor === "string" ? { editor: update_obj.editor } : currentConfig.editor ? { editor: currentConfig.editor } : {}),
+    editor: typeof update_obj.editor === "string" ? update_obj.editor : currentConfig.editor,
+    ...(update.colors ? { colors: update.colors } : currentConfig.colors ? { colors: currentConfig.colors } : {}),
   };
 
   writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), "utf-8");

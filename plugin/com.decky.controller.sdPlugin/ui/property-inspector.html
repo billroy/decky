@@ -113,7 +113,7 @@
       flex: 1;
     }
     .field-group.icon-group {
-      flex: 0 0 80px;
+      flex: 0 0 110px;
     }
     .macro-item label {
       display: block;
@@ -189,6 +189,109 @@
       background: rgba(239,68,68,0.25);
     }
 
+    /* --- Connection status --- */
+    .conn-status {
+      font-size: 10px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    .conn-status.connected {
+      background: rgba(34,197,94,0.15);
+      color: #86efac;
+    }
+    .conn-status.disconnected {
+      background: rgba(239,68,68,0.15);
+      color: #fca5a5;
+    }
+
+    /* --- Setting hints --- */
+    .setting-hint {
+      font-size: 9px;
+      color: #555;
+      margin: -2px 0 6px 98px;
+    }
+
+    /* --- Color swatches --- */
+    .color-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 4px;
+    }
+    .color-row label {
+      font-size: 10px;
+      color: #666;
+      min-width: 28px;
+      flex-shrink: 0;
+    }
+    .swatch-group {
+      display: flex;
+      gap: 3px;
+      align-items: center;
+    }
+    .swatch {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      border: 2px solid transparent;
+      cursor: pointer;
+      transition: border-color 0.15s;
+      box-sizing: border-box;
+    }
+    .swatch:hover {
+      border-color: rgba(255,255,255,0.4);
+    }
+    .swatch.selected {
+      border-color: rgba(100,160,255,0.8);
+    }
+    .swatch.none {
+      background: repeating-conic-gradient(#444 0% 25%, #222 0% 50%) 50%/8px 8px;
+      position: relative;
+    }
+    .swatch.none::after {
+      content: "\u00D7";
+      position: absolute;
+      top: -1px;
+      left: 3px;
+      font-size: 12px;
+      color: #888;
+    }
+    .color-section {
+      margin-bottom: 6px;
+    }
+    .color-section h4 {
+      font-size: 10px;
+      color: #777;
+      margin: 0 0 4px 0;
+      font-weight: normal;
+    }
+    .macro-colors-toggle {
+      font-size: 9px;
+      color: #557;
+      cursor: pointer;
+      user-select: none;
+      margin-top: 2px;
+    }
+    .macro-colors-toggle:hover {
+      color: #88a;
+    }
+    .macro-colors-panel {
+      margin-top: 4px;
+      padding: 4px;
+      background: rgba(0,0,0,0.15);
+      border-radius: 4px;
+    }
+
+    /* --- Macro help --- */
+    .macro-help {
+      font-size: 10px;
+      color: #666;
+      margin-bottom: 8px;
+      line-height: 1.4;
+    }
+
     /* --- Status --- */
     .status {
       font-size: 10px;
@@ -205,6 +308,9 @@
   </style>
 </head>
 <body>
+  <!-- Connection status -->
+  <div id="conn-status" class="conn-status disconnected">Waiting for bridge...</div>
+
   <!-- Settings -->
   <div class="section">
     <h3>Settings</h3>
@@ -219,10 +325,21 @@
       <label>Editor</label>
       <input type="text" id="editor" placeholder="e.g. bbedit, code, open" />
     </div>
+    <div class="setting-hint">Command to open config file (used by empty slots)</div>
     <div class="setting-row">
       <label>Approval timeout</label>
       <input type="number" id="timeout" min="5" max="300" step="5" />
     </div>
+    <div class="setting-hint">Auto-deny tool requests after this many seconds</div>
+  </div>
+
+  <hr />
+
+  <!-- Default Colors -->
+  <div class="section">
+    <h3>Default Colors</h3>
+    <div class="setting-hint" style="margin-left:0">Override theme colors for all macro buttons</div>
+    <div id="default-colors"></div>
   </div>
 
   <hr />
@@ -230,6 +347,7 @@
   <!-- Macros -->
   <div class="section">
     <h3>Macro Buttons <span id="macro-count" style="color:#666; font-weight:normal"></span></h3>
+    <div class="macro-help">Configure buttons shown on the deck during idle state. Label is the button text; Text to send is the prompt injected into Claude when pressed.</div>
     <div id="macro-list" class="macro-list"></div>
     <div class="btn-row">
       <button class="primary" id="btn-save">Save</button>
@@ -245,9 +363,42 @@
       { value: "checkmark", label: "\u2713 Checkmark" },
       { value: "stop", label: "\u2B23 Stop" },
       { value: "exclamation", label: "! Exclamation" },
+      { value: "check", label: "\u2500 Check" },
+      { value: "x", label: "\u2500 X / Close" },
+      { value: "circle-stop", label: "\u2500 Circle Stop" },
+      { value: "triangle-alert", label: "\u2500 Alert" },
+      { value: "zap", label: "\u2500 Zap" },
+      { value: "settings", label: "\u2500 Settings" },
+      { value: "pencil", label: "\u2500 Pencil" },
+      { value: "star", label: "\u2500 Star" },
+      { value: "refresh-cw", label: "\u2500 Refresh" },
+      { value: "corner-down-left", label: "\u2500 Enter" },
+      { value: "lock", label: "\u2500 Lock" },
+      { value: "folder", label: "\u2500 Folder" },
+      { value: "play", label: "\u2500 Play" },
+      { value: "pause", label: "\u2500 Pause" },
+      { value: "send", label: "\u2500 Send" },
+      { value: "terminal", label: "\u2500 Terminal" },
+      { value: "code", label: "\u2500 Code" },
+      { value: "git-branch", label: "\u2500 Git Branch" },
+      { value: "bug", label: "\u2500 Bug" },
+      { value: "rocket", label: "\u2500 Rocket" },
+      { value: "thumbs-up", label: "\u2500 Thumbs Up" },
+    ];
+    const COLOR_PALETTE = [
+      { value: "", label: "None" },
+      { value: "#0f172a", label: "Dark Navy" },
+      { value: "#1e3a5f", label: "Blue" },
+      { value: "#22c55e", label: "Green" },
+      { value: "#ef4444", label: "Red" },
+      { value: "#f59e0b", label: "Amber" },
+      { value: "#8b5cf6", label: "Purple" },
+      { value: "#ffffff", label: "White" },
+      { value: "#64748b", label: "Slate" },
     ];
     let macros = [];
     let settings = { theme: "light", editor: "", approvalTimeout: 30 };
+    let defaultColors = { bg: "", text: "", icon: "" };
     let configLoaded = false;
     const client = SDPIComponents.streamDeckClient;
 
@@ -259,20 +410,67 @@
             label: m.label || "",
             text: m.text || "",
             icon: m.icon || "",
+            colors: { bg: (m.colors && m.colors.bg) || "", text: (m.colors && m.colors.text) || "", icon: (m.colors && m.colors.icon) || "" },
           }));
         }
-        if (msg.theme) settings.theme = msg.theme;
+        settings.theme = msg.theme || "light";
         if (msg.editor !== undefined) settings.editor = msg.editor || "";
         if (msg.approvalTimeout !== undefined) settings.approvalTimeout = msg.approvalTimeout;
+        if (msg.colors) {
+          defaultColors.bg = msg.colors.bg || "";
+          defaultColors.text = msg.colors.text || "";
+          defaultColors.icon = msg.colors.icon || "";
+        }
 
         configLoaded = true;
         document.getElementById("theme").value = settings.theme;
         document.getElementById("editor").value = settings.editor;
         document.getElementById("timeout").value = settings.approvalTimeout;
         document.getElementById("btn-save").disabled = false;
+        var connEl = document.getElementById("conn-status");
+        connEl.textContent = "Connected to bridge";
+        connEl.className = "conn-status connected";
+        renderDefaultColors();
         renderMacros();
       }
     });
+
+    // Readiness handshake: tell the plugin we're ready to receive the config snapshot.
+    // This fixes the race condition where onPropertyInspectorDidAppear fires before
+    // the PI's subscribe listener is registered.
+    client.send("sendToPlugin", { type: "piReady" });
+
+    function buildSwatchRow(labelText, selectedValue, onSelect) {
+      var row = document.createElement("div");
+      row.className = "color-row";
+      var lbl = document.createElement("label");
+      lbl.textContent = labelText;
+      row.appendChild(lbl);
+      var group = document.createElement("div");
+      group.className = "swatch-group";
+      COLOR_PALETTE.forEach(function (c) {
+        var sw = document.createElement("div");
+        sw.className = "swatch" + (c.value === selectedValue ? " selected" : "") + (c.value === "" ? " none" : "");
+        if (c.value) sw.style.background = c.value;
+        sw.title = c.label;
+        sw.addEventListener("click", function () {
+          group.querySelectorAll(".swatch").forEach(function (s) { s.classList.remove("selected"); });
+          sw.classList.add("selected");
+          onSelect(c.value);
+        });
+        group.appendChild(sw);
+      });
+      row.appendChild(group);
+      return row;
+    }
+
+    function renderDefaultColors() {
+      var container = document.getElementById("default-colors");
+      container.innerHTML = "";
+      container.appendChild(buildSwatchRow("Bg", defaultColors.bg, function (v) { defaultColors.bg = v; }));
+      container.appendChild(buildSwatchRow("Text", defaultColors.text, function (v) { defaultColors.text = v; }));
+      container.appendChild(buildSwatchRow("Icon", defaultColors.icon, function (v) { defaultColors.icon = v; }));
+    }
 
     function renderMacros() {
       const list = document.getElementById("macro-list");
@@ -308,7 +506,8 @@
             "</div>" +
           "</div>" +
           "<label>Text to send</label>" +
-          '<textarea data-field="text" data-index="' + i + '" placeholder="Text injected into Claude">' + esc(macro.text) + "</textarea>";
+          '<textarea data-field="text" data-index="' + i + '" placeholder="Text injected into Claude">' + esc(macro.text) + "</textarea>" +
+          '<div class="macro-colors-toggle" data-colorindex="' + i + '">Colors \u25B6</div>';
 
         list.appendChild(item);
       });
@@ -347,6 +546,28 @@
         item.addEventListener("dragleave", handleDragLeave);
         item.addEventListener("drop", handleDrop);
         item.addEventListener("dragend", handleDragEnd);
+      });
+
+      // Per-macro color toggles
+      list.querySelectorAll(".macro-colors-toggle").forEach(function (toggle) {
+        toggle.addEventListener("click", function () {
+          var idx = parseInt(toggle.dataset.colorindex);
+          var existing = toggle.nextElementSibling;
+          if (existing && existing.classList.contains("macro-colors-panel")) {
+            existing.remove();
+            toggle.textContent = "Colors \u25B6";
+            return;
+          }
+          toggle.textContent = "Colors \u25BC";
+          var panel = document.createElement("div");
+          panel.className = "macro-colors-panel";
+          if (!macros[idx].colors) macros[idx].colors = { bg: "", text: "", icon: "" };
+          var mc = macros[idx].colors;
+          panel.appendChild(buildSwatchRow("Bg", mc.bg, function (v) { mc.bg = v; }));
+          panel.appendChild(buildSwatchRow("Text", mc.text, function (v) { mc.text = v; }));
+          panel.appendChild(buildSwatchRow("Icon", mc.icon, function (v) { mc.icon = v; }));
+          toggle.parentNode.insertBefore(panel, toggle.nextSibling);
+        });
       });
     }
 
@@ -427,12 +648,16 @@
         macros: macros.map(function (m) {
           var o = { label: m.label, text: m.text };
           if (m.icon) o.icon = m.icon;
+          if (m.colors && (m.colors.bg || m.colors.text || m.colors.icon)) o.colors = m.colors;
           return o;
         }),
         theme: document.getElementById("theme").value,
         editor: document.getElementById("editor").value,
         approvalTimeout: parseInt(document.getElementById("timeout").value) || 30,
       };
+      if (defaultColors.bg || defaultColors.text || defaultColors.icon) {
+        payload.colors = defaultColors;
+      }
       client.send("sendToPlugin", payload);
       showStatus("Saved", "saved");
     });
@@ -440,7 +665,7 @@
     // --- Add macro ---
     document.getElementById("btn-add").addEventListener("click", function () {
       if (macros.length < MAX_MACROS) {
-        macros.push({ label: "", text: "", icon: "" });
+        macros.push({ label: "", text: "", icon: "", colors: { bg: "", text: "", icon: "" } });
         renderMacros();
         // Scroll to bottom
         var list = document.getElementById("macro-list");
@@ -449,6 +674,7 @@
     });
 
     // Initial render
+    renderDefaultColors();
     renderMacros();
   </script>
 </body>
