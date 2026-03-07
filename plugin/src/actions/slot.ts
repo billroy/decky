@@ -138,6 +138,9 @@ export class SlotAction extends SingletonAction {
 
   override async onPropertyInspectorDidAppear(_ev: PropertyInspectorDidAppearEvent): Promise<void> {
     await this.sendConfigSnapshot();
+    // Bridge config may not be loaded yet when PI appears.
+    setTimeout(() => { this.sendConfigSnapshot().catch(() => {}); }, 250);
+    setTimeout(() => { this.sendConfigSnapshot().catch(() => {}); }, 750);
   }
 
   private async sendConfigSnapshot(): Promise<void> {
@@ -148,6 +151,7 @@ export class SlotAction extends SingletonAction {
     }
 
     const cfg = bridgeRef?.getLastConfig();
+    if (!cfg) return;
     const macros = cfg?.macros ?? [];
     const snapshot: Record<string, unknown> = {
       type: "configSnapshot",
