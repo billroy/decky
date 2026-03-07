@@ -25,12 +25,12 @@ const CONFIG_PATH = join(DECKY_DIR, "config.json");
 
 const DEFAULT_CONFIG: DeckyConfig = {
   macros: [
-    { label: "Continue", text: "Continue" },
-    { label: "Yes", text: "Yes" },
-    { label: "No", text: "No" },
-    { label: "Stop & Think", text: "Stop and think about whether this is the right approach." },
+    { label: "Continue", text: "Continue", icon: "checkmark" },
+    { label: "Yes", text: "Yes", icon: "checkmark" },
+    { label: "No", text: "No", icon: "stop" },
+    { label: "Stop", text: "Stop what you are doing.", icon: "stop" },
     { label: "Summarize", text: "Summarize what you've done so far." },
-    { label: "Make it so", text: "Make it so" },
+    { label: "Make it so", text: "Make it so", icon: "checkmark" },
   ],
   approvalTimeout: 30,
 };

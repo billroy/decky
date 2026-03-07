@@ -72,11 +72,11 @@ describe("layouts", () => {
       expect(config.action).toBeUndefined();
     });
 
-    it("caps macros at 6 slots", () => {
-      const manyMacros: MacroInput[] = Array.from({ length: 10 }, (_, i) => ({
+    it("caps macros at 15 slots", () => {
+      const manyMacros: MacroInput[] = Array.from({ length: 20 }, (_, i) => ({
         label: `M${i}`, text: `text${i}`,
       }));
-      const config = getSlotConfig("idle", 7, null, manyMacros);
+      const config = getSlotConfig("idle", 15, null, manyMacros);
       expect(config.title).toBe("");
     });
 
@@ -84,6 +84,29 @@ describe("layouts", () => {
       const longMacros: MacroInput[] = [{ label: "VeryLongMacroLabel", text: "test" }];
       const config = getSlotConfig("idle", 0, null, longMacros);
       expect(config.svg).toContain("VeryLongM\u2026");
+    });
+
+    it("renders checkmark icon with white background and green checkmark", () => {
+      const macros: MacroInput[] = [{ label: "Yes", text: "Yes", icon: "checkmark" }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.svg).toContain('fill="#ffffff"');
+      expect(config.svg).toContain('fill="#22c55e"');
+      expect(config.svg).toContain("\u2713");
+    });
+
+    it("renders stop icon with white background and red stop sign", () => {
+      const macros: MacroInput[] = [{ label: "No", text: "No", icon: "stop" }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.svg).toContain('fill="#ffffff"');
+      expect(config.svg).toContain('fill="#ef4444"');
+      expect(config.svg).toContain("\u2B23");
+    });
+
+    it("renders default blue style when no icon specified", () => {
+      const macros: MacroInput[] = [{ label: "Summarize", text: "Summarize" }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.svg).toContain('fill="#1e3a5f"');
+      expect(config.svg).toContain("\u25B6");
     });
   });
 

@@ -23,13 +23,31 @@ function roundedRect(color: string, symbol: string, fontSize = 64): string {
   </svg>`;
 }
 
-function macroSVG(label: string): string {
+function macroSVG(label: string, icon?: string): string {
   const displayLabel = label.length > 10 ? label.slice(0, 9) + "\u2026" : label;
   const fontSize = displayLabel.length > 6 ? 22 : 28;
+
+  if (icon === "checkmark") {
+    return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+      <rect width="144" height="144" rx="16" fill="#ffffff" />
+      <text x="72" y="90" font-size="84" font-family="sans-serif" text-anchor="middle" fill="#22c55e">\u2713</text>
+      <text x="72" y="130" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="#1e293b">${displayLabel}</text>
+    </svg>`;
+  }
+
+  if (icon === "stop") {
+    return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+      <rect width="144" height="144" rx="16" fill="#ffffff" />
+      <text x="72" y="88" font-size="80" font-family="sans-serif" text-anchor="middle" fill="#ef4444">\u2B23</text>
+      <text x="72" y="130" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="#1e293b">${displayLabel}</text>
+    </svg>`;
+  }
+
+  // Default: blue style
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <rect width="144" height="144" rx="16" fill="#1e3a5f" />
-    <text x="72" y="58" font-size="20" font-family="sans-serif" text-anchor="middle" fill="#64748b">\u25B6</text>
-    <text x="72" y="100" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="#e2e8f0">${displayLabel}</text>
+    <text x="72" y="82" font-size="48" font-family="sans-serif" text-anchor="middle" fill="#64748b">\u25B6</text>
+    <text x="72" y="130" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="#e2e8f0">${displayLabel}</text>
   </svg>`;
 }
 
@@ -95,11 +113,12 @@ const THINKING: SlotConfig = {
 export interface MacroInput {
   label: string;
   text: string;
+  icon?: string;
 }
 
 function macroSlot(macro: MacroInput): SlotConfig {
   return {
-    svg: macroSVG(macro.label),
+    svg: macroSVG(macro.label, macro.icon),
     title: macro.label,
     action: "macro",
     data: { text: macro.text },
@@ -125,7 +144,7 @@ const EMPTY: SlotConfig = {
 
 function buildIdleLayout(macros: MacroInput[]): LayoutDef {
   const layout: LayoutDef = {};
-  for (let i = 0; i < macros.length && i < 6; i++) {
+  for (let i = 0; i < macros.length && i < 15; i++) {
     layout[i] = macroSlot(macros[i]);
   }
   return layout;

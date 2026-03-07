@@ -121,7 +121,7 @@ export class SlotAction extends SingletonAction {
     const macros = cfg?.macros ?? [];
     await streamDeck.ui.sendToPropertyInspector({
       type: "configSnapshot",
-      macros: macros.map((m) => ({ label: m.label, text: m.text })),
+      macros: macros.map((m) => ({ label: m.label, text: m.text, icon: m.icon })),
     });
   }
 
@@ -135,7 +135,7 @@ export class SlotAction extends SingletonAction {
   private getMacros(): MacroInput[] | undefined {
     const cfg = bridgeRef?.getLastConfig();
     if (!cfg?.macros?.length) return undefined;
-    return cfg.macros.map((m) => ({ label: m.label, text: m.text }));
+    return cfg.macros.map((m) => ({ label: m.label, text: m.text, icon: m.icon }));
   }
 
   private async renderAll(connStatus: ConnectionStatus, snapshot: StateSnapshot | null): Promise<void> {
@@ -151,7 +151,7 @@ export class SlotAction extends SingletonAction {
       const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
 
       await instance.setImage(imageData);
-      await instance.setTitle(config.title);
+      await instance.setTitle("");
     }
   }
 }
