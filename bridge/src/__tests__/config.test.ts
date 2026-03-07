@@ -43,6 +43,8 @@ describe("config endpoints", () => {
     expect(Array.isArray(data.macros)).toBe(true);
     expect(data.macros.length).toBeGreaterThan(0);
     expect(data).toHaveProperty("approvalTimeout");
+    expect(data).toHaveProperty("defaultTargetApp");
+    expect(data).toHaveProperty("showTargetBadge");
   });
 
   it("each macro has label and text fields", async () => {
@@ -93,6 +95,22 @@ describe("config endpoints", () => {
 
     const data = await res.json();
     expect(data.config.approvalTimeout).toBe(30);
+  });
+
+  it("PUT /config saves multi-provider settings", async () => {
+    const res = await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        defaultTargetApp: "codex",
+        showTargetBadge: true,
+        macros: [{ label: "Ship", text: "Ship it", targetApp: "chatgpt" }],
+      }),
+    });
+    const data = await res.json();
+    expect(data.config.defaultTargetApp).toBe("codex");
+    expect(data.config.showTargetBadge).toBe(true);
+    expect(data.config.macros[0].targetApp).toBe("chatgpt");
   });
 
   it("GET /config reflects saved changes", async () => {

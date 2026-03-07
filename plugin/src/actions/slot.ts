@@ -19,7 +19,13 @@ import streamDeck, {
 import type { JsonValue, JsonObject } from "@elgato/utils";
 import { exec } from "node:child_process";
 import { type BridgeClient, type ConnectionStatus, type StateSnapshot } from "../bridge-client.js";
-import { getSlotConfig, setTheme, setDefaultColors, type MacroInput } from "../layouts.js";
+import {
+  getSlotConfig,
+  setTheme,
+  setDefaultColors,
+  setTargetBadgeOptions,
+  type MacroInput,
+} from "../layouts.js";
 
 let bridgeRef: BridgeClient | null = null;
 
@@ -89,6 +95,7 @@ export class SlotAction extends SingletonAction {
     if (!this.unsubConfig) {
       this.unsubConfig = bridgeRef.onConfigChange(() => {
         this.renderAll(bridgeRef!.getConnectionStatus(), bridgeRef!.getLastSnapshot()).catch(() => {});
+        this.sendConfigSnapshot().catch(() => {});
       });
     }
   }
@@ -131,21 +138,38 @@ export class SlotAction extends SingletonAction {
 
   override async onPropertyInspectorDidAppear(_ev: PropertyInspectorDidAppearEvent): Promise<void> {
     await this.sendConfigSnapshot();
+    // Bridge config may not be loaded yet when PI appears.
+    setTimeout(() => { this.sendConfigSnapshot().catch(() => {}); }, 250);
+    setTimeout(() => { this.sendConfigSnapshot().catch(() => {}); }, 750);
   }
 
   private async sendConfigSnapshot(): Promise<void> {
+    // Wait for the SDK's UIController to have the PI action reference;
+    // without it, sendToPropertyInspector silently drops the message.
+    for (let i = 0; i < 20 && !streamDeck.ui.action; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+
     const cfg = bridgeRef?.getLastConfig();
+    if (!cfg) return;
     const macros = cfg?.macros ?? [];
     const snapshot: Record<string, unknown> = {
       type: "configSnapshot",
       macros: macros.map((m) => {
-        const entry: Record<string, unknown> = { label: m.label, text: m.text, icon: m.icon };
+        const entry: Record<string, unknown> = {
+          label: m.label,
+          text: m.text,
+          icon: m.icon,
+          targetApp: m.targetApp,
+        };
         if (m.colors) entry.colors = m.colors;
         return entry;
       }),
       theme: cfg?.theme ?? "light",
       editor: cfg?.editor ?? "bbedit",
       approvalTimeout: cfg?.approvalTimeout ?? 30,
+      defaultTargetApp: cfg?.defaultTargetApp ?? "claude",
+      showTargetBadge: cfg?.showTargetBadge ?? false,
     };
     if (cfg?.colors) snapshot.colors = cfg.colors;
     await streamDeck.ui.sendToPropertyInspector(snapshot as JsonObject);
@@ -164,6 +188,8 @@ export class SlotAction extends SingletonAction {
       if (typeof payload.theme === "string") update.theme = payload.theme;
       if (typeof payload.editor === "string") update.editor = payload.editor;
       if (typeof payload.approvalTimeout === "number") update.approvalTimeout = payload.approvalTimeout;
+      if (typeof payload.defaultTargetApp === "string") update.defaultTargetApp = payload.defaultTargetApp;
+      if (typeof payload.showTargetBadge === "boolean") update.showTargetBadge = payload.showTargetBadge;
       if (payload.colors && typeof payload.colors === "object") update.colors = payload.colors;
       bridgeRef?.sendAction("updateConfig", update);
     }
@@ -173,12 +199,17 @@ export class SlotAction extends SingletonAction {
     const cfg = bridgeRef?.getLastConfig();
     if (cfg?.theme) setTheme(cfg.theme);
     if (cfg?.colors) setDefaultColors(cfg.colors);
+    setTargetBadgeOptions({
+      showTargetBadge: cfg?.showTargetBadge ?? false,
+      defaultTargetApp: cfg?.defaultTargetApp ?? "claude",
+    });
     if (!cfg?.macros?.length) return undefined;
     return cfg.macros.map((m) => ({
       label: m.label,
       text: m.text,
       icon: m.icon,
       colors: m.colors,
+      targetApp: m.targetApp,
     }));
   }
 

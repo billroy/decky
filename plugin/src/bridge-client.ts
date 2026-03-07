@@ -21,11 +21,14 @@ export interface ColorOverrides {
   icon?: string;
 }
 
+export type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";
+
 export interface MacroDef {
   label: string;
   text: string;
   icon?: string;
   colors?: ColorOverrides;
+  targetApp?: TargetApp;
 }
 
 export interface DeckyConfig {
@@ -34,6 +37,8 @@ export interface DeckyConfig {
   theme: "light" | "dark";
   editor?: string;
   colors?: ColorOverrides;
+  defaultTargetApp: TargetApp;
+  showTargetBadge: boolean;
 }
 
 export type ConnectionStatus = "connected" | "disconnected" | "connecting";

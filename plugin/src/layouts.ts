@@ -13,6 +13,7 @@ export interface SlotConfig {
 }
 
 export type LayoutDef = Record<number, SlotConfig>;
+export type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";
 
 // --- Theme palettes ---
 
@@ -50,6 +51,24 @@ const PALETTES: Record<Theme, ThemePalette> = {
 };
 
 let currentTheme: Theme = "light";
+let showTargetBadge = false;
+let defaultTargetApp: TargetApp = "claude";
+
+const TARGET_CODES: Record<TargetApp, string> = {
+  claude: "CLD",
+  codex: "CDX",
+  chatgpt: "CGP",
+  cursor: "CSR",
+  windsurf: "WDF",
+};
+
+const TARGET_BADGE_COLORS: Record<TargetApp, { bg: string; text: string }> = {
+  claude: { bg: "#f59e0b", text: "#111827" },
+  codex: { bg: "#10b981", text: "#052e16" },
+  chatgpt: { bg: "#22c55e", text: "#052e16" },
+  cursor: { bg: "#60a5fa", text: "#082f49" },
+  windsurf: { bg: "#a78bfa", text: "#2e1065" },
+};
 
 export function setTheme(theme: Theme): void {
   currentTheme = theme;
@@ -57,6 +76,24 @@ export function setTheme(theme: Theme): void {
 
 export function getTheme(): Theme {
   return currentTheme;
+}
+
+export function setTargetBadgeOptions(options: {
+  showTargetBadge: boolean;
+  defaultTargetApp: TargetApp;
+}): void {
+  showTargetBadge = options.showTargetBadge;
+  defaultTargetApp = options.defaultTargetApp;
+}
+
+function targetBadge(targetApp?: TargetApp): string {
+  if (!showTargetBadge) return "";
+  const target = targetApp ?? defaultTargetApp;
+  const palette = TARGET_BADGE_COLORS[target];
+  return `<g>
+    <rect x="6" y="6" width="34" height="14" rx="3" fill="${palette.bg}" opacity="0.95" />
+    <text x="23" y="16" font-size="8" font-family="sans-serif" font-weight="700" text-anchor="middle" fill="${palette.text}">${TARGET_CODES[target]}</text>
+  </g>`;
 }
 
 // --- SVG generators ---
@@ -116,7 +153,7 @@ export function getLucideIconNames(): string[] {
   return Object.keys(LUCIDE_ICONS);
 }
 
-function macroSVG(label: string, icon?: string, colors?: ColorOverrides): string {
+function macroSVG(label: string, icon?: string, colors?: ColorOverrides, targetApp?: TargetApp): string {
   const p = PALETTES[currentTheme];
   const displayLabel = label.length > 10 ? label.slice(0, 9) + "\u2026" : label;
   const fontSize = displayLabel.length > 6 ? 26 : 32;
@@ -135,6 +172,7 @@ function macroSVG(label: string, icon?: string, colors?: ColorOverrides): string
       <rect width="144" height="144" rx="16" fill="${resolvedBg}" />
       <g transform="translate(36, 10) scale(3)" fill="none" stroke="${resolvedIcon}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${LUCIDE_ICONS[icon]}</g>
       <text x="72" y="122" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${resolvedText}">${displayLabel}</text>
+      ${targetBadge(targetApp)}
     </svg>`;
   }
 
@@ -149,6 +187,7 @@ function macroSVG(label: string, icon?: string, colors?: ColorOverrides): string
       <rect width="144" height="144" rx="16" fill="${resolvedBg}" />
       <text x="72" y="82" font-size="100" font-family="sans-serif" text-anchor="middle" fill="${resolvedIcon}"${fontWeight}>${symbol}</text>
       <text x="72" y="122" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${resolvedText}">${displayLabel}</text>
+      ${targetBadge(targetApp)}
     </svg>`;
   }
 
@@ -160,6 +199,7 @@ function macroSVG(label: string, icon?: string, colors?: ColorOverrides): string
     <rect width="144" height="144" rx="16" fill="${resolvedBg}" />
     <text x="72" y="72" font-size="60" font-family="sans-serif" text-anchor="middle" fill="${resolvedIcon}">\u25B6</text>
     <text x="72" y="122" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${resolvedText}">${displayLabel}</text>
+    ${targetBadge(targetApp)}
   </svg>`;
 }
 
@@ -237,6 +277,7 @@ export interface MacroInput {
   text: string;
   icon?: string;
   colors?: ColorOverrides;
+  targetApp?: TargetApp;
 }
 
 /** Page-level default colors, set from config. */
@@ -247,11 +288,12 @@ export function setDefaultColors(colors: ColorOverrides): void {
 }
 
 function macroSlot(macro: MacroInput): SlotConfig {
+  const targetApp = macro.targetApp ?? defaultTargetApp;
   return {
-    svg: macroSVG(macro.label, macro.icon, macro.colors),
+    svg: macroSVG(macro.label, macro.icon, macro.colors, targetApp),
     title: macro.label,
     action: "macro",
-    data: { text: macro.text },
+    data: { text: macro.text, targetApp },
   };
 }
 

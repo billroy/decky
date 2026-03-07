@@ -15,11 +15,14 @@ export interface ColorOverrides {
   icon?: string;
 }
 
+export type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";
+
 export interface MacroDef {
   label: string;
   text: string;
   icon?: string;
   colors?: ColorOverrides;
+  targetApp?: TargetApp;
 }
 
 export interface DeckyConfig {
@@ -28,6 +31,8 @@ export interface DeckyConfig {
   theme: "light" | "dark";
   editor: string;
   colors?: ColorOverrides;
+  defaultTargetApp: TargetApp;
+  showTargetBadge: boolean;
 }
 
 const DECKY_DIR = join(homedir(), ".decky");
@@ -49,9 +54,35 @@ const DEFAULT_CONFIG: DeckyConfig = {
   approvalTimeout: 30,
   theme: "light",
   editor: "bbedit",
+  defaultTargetApp: "claude",
+  showTargetBadge: false,
 };
 
 let currentConfig: DeckyConfig = { ...DEFAULT_CONFIG };
+
+function normalizeTargetApp(value: unknown, fallback: TargetApp): TargetApp {
+  return value === "claude" ||
+    value === "codex" ||
+    value === "chatgpt" ||
+    value === "cursor" ||
+    value === "windsurf"
+    ? value
+    : fallback;
+}
+
+function normalizeMacro(value: unknown, fallbackTarget: TargetApp): MacroDef | null {
+  if (!value || typeof value !== "object") return null;
+  const macro = value as Record<string, unknown>;
+  if (typeof macro.label !== "string" || typeof macro.text !== "string") return null;
+
+  const normalized: MacroDef = { label: macro.label, text: macro.text };
+  if (typeof macro.icon === "string") normalized.icon = macro.icon;
+  if (macro.colors && typeof macro.colors === "object") normalized.colors = macro.colors as ColorOverrides;
+  if (macro.targetApp !== undefined) {
+    normalized.targetApp = normalizeTargetApp(macro.targetApp, fallbackTarget);
+  }
+  return normalized;
+}
 
 /** Ensure ~/.decky/ directory exists. */
 function ensureDir(): void {
@@ -75,14 +106,25 @@ export function loadConfig(): DeckyConfig {
 
     const raw_obj = parsed as Record<string, unknown>;
     const colors = raw_obj.colors as ColorOverrides | undefined;
+    const defaultTargetApp = normalizeTargetApp(raw_obj.defaultTargetApp, DEFAULT_CONFIG.defaultTargetApp);
+    const parsedMacros = Array.isArray(parsed.macros)
+      ? parsed.macros
+          .map((macro) => normalizeMacro(macro, defaultTargetApp))
+          .filter((macro): macro is MacroDef => macro !== null)
+      : DEFAULT_CONFIG.macros;
     currentConfig = {
-      macros: Array.isArray(parsed.macros) ? parsed.macros : DEFAULT_CONFIG.macros,
+      macros: Array.isArray(parsed.macros) ? parsedMacros : DEFAULT_CONFIG.macros,
       approvalTimeout:
         typeof parsed.approvalTimeout === "number"
           ? parsed.approvalTimeout
           : DEFAULT_CONFIG.approvalTimeout,
       theme: raw_obj.theme === "dark" ? "dark" : "light",
       editor: typeof raw_obj.editor === "string" ? raw_obj.editor : DEFAULT_CONFIG.editor,
+      defaultTargetApp,
+      showTargetBadge:
+        typeof raw_obj.showTargetBadge === "boolean"
+          ? raw_obj.showTargetBadge
+          : DEFAULT_CONFIG.showTargetBadge,
       ...(colors && typeof colors === "object" ? { colors } : {}),
     };
 
@@ -111,13 +153,22 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
 
   const update_obj = update as Record<string, unknown>;
   const merged: DeckyConfig = {
-    macros: Array.isArray(update.macros) ? update.macros : currentConfig.macros,
+    macros: Array.isArray(update.macros)
+      ? update.macros
+          .map((macro) => normalizeMacro(macro, currentConfig.defaultTargetApp))
+          .filter((macro): macro is MacroDef => macro !== null)
+      : currentConfig.macros,
     approvalTimeout:
       typeof update.approvalTimeout === "number"
         ? update.approvalTimeout
         : currentConfig.approvalTimeout,
     theme: update_obj.theme === "dark" ? "dark" : update_obj.theme === "light" ? "light" : currentConfig.theme,
     editor: typeof update_obj.editor === "string" ? update_obj.editor : currentConfig.editor,
+    defaultTargetApp: normalizeTargetApp(update_obj.defaultTargetApp, currentConfig.defaultTargetApp),
+    showTargetBadge:
+      typeof update_obj.showTargetBadge === "boolean"
+        ? update_obj.showTargetBadge
+        : currentConfig.showTargetBadge,
     ...(update.colors ? { colors: update.colors } : currentConfig.colors ? { colors: currentConfig.colors } : {}),
   };
 

@@ -131,7 +131,16 @@ export function createApp(): DeckyApp {
       } else if (data.action === "macro") {
         const macroText = typeof data.text === "string" ? data.text : null;
         if (macroText) {
-          executeMacro(macroText).catch((err) => {
+          const cfg = getConfig();
+          const targetApp =
+            data.targetApp === "claude" ||
+            data.targetApp === "codex" ||
+            data.targetApp === "chatgpt" ||
+            data.targetApp === "cursor" ||
+            data.targetApp === "windsurf"
+              ? data.targetApp
+              : cfg.defaultTargetApp;
+          executeMacro(macroText, { targetApp }).catch((err) => {
             console.error("[io] macro execution failed:", err);
           });
         } else {
@@ -142,11 +151,25 @@ export function createApp(): DeckyApp {
         const timeout = typeof data.approvalTimeout === "number" ? data.approvalTimeout : undefined;
         const theme = data.theme === "dark" ? "dark" as const : data.theme === "light" ? "light" as const : undefined;
         const editor = typeof data.editor === "string" ? data.editor : undefined;
+        const colors = data.colors && typeof data.colors === "object" ? data.colors : undefined;
+        const defaultTargetApp =
+          data.defaultTargetApp === "claude" ||
+          data.defaultTargetApp === "codex" ||
+          data.defaultTargetApp === "chatgpt" ||
+          data.defaultTargetApp === "cursor" ||
+          data.defaultTargetApp === "windsurf"
+            ? data.defaultTargetApp
+            : undefined;
+        const showTargetBadge =
+          typeof data.showTargetBadge === "boolean" ? data.showTargetBadge : undefined;
         const update: Record<string, unknown> = {};
         if (macros) update.macros = macros;
         if (timeout !== undefined) update.approvalTimeout = timeout;
         if (theme) update.theme = theme;
         if (editor !== undefined) update.editor = editor;
+        if (colors) update.colors = colors;
+        if (defaultTargetApp) update.defaultTargetApp = defaultTargetApp;
+        if (showTargetBadge !== undefined) update.showTargetBadge = showTargetBadge;
         if (Object.keys(update).length > 0) {
           const config = saveConfig(update);
           io.emit("configUpdate", config);

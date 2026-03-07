@@ -1,8 +1,18 @@
 import { describe, it, expect, afterEach } from "vitest";
-import { getSlotConfig, getLayout, getLayoutStates, setTheme, type MacroInput } from "../layouts.js";
+import {
+  getSlotConfig,
+  getLayout,
+  getLayoutStates,
+  setTheme,
+  setTargetBadgeOptions,
+  type MacroInput,
+} from "../layouts.js";
 
 describe("layouts", () => {
-  afterEach(() => setTheme("light"));
+  afterEach(() => {
+    setTheme("light");
+    setTargetBadgeOptions({ showTargetBadge: false, defaultTargetApp: "claude" });
+  });
   describe("getLayoutStates", () => {
     it("returns all five states", () => {
       const states = getLayoutStates();
@@ -33,7 +43,7 @@ describe("layouts", () => {
         const config = getSlotConfig("idle", i);
         expect(config.title).toBe(`Macro ${i + 1}`);
         expect(config.action).toBe("macro");
-        expect(config.data).toEqual({ text: "" });
+        expect(config.data).toEqual({ text: "", targetApp: "claude" });
         expect(config.svg).toContain("svg");
       }
     });
@@ -56,14 +66,14 @@ describe("layouts", () => {
       const config = getSlotConfig("idle", 0, null, macros);
       expect(config.title).toBe("Continue");
       expect(config.action).toBe("macro");
-      expect(config.data).toEqual({ text: "Continue" });
+      expect(config.data).toEqual({ text: "Continue", targetApp: "claude" });
     });
 
     it("renders all provided macros", () => {
       for (let i = 0; i < macros.length; i++) {
         const config = getSlotConfig("idle", i, null, macros);
         expect(config.title).toBe(macros[i].label);
-        expect(config.data).toEqual({ text: macros[i].text });
+        expect(config.data).toEqual({ text: macros[i].text, targetApp: "claude" });
       }
     });
 
@@ -108,6 +118,12 @@ describe("layouts", () => {
       const config = getSlotConfig("idle", 0, null, macros);
       expect(config.svg).toContain('fill="#1e3a5f"');
       expect(config.svg).toContain("\u25B6");
+    });
+
+    it("uses per-macro targetApp in action payload", () => {
+      const macros: MacroInput[] = [{ label: "Ship", text: "Ship it", targetApp: "codex" }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.data).toEqual({ text: "Ship it", targetApp: "codex" });
     });
   });
 
@@ -229,6 +245,15 @@ describe("layouts", () => {
     it("has openConfig action", () => {
       const config = getSlotConfig("idle", 99);
       expect(config.action).toBe("openConfig");
+    });
+  });
+
+  describe("target badge", () => {
+    it("renders target badge text when enabled", () => {
+      setTargetBadgeOptions({ showTargetBadge: true, defaultTargetApp: "claude" });
+      const macros: MacroInput[] = [{ label: "Ship", text: "Ship", targetApp: "codex" }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.svg).toContain("CDX");
     });
   });
 });

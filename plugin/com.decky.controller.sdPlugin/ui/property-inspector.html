@@ -56,6 +56,12 @@
       outline: none;
       border-color: rgba(100,160,255,0.5);
     }
+    .setting-row input[type="checkbox"] {
+      flex: 0 0 auto;
+      width: auto;
+      margin: 0;
+      accent-color: #3b82f6;
+    }
     .setting-row select {
       cursor: pointer;
     }
@@ -113,7 +119,7 @@
       flex: 1;
     }
     .field-group.icon-group {
-      flex: 0 0 110px;
+      flex: 0 0 130px;
     }
     .macro-item label {
       display: block;
@@ -232,19 +238,20 @@
       align-items: center;
     }
     .swatch {
-      width: 18px;
-      height: 18px;
+      width: 22px;
+      height: 22px;
       border-radius: 50%;
-      border: 2px solid transparent;
+      border: 2px solid rgba(255,255,255,0.15);
       cursor: pointer;
-      transition: border-color 0.15s;
+      transition: border-color 0.15s, box-shadow 0.15s;
       box-sizing: border-box;
     }
     .swatch:hover {
-      border-color: rgba(255,255,255,0.4);
+      border-color: rgba(255,255,255,0.5);
     }
     .swatch.selected {
-      border-color: rgba(100,160,255,0.8);
+      border-color: #64a0ff;
+      box-shadow: 0 0 4px rgba(100,160,255,0.6);
     }
     .swatch.none {
       background: repeating-conic-gradient(#444 0% 25%, #222 0% 50%) 50%/8px 8px;
@@ -268,14 +275,19 @@
       font-weight: normal;
     }
     .macro-colors-toggle {
-      font-size: 9px;
-      color: #557;
+      font-size: 10px;
+      color: #888;
       cursor: pointer;
       user-select: none;
-      margin-top: 2px;
+      margin-top: 4px;
+      padding: 2px 4px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 3px;
+      display: inline-block;
     }
     .macro-colors-toggle:hover {
-      color: #88a;
+      color: #aaa;
+      background: rgba(255,255,255,0.08);
     }
     .macro-colors-panel {
       margin-top: 4px;
@@ -309,7 +321,7 @@
 </head>
 <body>
   <!-- Connection status -->
-  <div id="conn-status" class="conn-status disconnected">Waiting for bridge...</div>
+  <div id="conn-status" class="conn-status" style="color:#888;background:rgba(255,255,255,0.05)">Connecting...</div>
 
   <!-- Settings -->
   <div class="section">
@@ -331,6 +343,20 @@
       <input type="number" id="timeout" min="5" max="300" step="5" />
     </div>
     <div class="setting-hint">Auto-deny tool requests after this many seconds</div>
+    <div class="setting-row">
+      <label>Default target</label>
+      <select id="default-target">
+        <option value="claude">Claude</option>
+        <option value="codex">Codex</option>
+        <option value="chatgpt">ChatGPT</option>
+        <option value="cursor">Cursor</option>
+        <option value="windsurf">Windsurf</option>
+      </select>
+    </div>
+    <div class="setting-row">
+      <label>Target badge</label>
+      <input type="checkbox" id="show-target-badge" />
+    </div>
   </div>
 
   <hr />
@@ -347,7 +373,7 @@
   <!-- Macros -->
   <div class="section">
     <h3>Macro Buttons <span id="macro-count" style="color:#666; font-weight:normal"></span></h3>
-    <div class="macro-help">Configure buttons shown on the deck during idle state. Label is the button text; Text to send is the prompt injected into Claude when pressed.</div>
+    <div class="macro-help">Configure buttons shown on the deck during idle state. Label is the button text; Text to send is the prompt injected into Claude when pressed. Each macro has Icon and optional per-macro colors.</div>
     <div id="macro-list" class="macro-list"></div>
     <div class="btn-row">
       <button class="primary" id="btn-save">Save</button>
@@ -385,6 +411,14 @@
       { value: "rocket", label: "\u2500 Rocket" },
       { value: "thumbs-up", label: "\u2500 Thumbs Up" },
     ];
+    const TARGETS = [
+      { value: "", label: "Use default" },
+      { value: "claude", label: "Claude (CLD)" },
+      { value: "codex", label: "Codex (CDX)" },
+      { value: "chatgpt", label: "ChatGPT (CGP)" },
+      { value: "cursor", label: "Cursor (CSR)" },
+      { value: "windsurf", label: "Windsurf (WDF)" },
+    ];
     const COLOR_PALETTE = [
       { value: "", label: "None" },
       { value: "#0f172a", label: "Dark Navy" },
@@ -397,10 +431,48 @@
       { value: "#64748b", label: "Slate" },
     ];
     let macros = [];
-    let settings = { theme: "light", editor: "", approvalTimeout: 30 };
+    let settings = {
+      theme: "light",
+      editor: "",
+      approvalTimeout: 30,
+      defaultTargetApp: "claude",
+      showTargetBadge: false,
+    };
     let defaultColors = { bg: "", text: "", icon: "" };
     let configLoaded = false;
+    let baselinePayload = "";
     const client = SDPIComponents.streamDeckClient;
+
+    function buildPayload() {
+      var payload = {
+        type: "updateConfig",
+        macros: macros.map(function (m) {
+          var o = { label: m.label, text: m.text };
+          if (m.icon) o.icon = m.icon;
+          if (m.targetApp) o.targetApp = m.targetApp;
+          if (m.colors && (m.colors.bg || m.colors.text || m.colors.icon)) o.colors = m.colors;
+          return o;
+        }),
+        theme: document.getElementById("theme").value,
+        editor: document.getElementById("editor").value,
+        approvalTimeout: parseInt(document.getElementById("timeout").value) || 30,
+        defaultTargetApp: document.getElementById("default-target").value,
+        showTargetBadge: document.getElementById("show-target-badge").checked,
+      };
+      if (defaultColors.bg || defaultColors.text || defaultColors.icon) {
+        payload.colors = defaultColors;
+      }
+      return payload;
+    }
+
+    function setSaveEnabled(enabled) {
+      document.getElementById("btn-save").disabled = !enabled;
+    }
+
+    function markDirty() {
+      if (!configLoaded) return;
+      setSaveEnabled(JSON.stringify(buildPayload()) !== baselinePayload);
+    }
 
     // Receive config from plugin
     client.sendToPropertyInspector.subscribe((msg) => {
@@ -410,12 +482,15 @@
             label: m.label || "",
             text: m.text || "",
             icon: m.icon || "",
+            targetApp: m.targetApp || "",
             colors: { bg: (m.colors && m.colors.bg) || "", text: (m.colors && m.colors.text) || "", icon: (m.colors && m.colors.icon) || "" },
           }));
         }
         settings.theme = msg.theme || "light";
         if (msg.editor !== undefined) settings.editor = msg.editor || "";
         if (msg.approvalTimeout !== undefined) settings.approvalTimeout = msg.approvalTimeout;
+        if (msg.defaultTargetApp) settings.defaultTargetApp = msg.defaultTargetApp;
+        if (msg.showTargetBadge !== undefined) settings.showTargetBadge = !!msg.showTargetBadge;
         if (msg.colors) {
           defaultColors.bg = msg.colors.bg || "";
           defaultColors.text = msg.colors.text || "";
@@ -426,7 +501,10 @@
         document.getElementById("theme").value = settings.theme;
         document.getElementById("editor").value = settings.editor;
         document.getElementById("timeout").value = settings.approvalTimeout;
-        document.getElementById("btn-save").disabled = false;
+        document.getElementById("default-target").value = settings.defaultTargetApp;
+        document.getElementById("show-target-badge").checked = settings.showTargetBadge;
+        baselinePayload = JSON.stringify(buildPayload());
+        setSaveEnabled(false);
         var connEl = document.getElementById("conn-status");
         connEl.textContent = "Connected to bridge";
         connEl.className = "conn-status connected";
@@ -436,9 +514,14 @@
     });
 
     // Readiness handshake: tell the plugin we're ready to receive the config snapshot.
-    // This fixes the race condition where onPropertyInspectorDidAppear fires before
-    // the PI's subscribe listener is registered.
-    client.send("sendToPlugin", { type: "piReady" });
+    // Retry periodically until we get a response, covering race conditions where
+    // the plugin's UIController hasn't set #action yet.
+    function sendPiReady() { client.send("sendToPlugin", { type: "piReady" }); }
+    sendPiReady();
+    var piReadyInterval = setInterval(function () {
+      if (configLoaded) { clearInterval(piReadyInterval); return; }
+      sendPiReady();
+    }, 500);
 
     function buildSwatchRow(labelText, selectedValue, onSelect) {
       var row = document.createElement("div");
@@ -457,6 +540,7 @@
           group.querySelectorAll(".swatch").forEach(function (s) { s.classList.remove("selected"); });
           sw.classList.add("selected");
           onSelect(c.value);
+          markDirty();
         });
         group.appendChild(sw);
       });
@@ -486,6 +570,16 @@
         const iconOptions = ICONS.map(
           (ic) => '<option value="' + esc(ic.value) + '"' + (macro.icon === ic.value ? " selected" : "") + ">" + esc(ic.label) + "</option>"
         ).join("");
+        const targetOptions = TARGETS.map(
+          (target) =>
+            '<option value="' +
+            esc(target.value) +
+            '"' +
+            ((macro.targetApp || "") === target.value ? " selected" : "") +
+            ">" +
+            esc(target.label) +
+            "</option>"
+        ).join("");
 
         item.innerHTML =
           '<div class="header">' +
@@ -504,10 +598,14 @@
               "<label>Icon</label>" +
               '<select data-field="icon" data-index="' + i + '">' + iconOptions + "</select>" +
             "</div>" +
+            '<div class="field-group icon-group">' +
+              "<label>Target</label>" +
+              '<select data-field="targetApp" data-index="' + i + '">' + targetOptions + "</select>" +
+            "</div>" +
           "</div>" +
           "<label>Text to send</label>" +
           '<textarea data-field="text" data-index="' + i + '" placeholder="Text injected into Claude">' + esc(macro.text) + "</textarea>" +
-          '<div class="macro-colors-toggle" data-colorindex="' + i + '">Colors \u25B6</div>';
+          '<div class="macro-colors-toggle" data-colorindex="' + i + '">Per-macro colors \u25B6</div>';
 
         list.appendChild(item);
       });
@@ -520,12 +618,16 @@
         el.addEventListener("input", function (e) {
           var idx = parseInt(e.target.dataset.index);
           var field = e.target.dataset.field;
+          if (!Number.isFinite(idx) || !field || !macros[idx]) return;
           macros[idx][field] = e.target.value;
+          markDirty();
         });
         el.addEventListener("change", function (e) {
           var idx = parseInt(e.target.dataset.index);
           var field = e.target.dataset.field;
+          if (!Number.isFinite(idx) || !field || !macros[idx]) return;
           macros[idx][field] = e.target.value;
+          markDirty();
         });
       });
 
@@ -533,8 +635,10 @@
       list.querySelectorAll("[data-remove]").forEach(function (btn) {
         btn.addEventListener("click", function (e) {
           var idx = parseInt(e.target.dataset.remove);
+          if (!Number.isFinite(idx) || !macros[idx]) return;
           macros.splice(idx, 1);
           renderMacros();
+          markDirty();
         });
       });
 
@@ -555,10 +659,10 @@
           var existing = toggle.nextElementSibling;
           if (existing && existing.classList.contains("macro-colors-panel")) {
             existing.remove();
-            toggle.textContent = "Colors \u25B6";
+            toggle.textContent = "Per-macro colors \u25B6";
             return;
           }
-          toggle.textContent = "Colors \u25BC";
+          toggle.textContent = "Per-macro colors \u25BC";
           var panel = document.createElement("div");
           panel.className = "macro-colors-panel";
           if (!macros[idx].colors) macros[idx].colors = { bg: "", text: "", icon: "" };
@@ -604,6 +708,7 @@
         var moved = macros.splice(dragSrcIndex, 1)[0];
         macros.splice(targetIndex, 0, moved);
         renderMacros();
+        markDirty();
       }
     }
 
@@ -630,6 +735,11 @@
 
     // --- Save ---
     document.getElementById("btn-save").disabled = true;
+    ["theme", "editor", "timeout", "default-target", "show-target-badge"].forEach(function (id) {
+      var el = document.getElementById(id);
+      el.addEventListener("input", markDirty);
+      el.addEventListener("change", markDirty);
+    });
     document.getElementById("btn-save").addEventListener("click", function () {
       if (!configLoaded) {
         showStatus("Not connected to bridge", "error");
@@ -643,30 +753,19 @@
         return;
       }
 
-      var payload = {
-        type: "updateConfig",
-        macros: macros.map(function (m) {
-          var o = { label: m.label, text: m.text };
-          if (m.icon) o.icon = m.icon;
-          if (m.colors && (m.colors.bg || m.colors.text || m.colors.icon)) o.colors = m.colors;
-          return o;
-        }),
-        theme: document.getElementById("theme").value,
-        editor: document.getElementById("editor").value,
-        approvalTimeout: parseInt(document.getElementById("timeout").value) || 30,
-      };
-      if (defaultColors.bg || defaultColors.text || defaultColors.icon) {
-        payload.colors = defaultColors;
-      }
+      var payload = buildPayload();
       client.send("sendToPlugin", payload);
+      baselinePayload = JSON.stringify(payload);
+      setSaveEnabled(false);
       showStatus("Saved", "saved");
     });
 
     // --- Add macro ---
     document.getElementById("btn-add").addEventListener("click", function () {
       if (macros.length < MAX_MACROS) {
-        macros.push({ label: "", text: "", icon: "", colors: { bg: "", text: "", icon: "" } });
+        macros.push({ label: "", text: "", icon: "", targetApp: "", colors: { bg: "", text: "", icon: "" } });
         renderMacros();
+        markDirty();
         // Scroll to bottom
         var list = document.getElementById("macro-list");
         list.lastElementChild && list.lastElementChild.scrollIntoView({ behavior: "smooth" });

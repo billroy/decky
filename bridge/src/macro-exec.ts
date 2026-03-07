@@ -1,5 +1,5 @@
 /**
- * Macro executor — injects text into Claude.app via AppleScript.
+ * Macro executor — injects text into a target macOS app via AppleScript.
  *
  * Strategy: copy text to clipboard, activate Claude, paste with Cmd+V.
  * This is more reliable than keystroke-by-keystroke injection and works
@@ -7,19 +7,54 @@
  */
 
 import { execFile } from "node:child_process";
+import type { TargetApp } from "./config.js";
+
+interface MacroExecutionOptions {
+  targetApp?: TargetApp;
+}
+
+interface TargetAppSpec {
+  appName: string;
+  bundleId?: string;
+}
+
+const TARGET_APP_SPECS: Record<TargetApp, TargetAppSpec> = {
+  claude: { appName: "Claude", bundleId: "com.anthropic.claudefordesktop" },
+  codex: { appName: "Codex", bundleId: "com.openai.codex" },
+  chatgpt: { appName: "ChatGPT", bundleId: "com.openai.chat" },
+  cursor: { appName: "Cursor", bundleId: "com.todesktop.230313mzl4w4u92" },
+  windsurf: { appName: "Windsurf", bundleId: "com.exafunction.windsurf" },
+};
+
+function activationScriptFor(targetApp: TargetApp): string {
+  const spec = TARGET_APP_SPECS[targetApp];
+  if (spec.bundleId) {
+    return `
+      try
+        tell application id "${spec.bundleId}" to activate
+      on error
+        tell application "${spec.appName}" to activate
+      end try
+    `;
+  }
+  return `tell application "${spec.appName}" to activate`;
+}
 
 /**
- * Inject text into Claude.app by copying to clipboard and pasting.
+ * Inject text into the selected app by copying to clipboard and pasting.
  * Returns a promise that resolves when the AppleScript completes.
  */
-export function executeMacro(text: string): Promise<void> {
+export function executeMacro(text: string, options: MacroExecutionOptions = {}): Promise<void> {
+  const targetApp = options.targetApp ?? "claude";
+  const activation = activationScriptFor(targetApp);
+
   // Use pbcopy + AppleScript for reliable injection:
   // 1. Copy text to clipboard via pbcopy (handles all characters safely)
-  // 2. Activate Claude.app
+  // 2. Activate target app
   // 3. Paste with Cmd+V
   // 4. Press Return to send
   const script = `
-    tell application "Claude" to activate
+    ${activation}
     delay 0.2
     tell application "System Events"
       keystroke "v" using command down
@@ -44,7 +79,9 @@ export function executeMacro(text: string): Promise<void> {
           reject(asErr);
           return;
         }
-        console.log(`[macro] injected: "${text.slice(0, 40)}${text.length > 40 ? "…" : ""}"`);
+        console.log(
+          `[macro] injected target=${targetApp}: "${text.slice(0, 40)}${text.length > 40 ? "…" : ""}"`
+        );
         resolve();
       });
     });
