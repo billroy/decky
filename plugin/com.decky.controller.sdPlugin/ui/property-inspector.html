@@ -602,6 +602,8 @@
     let pendingThemeApplyMode = "";
     let savedTheme = "light";
     let pendingThemeChange = false;
+    let savedThemeSeed = 0;
+    let pendingThemeSeed = null;
 
     function buildPayload() {
       var payload = {
@@ -625,6 +627,7 @@
       if (pendingThemeApplyMode) {
         payload.themeApplyMode = pendingThemeApplyMode;
       }
+      payload.themeSeed = pendingThemeSeed !== null ? pendingThemeSeed : savedThemeSeed;
       return payload;
     }
 
@@ -652,6 +655,8 @@
       baselinePayload = next;
       forceIncludeColorsField = false;
       pendingThemeApplyMode = "";
+      if (pendingThemeSeed !== null) savedThemeSeed = pendingThemeSeed;
+      pendingThemeSeed = null;
       setSaveEnabled(false);
       if (showToast) showStatus("Applied", "saved");
     }
@@ -702,6 +707,12 @@
 
     function applyThemeMode(mode) {
       pendingThemeApplyMode = mode;
+      const themeValue = document.getElementById("theme").value;
+      if (themeValue === "random" || themeValue === "rainbow") {
+        pendingThemeSeed = Math.floor(Math.random() * 0x7fffffff);
+      } else {
+        pendingThemeSeed = null;
+      }
       if (mode === "clear-page" || mode === "clear-all") {
         defaultColors = { bg: "", text: "", icon: "" };
         forceIncludeColorsField = true;
@@ -741,6 +752,11 @@
         return;
       }
       if (msg && msg.type === "configSnapshot") {
+        // Do not stomp local edits with async snapshots while the user is
+        // actively changing fields (notably theme selection + apply workflow).
+        if (configLoaded && (pendingThemeChange || hasChanges())) {
+          return;
+        }
         if (Array.isArray(msg.macros)) {
           macros = msg.macros.map((m) => ({
             label: m.label || "",
@@ -753,6 +769,11 @@
         settings.theme = msg.theme || "light";
         savedTheme = settings.theme;
         pendingThemeChange = false;
+        savedThemeSeed =
+          typeof msg.themeSeed === "number" && Number.isFinite(msg.themeSeed)
+            ? Math.floor(msg.themeSeed)
+            : 0;
+        pendingThemeSeed = null;
         if (msg.editor !== undefined) settings.editor = msg.editor || "";
         if (msg.approvalTimeout !== undefined) settings.approvalTimeout = msg.approvalTimeout;
         if (msg.defaultTargetApp) settings.defaultTargetApp = msg.defaultTargetApp;
@@ -761,6 +782,12 @@
           defaultColors.bg = msg.colors.bg || "";
           defaultColors.text = msg.colors.text || "";
           defaultColors.icon = msg.colors.icon || "";
+        } else {
+          // Bridge omits `colors` when defaults are cleared; mirror that in PI
+          // so stale local defaults are not re-sent on the next update.
+          defaultColors.bg = "";
+          defaultColors.text = "";
+          defaultColors.icon = "";
         }
         if (typeof msg.selectedMacroIndex === "number" && Number.isFinite(msg.selectedMacroIndex) && msg.selectedMacroIndex >= 0) {
           selectedMacroIndex = Math.floor(msg.selectedMacroIndex);

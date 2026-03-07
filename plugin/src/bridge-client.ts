@@ -46,6 +46,7 @@ export interface DeckyConfig {
   macros: MacroDef[];
   approvalTimeout: number;
   theme: Theme;
+  themeSeed?: number;
   editor?: string;
   colors?: ColorOverrides;
   defaultTargetApp: TargetApp;

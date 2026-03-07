@@ -117,10 +117,11 @@ describe("config endpoints", () => {
     const res = await fetch(`${baseUrl}/config`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ theme: "rainbow" }),
+      body: JSON.stringify({ theme: "rainbow", themeSeed: 12345 }),
     });
     const data = await res.json();
     expect(data.config.theme).toBe("rainbow");
+    expect(data.config.themeSeed).toBe(12345);
   });
 
   it("GET /config reflects saved changes", async () => {

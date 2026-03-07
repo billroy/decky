@@ -40,6 +40,7 @@ export interface DeckyConfig {
   macros: MacroDef[];
   approvalTimeout: number;
   theme: Theme;
+  themeSeed?: number;
   editor: string;
   colors?: ColorOverrides;
   defaultTargetApp: TargetApp;
@@ -64,6 +65,7 @@ const DEFAULT_CONFIG: DeckyConfig = {
   ],
   approvalTimeout: 30,
   theme: "light",
+  themeSeed: 0,
   editor: "bbedit",
   defaultTargetApp: "claude",
   showTargetBadge: false,
@@ -166,6 +168,10 @@ export function loadConfig(): DeckyConfig {
           ? parsed.approvalTimeout
           : DEFAULT_CONFIG.approvalTimeout,
       theme: normalizeTheme(raw_obj.theme, DEFAULT_CONFIG.theme),
+      themeSeed:
+        typeof raw_obj.themeSeed === "number" && Number.isFinite(raw_obj.themeSeed)
+          ? Math.floor(raw_obj.themeSeed)
+          : DEFAULT_CONFIG.themeSeed,
       editor: typeof raw_obj.editor === "string" ? raw_obj.editor : DEFAULT_CONFIG.editor,
       defaultTargetApp,
       showTargetBadge:
@@ -212,6 +218,10 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
         ? update.approvalTimeout
         : currentConfig.approvalTimeout,
     theme: normalizeTheme(update_obj.theme, currentConfig.theme),
+    themeSeed:
+      typeof update_obj.themeSeed === "number" && Number.isFinite(update_obj.themeSeed)
+        ? Math.floor(update_obj.themeSeed)
+        : currentConfig.themeSeed,
     editor: typeof update_obj.editor === "string" ? update_obj.editor : currentConfig.editor,
     defaultTargetApp: normalizeTargetApp(update_obj.defaultTargetApp, currentConfig.defaultTargetApp),
     showTargetBadge:
