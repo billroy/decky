@@ -1,0 +1,129 @@
+# Decky
+
+StreamDeck MK.2 controller for Claude Code on macOS. Approve tool use, deny, cancel, and send text macros with physical buttons instead of clicking through the GUI.
+
+## Install
+
+Requires macOS 13+, Node.js 20+, Elgato StreamDeck MK.2 with Stream Deck app 6.6+, and Claude Code.
+
+```bash
+git clone https://github.com/billroy/decky.git
+cd decky
+./install.sh
+```
+
+This installs dependencies, builds the plugin, copies hook scripts to `~/.decky/hooks/`, registers them in `~/.claude/settings.json`, and links the plugin to Stream Deck.
+
+Restart the Stream Deck app after install. Then add **Decky Slot** buttons to your deck (place 6 for the full layout).
+
+## Start
+
+```bash
+./start.sh
+```
+
+Starts the bridge server on `http://localhost:9130`. Keep it running while using Claude Code.
+
+## How it works
+
+Decky has two parts: a **bridge server** and a **StreamDeck plugin**.
+
+**Bridge server** (`bridge/`) receives lifecycle hook events from Claude Code (`PreToolUse`, `PostToolUse`, `Stop`, etc.), tracks state, and broadcasts changes over Socket.io.
+
+**StreamDeck plugin** (`plugin/`) connects to the bridge and dynamically updates button icons and behavior based on the current state.
+
+### States
+
+| State | Deck shows | Available actions |
+|---|---|---|
+| **idle** | Macro buttons (up to 6) | Press to inject text into Claude |
+| **thinking** | Thinking indicator + Stop | Stop |
+| **awaiting-approval** | Approve, Deny, Cancel, tool name | Approve / Deny / Cancel |
+| **tool-executing** | Stop + tool name | Stop |
+| **stopped** | Restart | Restart |
+
+### Approval workflow
+
+When Claude Code wants to run a tool, the `PreToolUse` hook fires and the bridge enters the `awaiting-approval` state. The hook script blocks, waiting for a decision. Press **Approve** on the deck and the tool runs. Press **Deny** to skip it or **Cancel** to stop the session.
+
+### Macros
+
+In the idle state, the deck shows up to 6 configurable text macros. Press one and the text is typed into Claude via the clipboard (pbcopy + Cmd+V). The default macros are: Continue, Yes, No, Stop & Think, Summarize, Make it so.
+
+Edit macros in the Stream Deck app by selecting a Decky Slot button and using the Property Inspector, or edit `~/.decky/config.json` directly.
+
+## Configuration
+
+Config lives at `~/.decky/config.json` (created with defaults on first run):
+
+```json
+{
+  "macros": [
+    { "label": "Continue", "text": "Continue" },
+    { "label": "Yes", "text": "Yes" },
+    { "label": "No", "text": "No" }
+  ],
+  "approvalTimeout": 30
+}
+```
+
+- **macros**: Up to 6 entries. `label` shows on the button, `text` is sent to Claude.
+- **approvalTimeout**: Seconds the hook waits for a button press before auto-approving (default 30).
+
+## Development
+
+```bash
+# Bridge (auto-restarts on changes)
+cd bridge && npm run dev
+
+# Plugin (watch mode for rollup)
+cd plugin && npm run watch
+
+# Tests
+cd bridge && npm test
+cd plugin && npm test
+```
+
+## Project structure
+
+```
+install.sh             One-step install
+start.sh               Start the bridge
+
+bridge/                Bridge server (Express + Socket.io)
+  src/app.ts             App factory
+  src/server.ts          Entry point (port 9130)
+  src/state-machine.ts   State machine (5 states)
+  src/approval-gate.ts   File-based approval signaling
+  src/config.ts          Config loader (~/.decky/config.json)
+  src/macro-exec.ts      AppleScript text injection
+
+plugin/                StreamDeck plugin
+  src/plugin.ts          Entry point
+  src/bridge-client.ts   Socket.io client
+  src/layouts.ts         State-driven button layouts
+  src/actions/           Action handlers (slot, status, approve, deny, cancel)
+  com.decky.controller.sdPlugin/
+    manifest.json        Plugin manifest
+    ui/                  Property Inspector
+
+hooks/                 Claude Code hook scripts
+  pre-tool-use.sh        Blocking hook (polls approval gate)
+  post-tool-use.sh       State update
+  stop.sh                State update
+  notification.sh        State update
+```
+
+## REST API
+
+The bridge exposes these endpoints:
+
+- `POST /hook` — receives Claude Code hook events
+- `GET /status` — current state snapshot
+- `GET /config` — current config
+- `PUT /config` — save updated config
+- `POST /config/reload` — reload config from disk
+
+## License
+
+MIT
