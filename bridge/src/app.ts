@@ -11,6 +11,8 @@ import { createServer, type Server as HttpServer } from "node:http";
 import { Server as SocketIOServer } from "socket.io";
 import { StateMachine, type HookPayload, type HookEvent } from "./state-machine.js";
 import { writeGateFile, clearGateFile, type ApprovalResult } from "./approval-gate.js";
+import { loadConfig, getConfig, reloadConfig } from "./config.js";
+import { executeMacro } from "./macro-exec.js";
 
 const VALID_EVENTS: Set<string> = new Set([
   "PreToolUse",
@@ -36,6 +38,9 @@ export function createApp(): DeckyApp {
   });
 
   const sm = new StateMachine();
+
+  // Load config from ~/.decky/config.json
+  loadConfig();
 
   // Broadcast state changes to all connected Socket.io clients
   sm.onStateChange((snapshot) => {
@@ -83,12 +88,23 @@ export function createApp(): DeckyApp {
     res.json(sm.getSnapshot());
   });
 
+  app.get("/config", (_req, res) => {
+    res.json(getConfig());
+  });
+
+  app.post("/config/reload", (_req, res) => {
+    const config = reloadConfig();
+    io.emit("configUpdate", config);
+    res.json({ ok: true, config });
+  });
+
   // --- Socket.io connections ---
 
   io.on("connection", (socket) => {
     console.log(`[io] client connected: ${socket.id}`);
 
     socket.emit("stateChange", sm.getSnapshot());
+    socket.emit("configUpdate", getConfig());
 
     socket.on("action", (data: { action: string; [key: string]: unknown }) => {
       console.log(`[io] action received: ${JSON.stringify(data)}`);
@@ -106,8 +122,14 @@ export function createApp(): DeckyApp {
       } else if (data.action === "restart") {
         sm.forceState("idle", "restarted via StreamDeck");
       } else if (data.action === "macro") {
-        // Stub: macros will be implemented in Phase 5
-        console.log(`[io] macro pressed: index=${data.index ?? "?"}`);
+        const macroText = typeof data.text === "string" ? data.text : null;
+        if (macroText) {
+          executeMacro(macroText).catch((err) => {
+            console.error("[io] macro execution failed:", err);
+          });
+        } else {
+          console.log(`[io] macro pressed with no text: ${JSON.stringify(data)}`);
+        }
       } else {
         console.log(`[io] unknown action: ${data.action}`);
       }

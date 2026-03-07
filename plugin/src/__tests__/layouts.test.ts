@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getSlotConfig, getLayout, getLayoutStates } from "../layouts.js";
+import { getSlotConfig, getLayout, getLayoutStates, type MacroInput } from "../layouts.js";
 
 describe("layouts", () => {
   describe("getLayoutStates", () => {
@@ -26,13 +26,13 @@ describe("layouts", () => {
     });
   });
 
-  describe("idle layout", () => {
-    it("has 6 macro stubs at slots 0-5", () => {
+  describe("idle layout (default macros)", () => {
+    it("has 6 default macro stubs at slots 0-5", () => {
       for (let i = 0; i < 6; i++) {
         const config = getSlotConfig("idle", i);
         expect(config.title).toBe(`Macro ${i + 1}`);
         expect(config.action).toBe("macro");
-        expect(config.data).toEqual({ index: i + 1 });
+        expect(config.data).toEqual({ text: "" });
         expect(config.svg).toContain("svg");
       }
     });
@@ -41,6 +41,49 @@ describe("layouts", () => {
       const config = getSlotConfig("idle", 6);
       expect(config.title).toBe("");
       expect(config.action).toBeUndefined();
+    });
+  });
+
+  describe("idle layout (config-driven macros)", () => {
+    const macros: MacroInput[] = [
+      { label: "Continue", text: "Continue" },
+      { label: "Yes", text: "Yes" },
+      { label: "No", text: "No" },
+    ];
+
+    it("renders macros from config", () => {
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.title).toBe("Continue");
+      expect(config.action).toBe("macro");
+      expect(config.data).toEqual({ text: "Continue" });
+    });
+
+    it("renders all provided macros", () => {
+      for (let i = 0; i < macros.length; i++) {
+        const config = getSlotConfig("idle", i, null, macros);
+        expect(config.title).toBe(macros[i].label);
+        expect(config.data).toEqual({ text: macros[i].text });
+      }
+    });
+
+    it("returns empty for slots beyond provided macros", () => {
+      const config = getSlotConfig("idle", 3, null, macros);
+      expect(config.title).toBe("");
+      expect(config.action).toBeUndefined();
+    });
+
+    it("caps macros at 6 slots", () => {
+      const manyMacros: MacroInput[] = Array.from({ length: 10 }, (_, i) => ({
+        label: `M${i}`, text: `text${i}`,
+      }));
+      const config = getSlotConfig("idle", 7, null, manyMacros);
+      expect(config.title).toBe("");
+    });
+
+    it("truncates long macro labels in SVG", () => {
+      const longMacros: MacroInput[] = [{ label: "VeryLongMacroLabel", text: "test" }];
+      const config = getSlotConfig("idle", 0, null, longMacros);
+      expect(config.svg).toContain("VeryLongM\u2026");
     });
   });
 

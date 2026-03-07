@@ -23,10 +23,13 @@ function roundedRect(color: string, symbol: string, fontSize = 64): string {
   </svg>`;
 }
 
-function macroSVG(n: number): string {
+function macroSVG(label: string): string {
+  const displayLabel = label.length > 10 ? label.slice(0, 9) + "\u2026" : label;
+  const fontSize = displayLabel.length > 6 ? 22 : 28;
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <rect width="144" height="144" rx="16" fill="#1e3a5f" />
-    <text x="72" y="92" font-size="72" font-family="sans-serif" text-anchor="middle" fill="#94a3b8">${n}</text>
+    <text x="72" y="58" font-size="20" font-family="sans-serif" text-anchor="middle" fill="#64748b">\u25B6</text>
+    <text x="72" y="100" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="#e2e8f0">${displayLabel}</text>
   </svg>`;
 }
 
@@ -89,14 +92,29 @@ const THINKING: SlotConfig = {
   title: "Thinking\u2026",
 };
 
-function macroSlot(n: number): SlotConfig {
+export interface MacroInput {
+  label: string;
+  text: string;
+}
+
+function macroSlot(macro: MacroInput): SlotConfig {
   return {
-    svg: macroSVG(n),
-    title: `Macro ${n}`,
+    svg: macroSVG(macro.label),
+    title: macro.label,
     action: "macro",
-    data: { index: n },
+    data: { text: macro.text },
   };
 }
+
+/** Default macros used when no config is available. */
+const DEFAULT_MACROS: MacroInput[] = [
+  { label: "Macro 1", text: "" },
+  { label: "Macro 2", text: "" },
+  { label: "Macro 3", text: "" },
+  { label: "Macro 4", text: "" },
+  { label: "Macro 5", text: "" },
+  { label: "Macro 6", text: "" },
+];
 
 const EMPTY: SlotConfig = {
   svg: EMPTY_SVG,
@@ -105,16 +123,15 @@ const EMPTY: SlotConfig = {
 
 // --- Layout definitions per state ---
 
-const LAYOUTS: Record<string, LayoutDef> = {
-  idle: {
-    0: macroSlot(1),
-    1: macroSlot(2),
-    2: macroSlot(3),
-    3: macroSlot(4),
-    4: macroSlot(5),
-    5: macroSlot(6),
-  },
+function buildIdleLayout(macros: MacroInput[]): LayoutDef {
+  const layout: LayoutDef = {};
+  for (let i = 0; i < macros.length && i < 6; i++) {
+    layout[i] = macroSlot(macros[i]);
+  }
+  return layout;
+}
 
+const LAYOUTS: Record<string, LayoutDef> = {
   thinking: {
     0: THINKING,
     1: STOP,
@@ -145,7 +162,15 @@ export function getSlotConfig(
   state: string,
   slotIndex: number,
   toolName?: string | null,
+  macros?: MacroInput[],
 ): SlotConfig {
+  // Idle state: render from macros (config-driven or defaults)
+  if (state === "idle") {
+    const macroList = macros ?? DEFAULT_MACROS;
+    const idleLayout = buildIdleLayout(macroList);
+    return idleLayout[slotIndex] ?? EMPTY;
+  }
+
   // Special case: tool-executing slot 1 shows tool name
   if (state === "tool-executing" && slotIndex === 1 && toolName) {
     return { svg: toolInfoSVG(toolName), title: toolName };
@@ -162,11 +187,14 @@ export function getSlotConfig(
 }
 
 /** Get the full layout definition for a state. */
-export function getLayout(state: string): LayoutDef {
+export function getLayout(state: string, macros?: MacroInput[]): LayoutDef {
+  if (state === "idle") {
+    return buildIdleLayout(macros ?? DEFAULT_MACROS);
+  }
   return LAYOUTS[state] ?? {};
 }
 
 /** List all known states that have layout definitions. */
 export function getLayoutStates(): string[] {
-  return Object.keys(LAYOUTS);
+  return ["idle", ...Object.keys(LAYOUTS)];
 }

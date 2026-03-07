@@ -15,10 +15,22 @@ export interface StateSnapshot {
   timestamp: number;
 }
 
+export interface MacroDef {
+  label: string;
+  text: string;
+  icon?: string;
+}
+
+export interface DeckyConfig {
+  macros: MacroDef[];
+  approvalTimeout: number;
+}
+
 export type ConnectionStatus = "connected" | "disconnected" | "connecting";
 
 type StateChangeListener = (snapshot: StateSnapshot) => void;
 type ConnectionListener = (status: ConnectionStatus) => void;
+type ConfigListener = (config: DeckyConfig) => void;
 
 export class BridgeClient {
   private socket: Socket | null = null;
@@ -26,6 +38,8 @@ export class BridgeClient {
   private lastSnapshot: StateSnapshot | null = null;
   private stateListeners: StateChangeListener[] = [];
   private connectionListeners: ConnectionListener[] = [];
+  private configListeners: ConfigListener[] = [];
+  private lastConfig: DeckyConfig | null = null;
 
   constructor(private url: string = "http://localhost:9130") {}
 
@@ -62,6 +76,14 @@ export class BridgeClient {
         listener(snapshot);
       }
     });
+
+    this.socket.on("configUpdate", (config: DeckyConfig) => {
+      console.log(`[bridge] config: ${config.macros.length} macros`);
+      this.lastConfig = config;
+      for (const listener of this.configListeners) {
+        listener(config);
+      }
+    });
   }
 
   disconnect(): void {
@@ -90,6 +112,17 @@ export class BridgeClient {
     this.stateListeners.push(listener);
     return () => {
       this.stateListeners = this.stateListeners.filter((l) => l !== listener);
+    };
+  }
+
+  getLastConfig(): DeckyConfig | null {
+    return this.lastConfig;
+  }
+
+  onConfigChange(listener: ConfigListener): () => void {
+    this.configListeners.push(listener);
+    return () => {
+      this.configListeners = this.configListeners.filter((l) => l !== listener);
     };
   }
 

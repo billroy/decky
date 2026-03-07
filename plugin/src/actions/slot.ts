@@ -15,7 +15,7 @@ import {
   type KeyDownEvent,
 } from "@elgato/streamdeck";
 import { type BridgeClient, type ConnectionStatus, type StateSnapshot } from "../bridge-client.js";
-import { getSlotConfig } from "../layouts.js";
+import { getSlotConfig, type MacroInput } from "../layouts.js";
 
 let bridgeRef: BridgeClient | null = null;
 
@@ -50,6 +50,7 @@ export function resetSlots(): void {
 export class SlotAction extends SingletonAction {
   private unsubConnection?: () => void;
   private unsubState?: () => void;
+  private unsubConfig?: () => void;
 
   override async onWillAppear(ev: WillAppearEvent): Promise<void> {
     if (!bridgeRef) return;
@@ -73,6 +74,12 @@ export class SlotAction extends SingletonAction {
         await this.renderAll(bridgeRef!.getConnectionStatus(), snapshot);
       });
     }
+
+    if (!this.unsubConfig) {
+      this.unsubConfig = bridgeRef.onConfigChange(async () => {
+        await this.renderAll(bridgeRef!.getConnectionStatus(), bridgeRef!.getLastSnapshot());
+      });
+    }
   }
 
   override async onWillDisappear(ev: WillDisappearEvent): Promise<void> {
@@ -82,8 +89,10 @@ export class SlotAction extends SingletonAction {
     if (slotAssignments.size === 0) {
       this.unsubConnection?.();
       this.unsubState?.();
+      this.unsubConfig?.();
       this.unsubConnection = undefined;
       this.unsubState = undefined;
+      this.unsubConfig = undefined;
       resetSlots();
     }
   }
@@ -96,22 +105,30 @@ export class SlotAction extends SingletonAction {
 
     const snapshot = bridgeRef.getLastSnapshot();
     const state = snapshot?.state ?? "idle";
-    const config = getSlotConfig(state, slotIndex, snapshot?.tool);
+    const macros = this.getMacros();
+    const config = getSlotConfig(state, slotIndex, snapshot?.tool, macros);
 
     if (config.action && bridgeRef.getConnectionStatus() === "connected") {
       bridgeRef.sendAction(config.action, config.data);
     }
   }
 
+  private getMacros(): MacroInput[] | undefined {
+    const cfg = bridgeRef?.getLastConfig();
+    if (!cfg?.macros?.length) return undefined;
+    return cfg.macros.map((m) => ({ label: m.label, text: m.text }));
+  }
+
   private async renderAll(connStatus: ConnectionStatus, snapshot: StateSnapshot | null): Promise<void> {
     const state = connStatus === "connected" ? (snapshot?.state ?? "idle") : "stopped";
     const toolName = snapshot?.tool;
+    const macros = this.getMacros();
 
     for (const instance of this.actions) {
       const slotIndex = slotAssignments.get(instance.id);
       if (slotIndex === undefined) continue;
 
-      const config = getSlotConfig(state, slotIndex, toolName);
+      const config = getSlotConfig(state, slotIndex, toolName, macros);
       const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
 
       await instance.setImage(imageData);
