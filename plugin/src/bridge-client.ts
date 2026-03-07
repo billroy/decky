@@ -24,6 +24,8 @@ export interface MacroDef {
 export interface DeckyConfig {
   macros: MacroDef[];
   approvalTimeout: number;
+  theme: "light" | "dark";
+  editor?: string;
 }
 
 export type ConnectionStatus = "connected" | "disconnected" | "connecting";

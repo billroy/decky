@@ -17,8 +17,9 @@ import streamDeck, {
   type SendToPluginEvent,
 } from "@elgato/streamdeck";
 import type { JsonValue, JsonObject } from "@elgato/utils";
+import { exec } from "node:child_process";
 import { type BridgeClient, type ConnectionStatus, type StateSnapshot } from "../bridge-client.js";
-import { getSlotConfig, type MacroInput } from "../layouts.js";
+import { getSlotConfig, setTheme, type MacroInput } from "../layouts.js";
 
 let bridgeRef: BridgeClient | null = null;
 
@@ -117,6 +118,12 @@ export class SlotAction extends SingletonAction {
     const macros = this.getMacros();
     const config = getSlotConfig(state, rank, snapshot?.tool, macros);
 
+    if (config.action === "openConfig") {
+      const editor = bridgeRef.getLastConfig()?.editor ?? "open";
+      exec(`${editor} ~/.decky/config.json`);
+      return;
+    }
+
     if (config.action && bridgeRef.getConnectionStatus() === "connected") {
       bridgeRef.sendAction(config.action, config.data);
     }
@@ -140,6 +147,7 @@ export class SlotAction extends SingletonAction {
 
   private getMacros(): MacroInput[] | undefined {
     const cfg = bridgeRef?.getLastConfig();
+    if (cfg?.theme) setTheme(cfg.theme);
     if (!cfg?.macros?.length) return undefined;
     return cfg.macros.map((m) => ({ label: m.label, text: m.text, icon: m.icon }));
   }

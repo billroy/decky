@@ -14,6 +14,51 @@ export interface SlotConfig {
 
 export type LayoutDef = Record<number, SlotConfig>;
 
+// --- Theme palettes ---
+
+export type Theme = "light" | "dark";
+
+interface ThemePalette {
+  macroBg: string;
+  macroLabel: string;
+  defaultBg: string;
+  defaultIcon: string;
+  defaultLabel: string;
+  emptyBg: string;
+  emptyText: string;
+}
+
+const PALETTES: Record<Theme, ThemePalette> = {
+  light: {
+    macroBg: "#ffffff",
+    macroLabel: "#1e293b",
+    defaultBg: "#1e3a5f",
+    defaultIcon: "#64748b",
+    defaultLabel: "#e2e8f0",
+    emptyBg: "#1e293b",
+    emptyText: "#475569",
+  },
+  dark: {
+    macroBg: "#0f172a",
+    macroLabel: "#e2e8f0",
+    defaultBg: "#0f172a",
+    defaultIcon: "#475569",
+    defaultLabel: "#94a3b8",
+    emptyBg: "#0f172a",
+    emptyText: "#334155",
+  },
+};
+
+let currentTheme: Theme = "light";
+
+export function setTheme(theme: Theme): void {
+  currentTheme = theme;
+}
+
+export function getTheme(): Theme {
+  return currentTheme;
+}
+
 // --- SVG generators ---
 
 function roundedRect(color: string, symbol: string, fontSize = 64): string {
@@ -24,38 +69,39 @@ function roundedRect(color: string, symbol: string, fontSize = 64): string {
 }
 
 function macroSVG(label: string, icon?: string): string {
+  const p = PALETTES[currentTheme];
   const displayLabel = label.length > 10 ? label.slice(0, 9) + "\u2026" : label;
-  const fontSize = displayLabel.length > 6 ? 22 : 28;
+  const fontSize = displayLabel.length > 6 ? 26 : 32;
 
   if (icon === "checkmark") {
     return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
-      <rect width="144" height="144" rx="16" fill="#ffffff" />
-      <text x="72" y="90" font-size="84" font-family="sans-serif" text-anchor="middle" fill="#22c55e">\u2713</text>
-      <text x="72" y="130" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="#1e293b">${displayLabel}</text>
+      <rect width="144" height="144" rx="16" fill="${p.macroBg}" />
+      <text x="72" y="96" font-size="100" font-family="sans-serif" text-anchor="middle" fill="#22c55e">\u2713</text>
+      <text x="72" y="136" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${p.macroLabel}">${displayLabel}</text>
     </svg>`;
   }
 
   if (icon === "stop") {
     return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
-      <rect width="144" height="144" rx="16" fill="#ffffff" />
-      <text x="72" y="92" font-size="90" font-family="sans-serif" text-anchor="middle" fill="#ef4444">\u2B23</text>
-      <text x="72" y="130" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="#1e293b">${displayLabel}</text>
+      <rect width="144" height="144" rx="16" fill="${p.macroBg}" />
+      <text x="72" y="96" font-size="100" font-family="sans-serif" text-anchor="middle" fill="#ef4444">\u2B23</text>
+      <text x="72" y="136" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${p.macroLabel}">${displayLabel}</text>
     </svg>`;
   }
 
   if (icon === "exclamation") {
     return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
-      <rect width="144" height="144" rx="16" fill="#ffffff" />
-      <text x="72" y="92" font-size="90" font-family="sans-serif" text-anchor="middle" fill="#f59e0b" font-weight="bold">!</text>
-      <text x="72" y="130" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="#1e293b">${displayLabel}</text>
+      <rect width="144" height="144" rx="16" fill="${p.macroBg}" />
+      <text x="72" y="96" font-size="100" font-family="sans-serif" text-anchor="middle" fill="#f59e0b" font-weight="bold">!</text>
+      <text x="72" y="136" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${p.macroLabel}">${displayLabel}</text>
     </svg>`;
   }
 
-  // Default: blue style
+  // Default: no icon
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
-    <rect width="144" height="144" rx="16" fill="#1e3a5f" />
-    <text x="72" y="82" font-size="48" font-family="sans-serif" text-anchor="middle" fill="#64748b">\u25B6</text>
-    <text x="72" y="130" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="#e2e8f0">${displayLabel}</text>
+    <rect width="144" height="144" rx="16" fill="${p.defaultBg}" />
+    <text x="72" y="86" font-size="60" font-family="sans-serif" text-anchor="middle" fill="${p.defaultIcon}">\u25B6</text>
+    <text x="72" y="136" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${p.defaultLabel}">${displayLabel}</text>
   </svg>`;
 }
 
@@ -77,10 +123,13 @@ function thinkingSVG(): string {
   </svg>`;
 }
 
-const EMPTY_SVG = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
-  <rect width="144" height="144" rx="16" fill="#1e293b" />
-  <text x="72" y="82" font-size="36" font-family="sans-serif" text-anchor="middle" fill="#475569">\u2022\u2022\u2022</text>
+function emptySVG(): string {
+  const p = PALETTES[currentTheme];
+  return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+  <rect width="144" height="144" rx="16" fill="${p.emptyBg}" />
+  <text x="72" y="82" font-size="36" font-family="sans-serif" text-anchor="middle" fill="${p.emptyText}">\u2022\u2022\u2022</text>
 </svg>`;
+}
 
 // --- Slot config factories ---
 
@@ -144,16 +193,15 @@ const DEFAULT_MACROS: MacroInput[] = [
   { label: "Macro 6", text: "" },
 ];
 
-const EMPTY: SlotConfig = {
-  svg: EMPTY_SVG,
-  title: "",
-};
+function emptySlot(): SlotConfig {
+  return { svg: emptySVG(), title: "", action: "openConfig" };
+}
 
 // --- Layout definitions per state ---
 
 function buildIdleLayout(macros: MacroInput[]): LayoutDef {
   const layout: LayoutDef = {};
-  for (let i = 0; i < macros.length && i < 15; i++) {
+  for (let i = 0; i < macros.length && i < 36; i++) {
     layout[i] = macroSlot(macros[i]);
   }
   return layout;
@@ -196,7 +244,7 @@ export function getSlotConfig(
   if (state === "idle") {
     const macroList = macros ?? DEFAULT_MACROS;
     const idleLayout = buildIdleLayout(macroList);
-    return idleLayout[slotIndex] ?? EMPTY;
+    return idleLayout[slotIndex] ?? emptySlot();
   }
 
   // Special case: tool-executing slot 1 shows tool name
@@ -210,8 +258,8 @@ export function getSlotConfig(
   }
 
   const layout = LAYOUTS[state];
-  if (!layout) return EMPTY;
-  return layout[slotIndex] ?? EMPTY;
+  if (!layout) return emptySlot();
+  return layout[slotIndex] ?? emptySlot();
 }
 
 /** Get the full layout definition for a state. */

@@ -18,6 +18,8 @@ export interface MacroDef {
 export interface DeckyConfig {
   macros: MacroDef[];
   approvalTimeout: number;
+  theme: "light" | "dark";
+  editor?: string;
 }
 
 const DECKY_DIR = join(homedir(), ".decky");
@@ -31,8 +33,13 @@ const DEFAULT_CONFIG: DeckyConfig = {
     { label: "Stop", text: "Stop what you are doing.", icon: "stop" },
     { label: "Summarize", text: "Summarize what you've done so far." },
     { label: "Make it so", text: "Make it so", icon: "checkmark" },
+    { label: "Commit", text: "Commit", icon: "exclamation" },
+    { label: "Deploy", text: "Deploy and monitor", icon: "exclamation" },
+    { label: "Usage", text: "Show usage", icon: "checkmark" },
+    { label: "Session?", text: "Is it time to move to a new session?", icon: "checkmark" },
   ],
   approvalTimeout: 30,
+  theme: "light",
 };
 
 let currentConfig: DeckyConfig = { ...DEFAULT_CONFIG };
@@ -57,19 +64,22 @@ export function loadConfig(): DeckyConfig {
     const raw = readFileSync(CONFIG_PATH, "utf-8");
     const parsed = JSON.parse(raw) as Partial<DeckyConfig>;
 
+    const raw_obj = parsed as Record<string, unknown>;
     currentConfig = {
       macros: Array.isArray(parsed.macros) ? parsed.macros : DEFAULT_CONFIG.macros,
       approvalTimeout:
         typeof parsed.approvalTimeout === "number"
           ? parsed.approvalTimeout
           : DEFAULT_CONFIG.approvalTimeout,
+      theme: raw_obj.theme === "dark" ? "dark" : "light",
+      ...(typeof raw_obj.editor === "string" ? { editor: raw_obj.editor } : {}),
     };
 
     console.log(`[config] loaded ${currentConfig.macros.length} macros from ${CONFIG_PATH}`);
     return currentConfig;
   } catch (err) {
     console.error(`[config] failed to parse config, using defaults:`, err);
-    currentConfig = { ...DEFAULT_CONFIG };
+    currentConfig = { ...DEFAULT_CONFIG, theme: "light" };
     return currentConfig;
   }
 }
@@ -88,12 +98,15 @@ export function reloadConfig(): DeckyConfig {
 export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
   ensureDir();
 
+  const update_obj = update as Record<string, unknown>;
   const merged: DeckyConfig = {
     macros: Array.isArray(update.macros) ? update.macros : currentConfig.macros,
     approvalTimeout:
       typeof update.approvalTimeout === "number"
         ? update.approvalTimeout
         : currentConfig.approvalTimeout,
+    theme: update_obj.theme === "dark" ? "dark" : currentConfig.theme,
+    ...(typeof update_obj.editor === "string" ? { editor: update_obj.editor } : currentConfig.editor ? { editor: currentConfig.editor } : {}),
   };
 
   writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), "utf-8");

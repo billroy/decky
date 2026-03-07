@@ -1,7 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { getSlotConfig, getLayout, getLayoutStates, type MacroInput } from "../layouts.js";
+import { describe, it, expect, afterEach } from "vitest";
+import { getSlotConfig, getLayout, getLayoutStates, setTheme, type MacroInput } from "../layouts.js";
 
 describe("layouts", () => {
+  afterEach(() => setTheme("light"));
   describe("getLayoutStates", () => {
     it("returns all five states", () => {
       const states = getLayoutStates();
@@ -40,7 +41,7 @@ describe("layouts", () => {
     it("returns empty config for slots beyond 5", () => {
       const config = getSlotConfig("idle", 6);
       expect(config.title).toBe("");
-      expect(config.action).toBeUndefined();
+      expect(config.action).toBe("openConfig");
     });
   });
 
@@ -69,14 +70,14 @@ describe("layouts", () => {
     it("returns empty for slots beyond provided macros", () => {
       const config = getSlotConfig("idle", 3, null, macros);
       expect(config.title).toBe("");
-      expect(config.action).toBeUndefined();
+      expect(config.action).toBe("openConfig");
     });
 
-    it("caps macros at 15 slots", () => {
-      const manyMacros: MacroInput[] = Array.from({ length: 20 }, (_, i) => ({
+    it("caps macros at 36 slots", () => {
+      const manyMacros: MacroInput[] = Array.from({ length: 40 }, (_, i) => ({
         label: `M${i}`, text: `text${i}`,
       }));
-      const config = getSlotConfig("idle", 15, null, manyMacros);
+      const config = getSlotConfig("idle", 36, null, manyMacros);
       expect(config.title).toBe("");
     });
 
@@ -196,6 +197,38 @@ describe("layouts", () => {
     it("returns empty for all slots", () => {
       const config = getSlotConfig("bogus", 0);
       expect(config.title).toBe("");
+    });
+  });
+
+  describe("dark theme", () => {
+    it("renders checkmark macro with dark background", () => {
+      setTheme("dark");
+      const macros: MacroInput[] = [{ label: "Yes", text: "Yes", icon: "checkmark" }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.svg).toContain('fill="#0f172a"');
+      expect(config.svg).toContain('fill="#22c55e"');
+      expect(config.svg).toContain('fill="#e2e8f0"');
+    });
+
+    it("renders default macro with dark background", () => {
+      setTheme("dark");
+      const macros: MacroInput[] = [{ label: "Test", text: "test" }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.svg).toContain('fill="#0f172a"');
+      expect(config.svg).toContain('fill="#94a3b8"');
+    });
+
+    it("renders empty slot with dark background", () => {
+      setTheme("dark");
+      const config = getSlotConfig("idle", 99);
+      expect(config.svg).toContain('fill="#0f172a"');
+    });
+  });
+
+  describe("empty slot action", () => {
+    it("has openConfig action", () => {
+      const config = getSlotConfig("idle", 99);
+      expect(config.action).toBe("openConfig");
     });
   });
 });
