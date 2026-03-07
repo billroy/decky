@@ -16,6 +16,17 @@ export interface ColorOverrides {
 }
 
 export type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";
+export type Theme =
+  | "light"
+  | "dark"
+  | "dracula"
+  | "monokai"
+  | "solarized-dark"
+  | "solarized-light"
+  | "nord"
+  | "github-dark"
+  | "rainbow"
+  | "random";
 
 export interface MacroDef {
   label: string;
@@ -28,7 +39,7 @@ export interface MacroDef {
 export interface DeckyConfig {
   macros: MacroDef[];
   approvalTimeout: number;
-  theme: "light" | "dark";
+  theme: Theme;
   editor: string;
   colors?: ColorOverrides;
   defaultTargetApp: TargetApp;
@@ -60,6 +71,21 @@ const DEFAULT_CONFIG: DeckyConfig = {
 
 let currentConfig: DeckyConfig = { ...DEFAULT_CONFIG };
 
+function normalizeTheme(value: unknown, fallback: Theme): Theme {
+  return value === "light" ||
+    value === "dark" ||
+    value === "dracula" ||
+    value === "monokai" ||
+    value === "solarized-dark" ||
+    value === "solarized-light" ||
+    value === "nord" ||
+    value === "github-dark" ||
+    value === "rainbow" ||
+    value === "random"
+    ? value
+    : fallback;
+}
+
 function normalizeTargetApp(value: unknown, fallback: TargetApp): TargetApp {
   return value === "claude" ||
     value === "codex" ||
@@ -77,11 +103,32 @@ function normalizeMacro(value: unknown, fallbackTarget: TargetApp): MacroDef | n
 
   const normalized: MacroDef = { label: macro.label, text: macro.text };
   if (typeof macro.icon === "string") normalized.icon = macro.icon;
-  if (macro.colors && typeof macro.colors === "object") normalized.colors = macro.colors as ColorOverrides;
+  const normalizedColors = normalizeColorOverrides(macro.colors);
+  if (normalizedColors) normalized.colors = normalizedColors;
   if (macro.targetApp !== undefined) {
     normalized.targetApp = normalizeTargetApp(macro.targetApp, fallbackTarget);
   }
   return normalized;
+}
+
+function normalizeHex(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const v = value.trim();
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(v) ? v : undefined;
+}
+
+function normalizeColorOverrides(value: unknown): ColorOverrides | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const obj = value as Record<string, unknown>;
+  const bg = normalizeHex(obj.bg);
+  const text = normalizeHex(obj.text);
+  const icon = normalizeHex(obj.icon);
+  if (!bg && !text && !icon) return undefined;
+  const out: ColorOverrides = {};
+  if (bg) out.bg = bg;
+  if (text) out.text = text;
+  if (icon) out.icon = icon;
+  return out;
 }
 
 /** Ensure ~/.decky/ directory exists. */
@@ -105,7 +152,7 @@ export function loadConfig(): DeckyConfig {
     const parsed = JSON.parse(raw) as Partial<DeckyConfig>;
 
     const raw_obj = parsed as Record<string, unknown>;
-    const colors = raw_obj.colors as ColorOverrides | undefined;
+    const colors = normalizeColorOverrides(raw_obj.colors);
     const defaultTargetApp = normalizeTargetApp(raw_obj.defaultTargetApp, DEFAULT_CONFIG.defaultTargetApp);
     const parsedMacros = Array.isArray(parsed.macros)
       ? parsed.macros
@@ -118,14 +165,14 @@ export function loadConfig(): DeckyConfig {
         typeof parsed.approvalTimeout === "number"
           ? parsed.approvalTimeout
           : DEFAULT_CONFIG.approvalTimeout,
-      theme: raw_obj.theme === "dark" ? "dark" : "light",
+      theme: normalizeTheme(raw_obj.theme, DEFAULT_CONFIG.theme),
       editor: typeof raw_obj.editor === "string" ? raw_obj.editor : DEFAULT_CONFIG.editor,
       defaultTargetApp,
       showTargetBadge:
         typeof raw_obj.showTargetBadge === "boolean"
           ? raw_obj.showTargetBadge
           : DEFAULT_CONFIG.showTargetBadge,
-      ...(colors && typeof colors === "object" ? { colors } : {}),
+      ...(colors ? { colors } : {}),
     };
 
     console.log(`[config] loaded ${currentConfig.macros.length} macros from ${CONFIG_PATH}`);
@@ -152,6 +199,8 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
   ensureDir();
 
   const update_obj = update as Record<string, unknown>;
+  const normalizedUpdateColors = normalizeColorOverrides(update.colors);
+  const hasColorsField = Object.prototype.hasOwnProperty.call(update_obj, "colors");
   const merged: DeckyConfig = {
     macros: Array.isArray(update.macros)
       ? update.macros
@@ -162,14 +211,16 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
       typeof update.approvalTimeout === "number"
         ? update.approvalTimeout
         : currentConfig.approvalTimeout,
-    theme: update_obj.theme === "dark" ? "dark" : update_obj.theme === "light" ? "light" : currentConfig.theme,
+    theme: normalizeTheme(update_obj.theme, currentConfig.theme),
     editor: typeof update_obj.editor === "string" ? update_obj.editor : currentConfig.editor,
     defaultTargetApp: normalizeTargetApp(update_obj.defaultTargetApp, currentConfig.defaultTargetApp),
     showTargetBadge:
       typeof update_obj.showTargetBadge === "boolean"
         ? update_obj.showTargetBadge
         : currentConfig.showTargetBadge,
-    ...(update.colors ? { colors: update.colors } : currentConfig.colors ? { colors: currentConfig.colors } : {}),
+    ...(hasColorsField
+      ? (normalizedUpdateColors ? { colors: normalizedUpdateColors } : {})
+      : (currentConfig.colors ? { colors: currentConfig.colors } : {})),
   };
 
   writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), "utf-8");

@@ -29,6 +29,45 @@ import {
 
 let bridgeRef: BridgeClient | null = null;
 
+interface DebugEntry {
+  ts: number;
+  event: string;
+  actionId?: string;
+  slotRank?: number;
+  details?: Record<string, unknown>;
+}
+
+const debugLog: DebugEntry[] = [];
+const DEBUG_MAX = 200;
+
+function pushDebug(event: string, actionId?: string, slotRank?: number, details?: Record<string, unknown>): void {
+  debugLog.push({ ts: Date.now(), event, actionId, slotRank, details });
+  if (debugLog.length > DEBUG_MAX) debugLog.splice(0, debugLog.length - DEBUG_MAX);
+}
+
+function recentDebug(): DebugEntry[] {
+  return debugLog.slice(-80);
+}
+
+function debugSummary(): Record<string, unknown> {
+  const cfg = bridgeRef?.getLastConfig();
+  return {
+    connection: bridgeRef?.getConnectionStatus() ?? "none",
+    theme: cfg?.theme ?? null,
+    hasPageColors: !!cfg?.colors,
+    macroCount: cfg?.macros?.length ?? 0,
+    macroColorCount: cfg?.macros?.filter((m) => !!m.colors).length ?? 0,
+    defaultTargetApp: cfg?.defaultTargetApp ?? null,
+    showTargetBadge: cfg?.showTargetBadge ?? false,
+  };
+}
+
+function summarizeSvg(svg: string): Record<string, unknown> {
+  const fills = svg.match(/fill="[^"]+"/g)?.slice(0, 6) ?? [];
+  const strokes = svg.match(/stroke="[^"]+"/g)?.slice(0, 4) ?? [];
+  return { fills, strokes, len: svg.length };
+}
+
 export function setSlotClient(client: BridgeClient): void {
   bridgeRef = client;
 }
@@ -53,6 +92,7 @@ export class SlotAction extends SingletonAction {
   private unsubConnection?: () => void;
   private unsubState?: () => void;
   private unsubConfig?: () => void;
+  private activePiActionId?: string;
 
   override async onWillAppear(ev: WillAppearEvent): Promise<void> {
     // Compute slot index from physical position on the deck
@@ -62,6 +102,7 @@ export class SlotAction extends SingletonAction {
       const columns = ev.action.device.size.columns;
       slotIndex = row * columns + column;
       slotAssignments.set(ev.action.id, slotIndex);
+      pushDebug("willAppear", ev.action.id, getSlotRank(ev.action.id), { slotIndex });
     }
 
     if (!bridgeRef) return;
@@ -75,6 +116,13 @@ export class SlotAction extends SingletonAction {
       const macros = this.getMacros();
       const config = getSlotConfig(state, rank, snapshot?.tool, macros);
       const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
+      pushDebug("initialRender", ev.action.id, rank, {
+        state,
+        tool: snapshot?.tool ?? null,
+        title: config.title,
+        action: config.action ?? null,
+        svg: summarizeSvg(config.svg),
+      });
       await ev.action.setImage(imageData);
       await ev.action.setTitle("");
     }
@@ -95,12 +143,13 @@ export class SlotAction extends SingletonAction {
     if (!this.unsubConfig) {
       this.unsubConfig = bridgeRef.onConfigChange(() => {
         this.renderAll(bridgeRef!.getConnectionStatus(), bridgeRef!.getLastSnapshot()).catch(() => {});
-        this.sendConfigSnapshot().catch(() => {});
+        this.sendConfigSnapshot(this.activePiActionId).catch(() => {});
       });
     }
   }
 
   override async onWillDisappear(ev: WillDisappearEvent): Promise<void> {
+    pushDebug("willDisappear", ev.action.id, getSlotRank(ev.action.id), {});
     slotAssignments.delete(ev.action.id);
 
     // If no more instances, clean up listeners
@@ -136,14 +185,16 @@ export class SlotAction extends SingletonAction {
     }
   }
 
-  override async onPropertyInspectorDidAppear(_ev: PropertyInspectorDidAppearEvent): Promise<void> {
-    await this.sendConfigSnapshot();
+  override async onPropertyInspectorDidAppear(ev: PropertyInspectorDidAppearEvent): Promise<void> {
+    this.activePiActionId = ev.action.id;
+    pushDebug("piAppear", ev.action.id, getSlotRank(ev.action.id), {});
+    await this.sendConfigSnapshot(ev.action.id);
     // Bridge config may not be loaded yet when PI appears.
-    setTimeout(() => { this.sendConfigSnapshot().catch(() => {}); }, 250);
-    setTimeout(() => { this.sendConfigSnapshot().catch(() => {}); }, 750);
+    setTimeout(() => { this.sendConfigSnapshot(ev.action.id).catch(() => {}); }, 250);
+    setTimeout(() => { this.sendConfigSnapshot(ev.action.id).catch(() => {}); }, 750);
   }
 
-  private async sendConfigSnapshot(): Promise<void> {
+  private async sendConfigSnapshot(actionId?: string): Promise<void> {
     // Wait for the SDK's UIController to have the PI action reference;
     // without it, sendToPropertyInspector silently drops the message.
     for (let i = 0; i < 20 && !streamDeck.ui.action; i++) {
@@ -153,6 +204,8 @@ export class SlotAction extends SingletonAction {
     const cfg = bridgeRef?.getLastConfig();
     if (!cfg) return;
     const macros = cfg?.macros ?? [];
+    const selectedMacroIndex =
+      actionId && slotAssignments.has(actionId) ? getSlotRank(actionId) : undefined;
     const snapshot: Record<string, unknown> = {
       type: "configSnapshot",
       macros: macros.map((m) => {
@@ -171,15 +224,59 @@ export class SlotAction extends SingletonAction {
       defaultTargetApp: cfg?.defaultTargetApp ?? "claude",
       showTargetBadge: cfg?.showTargetBadge ?? false,
     };
+    if (typeof selectedMacroIndex === "number" && selectedMacroIndex >= 0) {
+      snapshot.selectedMacroIndex = selectedMacroIndex;
+    }
     if (cfg?.colors) snapshot.colors = cfg.colors;
+    pushDebug("sendConfigSnapshot", actionId, typeof selectedMacroIndex === "number" ? selectedMacroIndex : -1, {
+      theme: cfg.theme,
+      hasPageColors: !!cfg.colors,
+      macroCount: macros.length,
+      macroColorCount: macros.filter((m) => !!m.colors).length,
+    });
     await streamDeck.ui.sendToPropertyInspector(snapshot as JsonObject);
   }
 
   override async onSendToPlugin(ev: SendToPluginEvent<JsonValue, JsonObject>): Promise<void> {
+    this.activePiActionId = ev.action.id;
     const payload = ev.payload as Record<string, unknown>;
+    pushDebug("pi->plugin", ev.action.id, getSlotRank(ev.action.id), { type: payload?.type ?? "unknown" });
     if (payload?.type === "piReady") {
       // PI is ready to receive — send the config snapshot now
-      await this.sendConfigSnapshot();
+      await this.sendConfigSnapshot(ev.action.id);
+      return;
+    }
+    if (payload?.type === "debugRenderProbe") {
+      const rank = getSlotRank(ev.action.id);
+      const stamp = new Date().toISOString().slice(11, 19);
+      const probeSvg = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+        <rect width="144" height="144" rx="16" fill="#ff00aa"/>
+        <rect x="8" y="8" width="128" height="128" rx="12" fill="#00d1ff"/>
+        <text x="72" y="74" font-size="28" font-family="sans-serif" text-anchor="middle" fill="#111">PROBE</text>
+        <text x="72" y="108" font-size="18" font-family="sans-serif" text-anchor="middle" fill="#111">${stamp}</text>
+      </svg>`;
+      try {
+        if (ev.action.isKey()) {
+          await ev.action.setImage(`data:image/svg+xml,${encodeURIComponent(probeSvg)}`);
+          await ev.action.setTitle("");
+        }
+        pushDebug("probe:setImage:ok", ev.action.id, rank, { stamp });
+      } catch (err) {
+        pushDebug("probe:setImage:err", ev.action.id, rank, { err: String(err) });
+      }
+      await streamDeck.ui.sendToPropertyInspector({
+        type: "debugSnapshot",
+        entries: recentDebug(),
+        summary: debugSummary(),
+      } as JsonObject);
+      return;
+    }
+    if (payload?.type === "debugDump") {
+      await streamDeck.ui.sendToPropertyInspector({
+        type: "debugSnapshot",
+        entries: recentDebug(),
+        summary: debugSummary(),
+      } as JsonObject);
       return;
     }
     if (payload?.type === "updateConfig") {
@@ -191,14 +288,26 @@ export class SlotAction extends SingletonAction {
       if (typeof payload.defaultTargetApp === "string") update.defaultTargetApp = payload.defaultTargetApp;
       if (typeof payload.showTargetBadge === "boolean") update.showTargetBadge = payload.showTargetBadge;
       if (payload.colors && typeof payload.colors === "object") update.colors = payload.colors;
+      if (
+        payload.themeApplyMode === "keep" ||
+        payload.themeApplyMode === "clear-page" ||
+        payload.themeApplyMode === "clear-all"
+      ) {
+        update.themeApplyMode = payload.themeApplyMode;
+      }
       bridgeRef?.sendAction("updateConfig", update);
+      pushDebug("plugin->bridge:updateConfig", ev.action.id, getSlotRank(ev.action.id), {
+        theme: update.theme ?? null,
+        themeApplyMode: update.themeApplyMode ?? null,
+        hasColorsField: Object.prototype.hasOwnProperty.call(update, "colors"),
+      });
     }
   }
 
   private getMacros(): MacroInput[] | undefined {
     const cfg = bridgeRef?.getLastConfig();
     if (cfg?.theme) setTheme(cfg.theme);
-    if (cfg?.colors) setDefaultColors(cfg.colors);
+    setDefaultColors(cfg?.colors ?? {});
     setTargetBadgeOptions({
       showTargetBadge: cfg?.showTargetBadge ?? false,
       defaultTargetApp: cfg?.defaultTargetApp ?? "claude",
@@ -226,9 +335,16 @@ export class SlotAction extends SingletonAction {
       const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
 
       try {
+        pushDebug("renderAll:setImage", instance.id, rank, {
+          state,
+          title: config.title,
+          action: config.action ?? null,
+          svg: summarizeSvg(config.svg),
+        });
         await instance.setImage(imageData);
         await instance.setTitle("");
       } catch {
+        pushDebug("renderAll:setImage:err", instance.id, rank, { state });
         // SDK may throw if the action disappeared mid-render; safe to ignore.
       }
     }

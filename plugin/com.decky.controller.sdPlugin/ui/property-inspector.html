@@ -2,7 +2,6 @@
 <html>
 <head>
   <meta charset="utf-8" />
-  <script src="sdpi-components.js"></script>
   <style>
     body {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
@@ -238,6 +237,9 @@
       align-items: center;
     }
     .swatch {
+      display: inline-block;
+      position: relative;
+      overflow: hidden;
       width: 22px;
       height: 22px;
       border-radius: 50%;
@@ -245,6 +247,10 @@
       cursor: pointer;
       transition: border-color 0.15s, box-shadow 0.15s;
       box-sizing: border-box;
+      font-size: 0;
+      line-height: 0;
+      color: transparent;
+      user-select: none;
     }
     .swatch:hover {
       border-color: rgba(255,255,255,0.5);
@@ -264,6 +270,13 @@
       left: 3px;
       font-size: 12px;
       color: #888;
+      pointer-events: none;
+    }
+    .custom-color-note {
+      font-size: 9px;
+      color: #777;
+      margin-left: 4px;
+      white-space: nowrap;
     }
     .color-section {
       margin-bottom: 6px;
@@ -317,6 +330,54 @@
     .status.error {
       color: #fca5a5;
     }
+    .theme-apply-panel {
+      margin-top: 8px;
+      padding: 8px;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 6px;
+    }
+    .theme-apply-panel.hidden {
+      display: none;
+    }
+    .theme-apply-title {
+      font-size: 11px;
+      color: #aaa;
+      margin-bottom: 6px;
+    }
+    .theme-apply-option {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      margin-bottom: 4px;
+      color: #c8c8c8;
+    }
+    .theme-apply-impact {
+      font-size: 10px;
+      color: #777;
+      margin: 4px 0 2px 0;
+    }
+    .debug-panel {
+      margin-top: 8px;
+      padding: 8px;
+      background: rgba(0,0,0,0.2);
+      border: 1px solid rgba(255,255,255,0.12);
+      border-radius: 6px;
+    }
+    .debug-log {
+      margin-top: 6px;
+      max-height: 140px;
+      overflow: auto;
+      background: rgba(0,0,0,0.25);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 4px;
+      padding: 6px;
+      font-size: 9px;
+      color: #98a2b3;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
   </style>
 </head>
 <body>
@@ -331,7 +392,30 @@
       <select id="theme">
         <option value="light">Light</option>
         <option value="dark">Dark</option>
+        <option value="dracula">Dracula</option>
+        <option value="monokai">Monokai</option>
+        <option value="solarized-dark">Solarized Dark</option>
+        <option value="solarized-light">Solarized Light</option>
+        <option value="nord">Nord</option>
+        <option value="github-dark">GitHub Dark</option>
+        <option value="rainbow">Rainbow</option>
+        <option value="random">Random</option>
       </select>
+    </div>
+    <div class="setting-row">
+      <label>Theme apply</label>
+      <button id="btn-theme-apply">Apply Theme…</button>
+    </div>
+    <div id="theme-apply-panel" class="theme-apply-panel hidden">
+      <div class="theme-apply-title">Choose how theme should interact with color overrides</div>
+      <label class="theme-apply-option"><input type="radio" name="theme-apply-mode" value="keep" checked /> Keep overrides (theme fills unspecified)</label>
+      <label class="theme-apply-option"><input type="radio" name="theme-apply-mode" value="clear-page" /> Clear page defaults, keep macro overrides</label>
+      <label class="theme-apply-option"><input type="radio" name="theme-apply-mode" value="clear-all" /> Clear all page + macro overrides</label>
+      <div id="theme-apply-impact" class="theme-apply-impact"></div>
+      <div class="btn-row" style="margin-top:6px">
+        <button class="primary" id="btn-theme-apply-confirm">Apply strategy</button>
+        <button id="btn-theme-apply-cancel">Cancel</button>
+      </div>
     </div>
     <div class="setting-row">
       <label>Editor</label>
@@ -357,15 +441,27 @@
       <label>Target badge</label>
       <input type="checkbox" id="show-target-badge" />
     </div>
+    <div class="debug-panel">
+      <div class="btn-row" style="margin-top:0">
+        <button id="btn-debug-probe">Test selected key render</button>
+        <button id="btn-debug-dump">Get debug log</button>
+        <button id="btn-debug-copy">Copy debug log</button>
+      </div>
+      <div id="debug-log" class="debug-log">No debug data yet.</div>
+    </div>
   </div>
 
   <hr />
 
   <!-- Default Colors -->
   <div class="section">
-    <h3>Default Colors</h3>
-    <div class="setting-hint" style="margin-left:0">Override theme colors for all macro buttons</div>
+    <h3>Page Default Colors (All Buttons)</h3>
+    <div class="setting-hint" style="margin-left:0">These affect every macro unless a macro-specific override is set.</div>
     <div id="default-colors"></div>
+    <div class="btn-row" style="margin-top:6px">
+      <button id="btn-reset-default-colors">Reset page defaults</button>
+      <button id="btn-reset-all-colors">Reset all overrides</button>
+    </div>
   </div>
 
   <hr />
@@ -376,13 +472,71 @@
     <div class="macro-help">Configure buttons shown on the deck during idle state. Label is the button text; Text to send is the prompt injected into Claude when pressed. Each macro has Icon and optional per-macro colors.</div>
     <div id="macro-list" class="macro-list"></div>
     <div class="btn-row">
-      <button class="primary" id="btn-save">Save</button>
+      <button class="primary" id="btn-save">Apply now</button>
+      <button id="btn-scope">Show all</button>
       <button id="btn-add">+ Add Macro</button>
     </div>
     <div id="status" class="status"></div>
   </div>
 
   <script>
+    // Native Stream Deck PI websocket bridge. This avoids runtime coupling to
+    // sdpi-components.js, which can fail to initialize on some Stream Deck builds.
+    let sdSocket = null;
+    let sdContext = null;
+    let sdAction = "com.decky.controller.slot";
+    const sdMessageHandlers = [];
+
+    function onPluginMessage(handler) {
+      sdMessageHandlers.push(handler);
+    }
+
+    function sendToPlugin(payload) {
+      if (!sdSocket || sdSocket.readyState !== WebSocket.OPEN || !sdContext) return;
+      sdSocket.send(
+        JSON.stringify({
+          event: "sendToPlugin",
+          action: sdAction,
+          context: sdContext,
+          payload: payload,
+        })
+      );
+    }
+
+    window.connectElgatoStreamDeckSocket = function (inPort, inUUID, inRegisterEvent, _inInfo, inActionInfo) {
+      sdContext = inUUID;
+      try {
+        var ai = JSON.parse(inActionInfo || "{}");
+        if (ai && typeof ai.action === "string") sdAction = ai.action;
+      } catch {
+        // Keep fallback action UUID.
+      }
+
+      sdSocket = new WebSocket("ws://127.0.0.1:" + inPort);
+      sdSocket.onopen = function () {
+        sdSocket.send(
+          JSON.stringify({
+            event: inRegisterEvent,
+            uuid: inUUID,
+          })
+        );
+      };
+      sdSocket.onmessage = function (evt) {
+        let msg;
+        try {
+          msg = JSON.parse(evt.data);
+        } catch {
+          return;
+        }
+        if (msg && msg.event === "sendToPropertyInspector") {
+          const payload = msg.payload || {};
+          sdMessageHandlers.forEach(function (fn) {
+            try { fn(payload); } catch { /* no-op */ }
+          });
+        }
+      };
+    };
+
     const MAX_MACROS = 36;
     const ICONS = [
       { value: "", label: "None" },
@@ -441,7 +595,13 @@
     let defaultColors = { bg: "", text: "", icon: "" };
     let configLoaded = false;
     let baselinePayload = "";
-    const client = SDPIComponents.streamDeckClient;
+    let selectedMacroIndex = -1;
+    let showAllMacros = false;
+    let autoApplyTimer = null;
+    let forceIncludeColorsField = false;
+    let pendingThemeApplyMode = "";
+    let savedTheme = "light";
+    let pendingThemeChange = false;
 
     function buildPayload() {
       var payload = {
@@ -459,8 +619,11 @@
         defaultTargetApp: document.getElementById("default-target").value,
         showTargetBadge: document.getElementById("show-target-badge").checked,
       };
-      if (defaultColors.bg || defaultColors.text || defaultColors.icon) {
+      if (forceIncludeColorsField || defaultColors.bg || defaultColors.text || defaultColors.icon) {
         payload.colors = defaultColors;
+      }
+      if (pendingThemeApplyMode) {
+        payload.themeApplyMode = pendingThemeApplyMode;
       }
       return payload;
     }
@@ -469,13 +632,114 @@
       document.getElementById("btn-save").disabled = !enabled;
     }
 
+    function hasChanges() {
+      return JSON.stringify(buildPayload()) !== baselinePayload;
+    }
+
+    function applyConfig(showToast, forceSend, allowThemeCommit) {
+      if (!configLoaded) return;
+      var payload = buildPayload();
+      if (!allowThemeCommit && pendingThemeChange) {
+        payload.theme = savedTheme;
+      }
+      var next = JSON.stringify(payload);
+      if (!forceSend && next === baselinePayload) {
+        forceIncludeColorsField = false;
+        pendingThemeApplyMode = "";
+        return;
+      }
+      sendToPlugin(payload);
+      baselinePayload = next;
+      forceIncludeColorsField = false;
+      pendingThemeApplyMode = "";
+      setSaveEnabled(false);
+      if (showToast) showStatus("Applied", "saved");
+    }
+
+    function scheduleAutoApply() {
+      if (autoApplyTimer) clearTimeout(autoApplyTimer);
+      autoApplyTimer = setTimeout(function () {
+        autoApplyTimer = null;
+        applyConfig(false, false, false);
+      }, 120);
+    }
+
+    function syncScopeButton() {
+      var btn = document.getElementById("btn-scope");
+      btn.textContent = showAllMacros ? "Show selected" : "Show all";
+      btn.disabled = selectedMacroIndex < 0 || selectedMacroIndex >= macros.length;
+    }
+
+    function hasAnyColorOverrides() {
+      if (defaultColors.bg || defaultColors.text || defaultColors.icon) return true;
+      return macros.some(function (m) {
+        return !!(m.colors && (m.colors.bg || m.colors.text || m.colors.icon));
+      });
+    }
+
+    function hasPageColorOverrides() {
+      return !!(defaultColors.bg || defaultColors.text || defaultColors.icon);
+    }
+
+    function countMacroOverrides() {
+      return macros.filter(function (m) {
+        return !!(m.colors && (m.colors.bg || m.colors.text || m.colors.icon));
+      }).length;
+    }
+
+    function openThemeApplyPanel() {
+      var panel = document.getElementById("theme-apply-panel");
+      var impact = document.getElementById("theme-apply-impact");
+      impact.textContent =
+        "Current overrides: page=" + (hasPageColorOverrides() ? "yes" : "no") +
+        ", macros=" + countMacroOverrides() + "/" + macros.length;
+      panel.classList.remove("hidden");
+    }
+
+    function closeThemeApplyPanel() {
+      document.getElementById("theme-apply-panel").classList.add("hidden");
+    }
+
+    function applyThemeMode(mode) {
+      pendingThemeApplyMode = mode;
+      if (mode === "clear-page" || mode === "clear-all") {
+        defaultColors = { bg: "", text: "", icon: "" };
+        forceIncludeColorsField = true;
+      }
+      if (mode === "clear-all") {
+        macros.forEach(function (m) { m.colors = { bg: "", text: "", icon: "" }; });
+      }
+      renderDefaultColors();
+      renderMacros();
+      applyConfig(true, true, true);
+      savedTheme = document.getElementById("theme").value;
+      pendingThemeChange = false;
+    }
+
     function markDirty() {
       if (!configLoaded) return;
-      setSaveEnabled(JSON.stringify(buildPayload()) !== baselinePayload);
+      var dirty = hasChanges();
+      setSaveEnabled(dirty);
+      if (dirty && !pendingThemeChange) scheduleAutoApply();
     }
 
     // Receive config from plugin
-    client.sendToPropertyInspector.subscribe((msg) => {
+    onPluginMessage((msg) => {
+      if (msg && msg.type === "debugSnapshot") {
+        var header = "";
+        if (msg.summary) {
+          header = "summary " + JSON.stringify(msg.summary) + "\n\n";
+        }
+        var out = (msg.entries || []).map(function (e) {
+          var t = new Date(e.ts || Date.now()).toISOString().slice(11, 19);
+          return t + " " + (e.event || "?") +
+            (e.slotRank !== undefined ? " slot=" + e.slotRank : "") +
+            (e.actionId ? " id=" + String(e.actionId).slice(-6) : "") +
+            (e.details ? " " + JSON.stringify(e.details) : "");
+        }).join("\n");
+        document.getElementById("debug-log").textContent = (header + out).trim() || "No debug entries.";
+        return;
+      }
       if (msg && msg.type === "configSnapshot") {
         if (Array.isArray(msg.macros)) {
           macros = msg.macros.map((m) => ({
@@ -487,6 +751,8 @@
           }));
         }
         settings.theme = msg.theme || "light";
+        savedTheme = settings.theme;
+        pendingThemeChange = false;
         if (msg.editor !== undefined) settings.editor = msg.editor || "";
         if (msg.approvalTimeout !== undefined) settings.approvalTimeout = msg.approvalTimeout;
         if (msg.defaultTargetApp) settings.defaultTargetApp = msg.defaultTargetApp;
@@ -496,6 +762,12 @@
           defaultColors.text = msg.colors.text || "";
           defaultColors.icon = msg.colors.icon || "";
         }
+        if (typeof msg.selectedMacroIndex === "number" && Number.isFinite(msg.selectedMacroIndex) && msg.selectedMacroIndex >= 0) {
+          selectedMacroIndex = Math.floor(msg.selectedMacroIndex);
+          showAllMacros = false;
+        }
+        if (selectedMacroIndex >= macros.length) selectedMacroIndex = macros.length - 1;
+        if (selectedMacroIndex < 0 && macros.length > 0) selectedMacroIndex = 0;
 
         configLoaded = true;
         document.getElementById("theme").value = settings.theme;
@@ -508,6 +780,7 @@
         var connEl = document.getElementById("conn-status");
         connEl.textContent = "Connected to bridge";
         connEl.className = "conn-status connected";
+        syncScopeButton();
         renderDefaultColors();
         renderMacros();
       }
@@ -516,7 +789,7 @@
     // Readiness handshake: tell the plugin we're ready to receive the config snapshot.
     // Retry periodically until we get a response, covering race conditions where
     // the plugin's UIController hasn't set #action yet.
-    function sendPiReady() { client.send("sendToPlugin", { type: "piReady" }); }
+    function sendPiReady() { sendToPlugin({ type: "piReady" }); }
     sendPiReady();
     var piReadyInterval = setInterval(function () {
       if (configLoaded) { clearInterval(piReadyInterval); return; }
@@ -531,9 +804,11 @@
       row.appendChild(lbl);
       var group = document.createElement("div");
       group.className = "swatch-group";
+      var paletteValues = COLOR_PALETTE.map(function (c) { return c.value; });
       COLOR_PALETTE.forEach(function (c) {
         var sw = document.createElement("div");
         sw.className = "swatch" + (c.value === selectedValue ? " selected" : "") + (c.value === "" ? " none" : "");
+        sw.textContent = "";
         if (c.value) sw.style.background = c.value;
         sw.title = c.label;
         sw.addEventListener("click", function () {
@@ -544,8 +819,52 @@
         });
         group.appendChild(sw);
       });
+
+      // If config contains a custom color not in the current palette, surface it
+      // as an explicit swatch instead of allowing fallback text overlays.
+      if (selectedValue && paletteValues.indexOf(selectedValue) === -1) {
+        var custom = document.createElement("div");
+        custom.className = "swatch selected";
+        custom.style.background = selectedValue;
+        custom.title = "Custom " + selectedValue;
+        custom.textContent = "";
+        custom.addEventListener("click", function () {
+          onSelect(selectedValue);
+          markDirty();
+        });
+        group.appendChild(custom);
+
+        var note = document.createElement("span");
+        note.className = "custom-color-note";
+        note.textContent = "Custom " + selectedValue;
+        group.appendChild(note);
+      }
+
       row.appendChild(group);
       return row;
+    }
+
+    function ensureMacroColors(index) {
+      if (!macros[index].colors) macros[index].colors = { bg: "", text: "", icon: "" };
+      return macros[index].colors;
+    }
+
+    function renderMacroColorsPanel(panel, index) {
+      panel.innerHTML = "";
+      var mc = ensureMacroColors(index);
+      panel.appendChild(buildSwatchRow("Bg", mc.bg, function (v) { mc.bg = v; markDirty(); }));
+      panel.appendChild(buildSwatchRow("Text", mc.text, function (v) { mc.text = v; markDirty(); }));
+      panel.appendChild(buildSwatchRow("Icon", mc.icon, function (v) { mc.icon = v; markDirty(); }));
+    }
+
+    function openMacroColorsPanel(toggle, index) {
+      var existing = toggle.nextElementSibling;
+      if (existing && existing.classList.contains("macro-colors-panel")) return;
+      toggle.textContent = "Per-macro colors \u25BC";
+      var panel = document.createElement("div");
+      panel.className = "macro-colors-panel";
+      renderMacroColorsPanel(panel, index);
+      toggle.parentNode.insertBefore(panel, toggle.nextSibling);
     }
 
     function renderDefaultColors() {
@@ -559,12 +878,20 @@
     function renderMacros() {
       const list = document.getElementById("macro-list");
       list.innerHTML = "";
-      document.getElementById("macro-count").textContent = "(" + macros.length + "/" + MAX_MACROS + ")";
+      const selectedValid = selectedMacroIndex >= 0 && selectedMacroIndex < macros.length;
+      const visibleIndexes = showAllMacros || !selectedValid
+        ? macros.map(function (_m, i) { return i; })
+        : [selectedMacroIndex];
+      document.getElementById("macro-count").textContent = selectedValid && !showAllMacros
+        ? "(slot " + (selectedMacroIndex + 1) + " of " + macros.length + ")"
+        : "(" + macros.length + "/" + MAX_MACROS + ")";
+      syncScopeButton();
 
-      macros.forEach((macro, i) => {
+      visibleIndexes.forEach((i) => {
+        const macro = macros[i];
         const item = document.createElement("div");
         item.className = "macro-item";
-        item.draggable = true;
+        item.draggable = showAllMacros;
         item.dataset.index = i;
 
         const iconOptions = ICONS.map(
@@ -605,7 +932,8 @@
           "</div>" +
           "<label>Text to send</label>" +
           '<textarea data-field="text" data-index="' + i + '" placeholder="Text injected into Claude">' + esc(macro.text) + "</textarea>" +
-          '<div class="macro-colors-toggle" data-colorindex="' + i + '">Per-macro colors \u25B6</div>';
+          '<div class="macro-colors-toggle" data-colorindex="' + i + '">Per-macro colors \u25B6</div>' +
+          '<div class="btn-row" style="margin-top:4px"><button data-reset-macro-colors="' + i + '">Reset this macro colors</button></div>';
 
         list.appendChild(item);
       });
@@ -643,14 +971,16 @@
       });
 
       // Drag and drop for reordering
-      list.querySelectorAll(".macro-item").forEach(function (item) {
-        item.addEventListener("dragstart", handleDragStart);
-        item.addEventListener("dragover", handleDragOver);
-        item.addEventListener("dragenter", handleDragEnter);
-        item.addEventListener("dragleave", handleDragLeave);
-        item.addEventListener("drop", handleDrop);
-        item.addEventListener("dragend", handleDragEnd);
-      });
+      if (showAllMacros) {
+        list.querySelectorAll(".macro-item").forEach(function (item) {
+          item.addEventListener("dragstart", handleDragStart);
+          item.addEventListener("dragover", handleDragOver);
+          item.addEventListener("dragenter", handleDragEnter);
+          item.addEventListener("dragleave", handleDragLeave);
+          item.addEventListener("drop", handleDrop);
+          item.addEventListener("dragend", handleDragEnd);
+        });
+      }
 
       // Per-macro color toggles
       list.querySelectorAll(".macro-colors-toggle").forEach(function (toggle) {
@@ -662,15 +992,26 @@
             toggle.textContent = "Per-macro colors \u25B6";
             return;
           }
-          toggle.textContent = "Per-macro colors \u25BC";
-          var panel = document.createElement("div");
-          panel.className = "macro-colors-panel";
-          if (!macros[idx].colors) macros[idx].colors = { bg: "", text: "", icon: "" };
-          var mc = macros[idx].colors;
-          panel.appendChild(buildSwatchRow("Bg", mc.bg, function (v) { mc.bg = v; }));
-          panel.appendChild(buildSwatchRow("Text", mc.text, function (v) { mc.text = v; }));
-          panel.appendChild(buildSwatchRow("Icon", mc.icon, function (v) { mc.icon = v; }));
-          toggle.parentNode.insertBefore(panel, toggle.nextSibling);
+          openMacroColorsPanel(toggle, idx);
+        });
+      });
+
+      // In selected-slot mode, keep per-macro colors expanded inline.
+      if (!showAllMacros) {
+        list.querySelectorAll(".macro-colors-toggle").forEach(function (toggle) {
+          var idx = parseInt(toggle.dataset.colorindex);
+          openMacroColorsPanel(toggle, idx);
+        });
+      }
+
+      // Reset per-macro colors
+      list.querySelectorAll("[data-reset-macro-colors]").forEach(function (btn) {
+        btn.addEventListener("click", function (e) {
+          var idx = parseInt(e.target.dataset.resetMacroColors);
+          if (!Number.isFinite(idx) || !macros[idx]) return;
+          macros[idx].colors = { bg: "", text: "", icon: "" };
+          renderMacros();
+          markDirty();
         });
       });
     }
@@ -735,41 +1076,111 @@
 
     // --- Save ---
     document.getElementById("btn-save").disabled = true;
-    ["theme", "editor", "timeout", "default-target", "show-target-badge"].forEach(function (id) {
+    ["editor", "timeout", "default-target", "show-target-badge"].forEach(function (id) {
       var el = document.getElementById(id);
       el.addEventListener("input", markDirty);
       el.addEventListener("change", markDirty);
+    });
+    document.getElementById("theme").addEventListener("change", function () {
+      pendingThemeChange = document.getElementById("theme").value !== savedTheme;
+      showStatus("Theme change pending. Use Apply Theme… to commit.", "error");
+      openThemeApplyPanel();
+      setSaveEnabled(true);
+    });
+    document.getElementById("btn-theme-apply").addEventListener("click", function () {
+      openThemeApplyPanel();
+    });
+    document.getElementById("btn-theme-apply-cancel").addEventListener("click", function () {
+      document.getElementById("theme").value = savedTheme;
+      pendingThemeChange = false;
+      setSaveEnabled(hasChanges());
+      closeThemeApplyPanel();
+    });
+    document.getElementById("btn-theme-apply-confirm").addEventListener("click", function () {
+      var selected = document.querySelector('input[name="theme-apply-mode"]:checked');
+      var mode = selected ? selected.value : "keep";
+      applyThemeMode(mode);
+      closeThemeApplyPanel();
+    });
+    document.getElementById("btn-debug-probe").addEventListener("click", function () {
+      sendToPlugin({ type: "debugRenderProbe" });
+    });
+    document.getElementById("btn-debug-dump").addEventListener("click", function () {
+      sendToPlugin({ type: "debugDump" });
+    });
+    document.getElementById("btn-debug-copy").addEventListener("click", async function () {
+      var txt = document.getElementById("debug-log").textContent || "";
+      if (!txt.trim()) {
+        showStatus("No debug log to copy", "error");
+        return;
+      }
+      try {
+        await navigator.clipboard.writeText(txt);
+        showStatus("Debug log copied", "saved");
+      } catch {
+        try {
+          var ta = document.createElement("textarea");
+          ta.value = txt;
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.focus();
+          ta.select();
+          document.execCommand("copy");
+          document.body.removeChild(ta);
+          showStatus("Debug log copied", "saved");
+        } catch {
+          showStatus("Copy failed; select log text manually", "error");
+        }
+      }
     });
     document.getElementById("btn-save").addEventListener("click", function () {
       if (!configLoaded) {
         showStatus("Not connected to bridge", "error");
         return;
       }
-
-      // Validate: no empty labels
-      var invalid = macros.some(function (m) { return !m.label.trim(); });
-      if (invalid) {
-        showStatus("All macros need a label", "error");
+      if (pendingThemeChange) {
+        showStatus("Theme change pending. Use Apply Theme…", "error");
+        openThemeApplyPanel();
         return;
       }
-
-      var payload = buildPayload();
-      client.send("sendToPlugin", payload);
-      baselinePayload = JSON.stringify(payload);
-      setSaveEnabled(false);
-      showStatus("Saved", "saved");
+      applyConfig(true, true, false);
     });
 
     // --- Add macro ---
     document.getElementById("btn-add").addEventListener("click", function () {
       if (macros.length < MAX_MACROS) {
         macros.push({ label: "", text: "", icon: "", targetApp: "", colors: { bg: "", text: "", icon: "" } });
+        selectedMacroIndex = macros.length - 1;
+        showAllMacros = false;
         renderMacros();
         markDirty();
         // Scroll to bottom
         var list = document.getElementById("macro-list");
         list.lastElementChild && list.lastElementChild.scrollIntoView({ behavior: "smooth" });
       }
+    });
+
+    document.getElementById("btn-scope").addEventListener("click", function () {
+      if (selectedMacroIndex < 0 || selectedMacroIndex >= macros.length) return;
+      showAllMacros = !showAllMacros;
+      renderMacros();
+    });
+
+    document.getElementById("btn-reset-default-colors").addEventListener("click", function () {
+      defaultColors = { bg: "", text: "", icon: "" };
+      forceIncludeColorsField = true;
+      renderDefaultColors();
+      applyConfig(true, true, false);
+    });
+
+    document.getElementById("btn-reset-all-colors").addEventListener("click", function () {
+      defaultColors = { bg: "", text: "", icon: "" };
+      forceIncludeColorsField = true;
+      macros.forEach(function (m) { m.colors = { bg: "", text: "", icon: "" }; });
+      renderDefaultColors();
+      renderMacros();
+      applyConfig(true, true, false);
     });
 
     // Initial render

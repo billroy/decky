@@ -14,10 +14,19 @@ export interface SlotConfig {
 
 export type LayoutDef = Record<number, SlotConfig>;
 export type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";
+export type Theme =
+  | "light"
+  | "dark"
+  | "dracula"
+  | "monokai"
+  | "solarized-dark"
+  | "solarized-light"
+  | "nord"
+  | "github-dark"
+  | "rainbow"
+  | "random";
 
 // --- Theme palettes ---
-
-export type Theme = "light" | "dark";
 
 interface ThemePalette {
   macroBg: string;
@@ -48,6 +57,79 @@ const PALETTES: Record<Theme, ThemePalette> = {
     emptyBg: "#0f172a",
     emptyText: "#334155",
   },
+  dracula: {
+    macroBg: "#282a36",
+    macroLabel: "#f8f8f2",
+    defaultBg: "#44475a",
+    defaultIcon: "#8be9fd",
+    defaultLabel: "#f8f8f2",
+    emptyBg: "#1e1f29",
+    emptyText: "#6272a4",
+  },
+  monokai: {
+    macroBg: "#272822",
+    macroLabel: "#f8f8f2",
+    defaultBg: "#3e3d32",
+    defaultIcon: "#a6e22e",
+    defaultLabel: "#f8f8f2",
+    emptyBg: "#1f201c",
+    emptyText: "#75715e",
+  },
+  "solarized-dark": {
+    macroBg: "#073642",
+    macroLabel: "#93a1a1",
+    defaultBg: "#002b36",
+    defaultIcon: "#2aa198",
+    defaultLabel: "#93a1a1",
+    emptyBg: "#00212b",
+    emptyText: "#586e75",
+  },
+  "solarized-light": {
+    macroBg: "#fdf6e3",
+    macroLabel: "#586e75",
+    defaultBg: "#eee8d5",
+    defaultIcon: "#268bd2",
+    defaultLabel: "#586e75",
+    emptyBg: "#e7dfcc",
+    emptyText: "#93a1a1",
+  },
+  nord: {
+    macroBg: "#2e3440",
+    macroLabel: "#eceff4",
+    defaultBg: "#3b4252",
+    defaultIcon: "#88c0d0",
+    defaultLabel: "#e5e9f0",
+    emptyBg: "#242933",
+    emptyText: "#4c566a",
+  },
+  "github-dark": {
+    macroBg: "#0d1117",
+    macroLabel: "#c9d1d9",
+    defaultBg: "#161b22",
+    defaultIcon: "#58a6ff",
+    defaultLabel: "#c9d1d9",
+    emptyBg: "#0b0f14",
+    emptyText: "#6e7681",
+  },
+  // Dynamic themes are computed per slot by resolveThemePaletteForSlot.
+  rainbow: {
+    macroBg: "#1e3a8a",
+    macroLabel: "#ffffff",
+    defaultBg: "#1e3a8a",
+    defaultIcon: "#ffffff",
+    defaultLabel: "#ffffff",
+    emptyBg: "#0f172a",
+    emptyText: "#64748b",
+  },
+  random: {
+    macroBg: "#1e293b",
+    macroLabel: "#e2e8f0",
+    defaultBg: "#1e293b",
+    defaultIcon: "#e2e8f0",
+    defaultLabel: "#e2e8f0",
+    emptyBg: "#0f172a",
+    emptyText: "#64748b",
+  },
 };
 
 let currentTheme: Theme = "light";
@@ -76,6 +158,60 @@ export function setTheme(theme: Theme): void {
 
 export function getTheme(): Theme {
   return currentTheme;
+}
+
+const RAINBOW_BG = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#8b5cf6"];
+const RAINBOW_FG = ["#ffffff", "#111827", "#111827", "#052e16", "#083344", "#ffffff", "#f5f3ff"];
+const RANDOM_SEED = 0x9e3779b1;
+
+function hash32(value: number): number {
+  let x = (value ^ RANDOM_SEED) >>> 0;
+  x ^= x >>> 16;
+  x = Math.imul(x, 0x7feb352d);
+  x ^= x >>> 15;
+  x = Math.imul(x, 0x846ca68b);
+  x ^= x >>> 16;
+  return x >>> 0;
+}
+
+function randomColorFromIndex(index: number, channel: number): string {
+  const h = hash32(index * 131 + channel * 911);
+  const hue = h % 360;
+  const sat = 58 + ((h >>> 8) % 28); // 58..85
+  const light = 30 + ((h >>> 16) % 36); // 30..65
+  return `hsl(${hue} ${sat}% ${light}%)`;
+}
+
+function resolveThemePaletteForSlot(theme: Theme, slotIndex: number): ThemePalette {
+  if (theme === "rainbow") {
+    const idx = ((slotIndex % RAINBOW_BG.length) + RAINBOW_BG.length) % RAINBOW_BG.length;
+    const bg = RAINBOW_BG[idx];
+    const fg = RAINBOW_FG[idx];
+    return {
+      macroBg: bg,
+      macroLabel: fg,
+      defaultBg: bg,
+      defaultIcon: fg,
+      defaultLabel: fg,
+      emptyBg: bg,
+      emptyText: fg,
+    };
+  }
+  if (theme === "random") {
+    const bg = randomColorFromIndex(slotIndex, 1);
+    const text = randomColorFromIndex(slotIndex, 2);
+    const icon = randomColorFromIndex(slotIndex, 3);
+    return {
+      macroBg: bg,
+      macroLabel: text,
+      defaultBg: bg,
+      defaultIcon: icon,
+      defaultLabel: text,
+      emptyBg: bg,
+      emptyText: text,
+    };
+  }
+  return PALETTES[theme];
 }
 
 export function setTargetBadgeOptions(options: {
@@ -153,25 +289,22 @@ export function getLucideIconNames(): string[] {
   return Object.keys(LUCIDE_ICONS);
 }
 
-function macroSVG(label: string, icon?: string, colors?: ColorOverrides, targetApp?: TargetApp): string {
-  const p = PALETTES[currentTheme];
+function macroSVG(slotIndex: number, label: string, icon?: string, colors?: ColorOverrides, targetApp?: TargetApp): string {
+  const p = resolveThemePaletteForSlot(currentTheme, slotIndex);
   const displayLabel = label.length > 10 ? label.slice(0, 9) + "\u2026" : label;
   const fontSize = displayLabel.length > 6 ? 26 : 32;
 
-  // Resolve colors: macro overrides > page defaults > theme palette
-  const bg = colors?.bg ?? defaultColors.bg;
-  const textColor = colors?.text ?? defaultColors.text;
-  const iconColor = colors?.icon ?? defaultColors.icon;
+  // Resolve colors: theme < page defaults < macro overrides
+  const bg = resolveColor(p.macroBg, defaultColors.bg, colors?.bg);
+  const textColor = resolveColor(p.macroLabel, defaultColors.text, colors?.text);
+  const iconColor = resolveColor(p.macroLabel, defaultColors.icon, colors?.icon);
 
   // Lucide SVG path icon
   if (icon && LUCIDE_ICONS[icon]) {
-    const resolvedBg = bg ?? p.macroBg;
-    const resolvedIcon = iconColor ?? p.macroLabel;
-    const resolvedText = textColor ?? p.macroLabel;
     return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
-      <rect width="144" height="144" rx="16" fill="${resolvedBg}" />
-      <g transform="translate(36, 10) scale(3)" fill="none" stroke="${resolvedIcon}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${LUCIDE_ICONS[icon]}</g>
-      <text x="72" y="122" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${resolvedText}">${displayLabel}</text>
+      <rect width="144" height="144" rx="16" fill="${bg}" />
+      <g transform="translate(36, 10) scale(3)" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${LUCIDE_ICONS[icon]}</g>
+      <text x="72" y="122" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${textColor}">${displayLabel}</text>
       ${targetBadge(targetApp)}
     </svg>`;
   }
@@ -179,22 +312,21 @@ function macroSVG(label: string, icon?: string, colors?: ColorOverrides, targetA
   // Legacy Unicode icon (checkmark, stop, exclamation)
   if (icon && ICON_SYMBOLS[icon]) {
     const symbol = ICON_SYMBOLS[icon];
-    const resolvedBg = bg ?? p.macroBg;
-    const resolvedIcon = iconColor ?? ICON_COLORS[icon] ?? p.defaultIcon;
-    const resolvedText = textColor ?? p.macroLabel;
+    const legacyDefaultIcon = ICON_COLORS[icon] ?? p.defaultIcon;
+    const resolvedIcon = resolveColor(legacyDefaultIcon, defaultColors.icon, colors?.icon);
     const fontWeight = icon === "exclamation" ? ' font-weight="bold"' : "";
     return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
-      <rect width="144" height="144" rx="16" fill="${resolvedBg}" />
+      <rect width="144" height="144" rx="16" fill="${bg}" />
       <text x="72" y="82" font-size="100" font-family="sans-serif" text-anchor="middle" fill="${resolvedIcon}"${fontWeight}>${symbol}</text>
-      <text x="72" y="122" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${resolvedText}">${displayLabel}</text>
+      <text x="72" y="122" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${textColor}">${displayLabel}</text>
       ${targetBadge(targetApp)}
     </svg>`;
   }
 
   // Default: no icon — play arrow style
-  const resolvedBg = bg ?? p.defaultBg;
-  const resolvedIcon = iconColor ?? p.defaultIcon;
-  const resolvedText = textColor ?? p.defaultLabel;
+  const resolvedBg = resolveColor(p.defaultBg, defaultColors.bg, colors?.bg);
+  const resolvedIcon = resolveColor(p.defaultIcon, defaultColors.icon, colors?.icon);
+  const resolvedText = resolveColor(p.defaultLabel, defaultColors.text, colors?.text);
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <rect width="144" height="144" rx="16" fill="${resolvedBg}" />
     <text x="72" y="72" font-size="60" font-family="sans-serif" text-anchor="middle" fill="${resolvedIcon}">\u25B6</text>
@@ -221,8 +353,8 @@ function thinkingSVG(): string {
   </svg>`;
 }
 
-function emptySVG(): string {
-  const p = PALETTES[currentTheme];
+function emptySVG(slotIndex = 0): string {
+  const p = resolveThemePaletteForSlot(currentTheme, slotIndex);
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
   <rect width="144" height="144" rx="16" fill="${p.emptyBg}" />
   <text x="72" y="70" font-size="36" font-family="sans-serif" text-anchor="middle" fill="${p.emptyText}">\u2022\u2022\u2022</text>
@@ -287,10 +419,20 @@ export function setDefaultColors(colors: ColorOverrides): void {
   defaultColors = colors;
 }
 
-function macroSlot(macro: MacroInput): SlotConfig {
+function sanitizeColor(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  const v = value.trim();
+  return /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(v) ? v : undefined;
+}
+
+function resolveColor(base: string, pageOverride?: string, macroOverride?: string): string {
+  return sanitizeColor(macroOverride) ?? sanitizeColor(pageOverride) ?? base;
+}
+
+function macroSlot(index: number, macro: MacroInput): SlotConfig {
   const targetApp = macro.targetApp ?? defaultTargetApp;
   return {
-    svg: macroSVG(macro.label, macro.icon, macro.colors, targetApp),
+    svg: macroSVG(index, macro.label, macro.icon, macro.colors, targetApp),
     title: macro.label,
     action: "macro",
     data: { text: macro.text, targetApp },
@@ -307,8 +449,8 @@ const DEFAULT_MACROS: MacroInput[] = [
   { label: "Macro 6", text: "" },
 ];
 
-function emptySlot(): SlotConfig {
-  return { svg: emptySVG(), title: "", action: "openConfig" };
+function emptySlot(slotIndex = 0): SlotConfig {
+  return { svg: emptySVG(slotIndex), title: "", action: "openConfig" };
 }
 
 // --- Layout definitions per state ---
@@ -316,7 +458,7 @@ function emptySlot(): SlotConfig {
 function buildIdleLayout(macros: MacroInput[]): LayoutDef {
   const layout: LayoutDef = {};
   for (let i = 0; i < macros.length && i < 36; i++) {
-    layout[i] = macroSlot(macros[i]);
+    layout[i] = macroSlot(i, macros[i]);
   }
   return layout;
 }
@@ -358,7 +500,7 @@ export function getSlotConfig(
   if (state === "idle") {
     const macroList = macros ?? DEFAULT_MACROS;
     const idleLayout = buildIdleLayout(macroList);
-    return idleLayout[slotIndex] ?? emptySlot();
+    return idleLayout[slotIndex] ?? emptySlot(slotIndex);
   }
 
   // Special case: tool-executing slot 1 shows tool name
@@ -372,8 +514,8 @@ export function getSlotConfig(
   }
 
   const layout = LAYOUTS[state];
-  if (!layout) return emptySlot();
-  return layout[slotIndex] ?? emptySlot();
+  if (!layout) return emptySlot(slotIndex);
+  return layout[slotIndex] ?? emptySlot(slotIndex);
 }
 
 /** Get the full layout definition for a state. */

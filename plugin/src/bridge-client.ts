@@ -22,6 +22,17 @@ export interface ColorOverrides {
 }
 
 export type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";
+export type Theme =
+  | "light"
+  | "dark"
+  | "dracula"
+  | "monokai"
+  | "solarized-dark"
+  | "solarized-light"
+  | "nord"
+  | "github-dark"
+  | "rainbow"
+  | "random";
 
 export interface MacroDef {
   label: string;
@@ -34,7 +45,7 @@ export interface MacroDef {
 export interface DeckyConfig {
   macros: MacroDef[];
   approvalTimeout: number;
-  theme: "light" | "dark";
+  theme: Theme;
   editor?: string;
   colors?: ColorOverrides;
   defaultTargetApp: TargetApp;
