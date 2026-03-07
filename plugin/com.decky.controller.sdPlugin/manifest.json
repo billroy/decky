@@ -49,6 +49,16 @@
       "States": [
         { "Image": "imgs/actions/cancel/key", "Title": "Cancel" }
       ]
+    },
+    {
+      "UUID": "com.decky.controller.slot",
+      "Name": "Decky Slot",
+      "Tooltip": "Dynamic button that changes based on Claude Code state. Place multiple for full layout.",
+      "Icon": "imgs/actions/slot/icon",
+      "Controllers": ["Keypad"],
+      "States": [
+        { "Image": "imgs/actions/slot/key", "Title": "Slot" }
+      ]
     }
   ]
 }

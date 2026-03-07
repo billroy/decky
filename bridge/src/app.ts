@@ -103,6 +103,11 @@ export function createApp(): DeckyApp {
       if (entry) {
         writeGateFile(entry.result);
         sm.forceState(entry.state as Parameters<typeof sm.forceState>[0], entry.reason);
+      } else if (data.action === "restart") {
+        sm.forceState("idle", "restarted via StreamDeck");
+      } else if (data.action === "macro") {
+        // Stub: macros will be implemented in Phase 5
+        console.log(`[io] macro pressed: index=${data.index ?? "?"}`);
       } else {
         console.log(`[io] unknown action: ${data.action}`);
       }

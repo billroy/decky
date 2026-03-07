@@ -86,6 +86,7 @@ for (const dir of [
   "com.decky.controller.sdPlugin/imgs/actions/approve",
   "com.decky.controller.sdPlugin/imgs/actions/deny",
   "com.decky.controller.sdPlugin/imgs/actions/cancel",
+  "com.decky.controller.sdPlugin/imgs/actions/slot",
 ]) {
   mkdirSync(dir, { recursive: true });
 }
@@ -118,6 +119,12 @@ const icons = [
   { path: "com.decky.controller.sdPlugin/imgs/actions/cancel/icon@2x.png", w: 40, h: 40, render: circleRenderer(245, 158, 11) },
   { path: "com.decky.controller.sdPlugin/imgs/actions/cancel/key.png", w: 72, h: 72, render: circleRenderer(245, 158, 11) },
   { path: "com.decky.controller.sdPlugin/imgs/actions/cancel/key@2x.png", w: 144, h: 144, render: circleRenderer(245, 158, 11) },
+
+  // Slot action icons (blue — dynamic multi-purpose button)
+  { path: "com.decky.controller.sdPlugin/imgs/actions/slot/icon.png", w: 20, h: 20, render: circleRenderer(59, 130, 246) },
+  { path: "com.decky.controller.sdPlugin/imgs/actions/slot/icon@2x.png", w: 40, h: 40, render: circleRenderer(59, 130, 246) },
+  { path: "com.decky.controller.sdPlugin/imgs/actions/slot/key.png", w: 72, h: 72, render: circleRenderer(59, 130, 246) },
+  { path: "com.decky.controller.sdPlugin/imgs/actions/slot/key@2x.png", w: 144, h: 144, render: circleRenderer(59, 130, 246) },
 ];
 
 for (const { path, w, h, render } of icons) {
