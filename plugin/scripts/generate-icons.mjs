@@ -81,16 +81,43 @@ function solidRenderer(r, g, b) {
   return () => [r, g, b, 255];
 }
 
+// Ensure action icon directories exist
+for (const dir of [
+  "com.decky.controller.sdPlugin/imgs/actions/approve",
+  "com.decky.controller.sdPlugin/imgs/actions/deny",
+  "com.decky.controller.sdPlugin/imgs/actions/cancel",
+]) {
+  mkdirSync(dir, { recursive: true });
+}
+
 const icons = [
   // Plugin icons
   { path: "com.decky.controller.sdPlugin/imgs/plugin/icon.png", w: 256, h: 256, render: circleRenderer(100, 100, 100) },
   { path: "com.decky.controller.sdPlugin/imgs/plugin/icon@2x.png", w: 512, h: 512, render: circleRenderer(100, 100, 100) },
-  // Action icons (shown in action list) — small
+
+  // Status action icons
   { path: "com.decky.controller.sdPlugin/imgs/actions/status/icon.png", w: 20, h: 20, render: circleRenderer(100, 100, 100) },
   { path: "com.decky.controller.sdPlugin/imgs/actions/status/icon@2x.png", w: 40, h: 40, render: circleRenderer(100, 100, 100) },
-  // Key state images (shown on the button)
   { path: "com.decky.controller.sdPlugin/imgs/actions/status/key.png", w: 72, h: 72, render: circleRenderer(100, 100, 100) },
   { path: "com.decky.controller.sdPlugin/imgs/actions/status/key@2x.png", w: 144, h: 144, render: circleRenderer(100, 100, 100) },
+
+  // Approve action icons (green)
+  { path: "com.decky.controller.sdPlugin/imgs/actions/approve/icon.png", w: 20, h: 20, render: circleRenderer(34, 197, 94) },
+  { path: "com.decky.controller.sdPlugin/imgs/actions/approve/icon@2x.png", w: 40, h: 40, render: circleRenderer(34, 197, 94) },
+  { path: "com.decky.controller.sdPlugin/imgs/actions/approve/key.png", w: 72, h: 72, render: circleRenderer(34, 197, 94) },
+  { path: "com.decky.controller.sdPlugin/imgs/actions/approve/key@2x.png", w: 144, h: 144, render: circleRenderer(34, 197, 94) },
+
+  // Deny action icons (red)
+  { path: "com.decky.controller.sdPlugin/imgs/actions/deny/icon.png", w: 20, h: 20, render: circleRenderer(239, 68, 68) },
+  { path: "com.decky.controller.sdPlugin/imgs/actions/deny/icon@2x.png", w: 40, h: 40, render: circleRenderer(239, 68, 68) },
+  { path: "com.decky.controller.sdPlugin/imgs/actions/deny/key.png", w: 72, h: 72, render: circleRenderer(239, 68, 68) },
+  { path: "com.decky.controller.sdPlugin/imgs/actions/deny/key@2x.png", w: 144, h: 144, render: circleRenderer(239, 68, 68) },
+
+  // Cancel action icons (amber)
+  { path: "com.decky.controller.sdPlugin/imgs/actions/cancel/icon.png", w: 20, h: 20, render: circleRenderer(245, 158, 11) },
+  { path: "com.decky.controller.sdPlugin/imgs/actions/cancel/icon@2x.png", w: 40, h: 40, render: circleRenderer(245, 158, 11) },
+  { path: "com.decky.controller.sdPlugin/imgs/actions/cancel/key.png", w: 72, h: 72, render: circleRenderer(245, 158, 11) },
+  { path: "com.decky.controller.sdPlugin/imgs/actions/cancel/key@2x.png", w: 144, h: 144, render: circleRenderer(245, 158, 11) },
 ];
 
 for (const { path, w, h, render } of icons) {

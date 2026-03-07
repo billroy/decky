@@ -1,0 +1,78 @@
+/**
+ * Cancel action — sends "cancel" to the bridge when pressed.
+ *
+ * Active (yellow ⏹) when state is awaiting-approval OR tool-executing.
+ * Dimmed (gray) in all other states.
+ */
+
+import {
+  action,
+  SingletonAction,
+  type WillAppearEvent,
+  type WillDisappearEvent,
+  type KeyDownEvent,
+} from "@elgato/streamdeck";
+import { type BridgeClient, type ConnectionStatus, type StateSnapshot } from "../bridge-client.js";
+
+const ACTIVE_COLOR = "#f59e0b";   // amber/yellow
+const INACTIVE_COLOR = "#4b5563"; // gray
+
+const CANCELABLE_STATES = new Set(["awaiting-approval", "tool-executing", "thinking"]);
+
+function renderSVG(color: string, symbol: string): string {
+  return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+    <rect width="144" height="144" rx="16" fill="${color}" />
+    <text x="72" y="88" font-size="72" text-anchor="middle" fill="white">${symbol}</text>
+  </svg>`;
+}
+
+let bridgeRef: BridgeClient | null = null;
+
+export function setCancelClient(client: BridgeClient): void {
+  bridgeRef = client;
+}
+
+@action({ UUID: "com.decky.controller.cancel" })
+export class CancelAction extends SingletonAction {
+  private unsubConnection?: () => void;
+  private unsubState?: () => void;
+
+  override async onWillAppear(_ev: WillAppearEvent): Promise<void> {
+    if (!bridgeRef) return;
+
+    await this.render(bridgeRef.getConnectionStatus(), bridgeRef.getLastSnapshot());
+
+    this.unsubConnection = bridgeRef.onConnectionChange(async (status) => {
+      await this.render(status, bridgeRef!.getLastSnapshot());
+    });
+
+    this.unsubState = bridgeRef.onStateChange(async (snapshot) => {
+      await this.render(bridgeRef!.getConnectionStatus(), snapshot);
+    });
+  }
+
+  override async onWillDisappear(_ev: WillDisappearEvent): Promise<void> {
+    this.unsubConnection?.();
+    this.unsubState?.();
+  }
+
+  override async onKeyDown(_ev: KeyDownEvent): Promise<void> {
+    if (!bridgeRef) return;
+    const snapshot = bridgeRef.getLastSnapshot();
+    if (snapshot && CANCELABLE_STATES.has(snapshot.state)) {
+      bridgeRef.sendAction("cancel");
+    }
+  }
+
+  private async render(connStatus: ConnectionStatus, snapshot: StateSnapshot | null): Promise<void> {
+    const active = connStatus === "connected" && snapshot !== null && CANCELABLE_STATES.has(snapshot.state);
+    const color = active ? ACTIVE_COLOR : INACTIVE_COLOR;
+    const svg = renderSVG(color, "\u23F9"); // ⏹
+    const imageData = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+
+    for (const instance of this.actions) {
+      await instance.setImage(imageData);
+      await instance.setTitle(active ? "Cancel" : "");
+    }
+  }
+}

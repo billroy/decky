@@ -22,6 +22,33 @@
       "States": [
         { "Image": "imgs/actions/status/key", "Title": "Decky" }
       ]
+    },
+    {
+      "UUID": "com.decky.controller.approve",
+      "Name": "Approve",
+      "Icon": "imgs/actions/approve/icon",
+      "Controllers": ["Keypad"],
+      "States": [
+        { "Image": "imgs/actions/approve/key", "Title": "Approve" }
+      ]
+    },
+    {
+      "UUID": "com.decky.controller.deny",
+      "Name": "Deny",
+      "Icon": "imgs/actions/deny/icon",
+      "Controllers": ["Keypad"],
+      "States": [
+        { "Image": "imgs/actions/deny/key", "Title": "Deny" }
+      ]
+    },
+    {
+      "UUID": "com.decky.controller.cancel",
+      "Name": "Cancel",
+      "Icon": "imgs/actions/cancel/icon",
+      "Controllers": ["Keypad"],
+      "States": [
+        { "Image": "imgs/actions/cancel/key", "Title": "Cancel" }
+      ]
     }
   ]
 }

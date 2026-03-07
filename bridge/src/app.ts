@@ -10,6 +10,7 @@ import express from "express";
 import { createServer, type Server as HttpServer } from "node:http";
 import { Server as SocketIOServer } from "socket.io";
 import { StateMachine, type HookPayload, type HookEvent } from "./state-machine.js";
+import { writeGateFile, clearGateFile, type ApprovalResult } from "./approval-gate.js";
 
 const VALID_EVENTS: Set<string> = new Set([
   "PreToolUse",
@@ -69,6 +70,11 @@ export function createApp(): DeckyApp {
       `[hook] received: event=${payload.event}${payload.tool ? ` tool=${payload.tool}` : ""}`
     );
 
+    // Clear any stale gate file when a new tool-approval cycle starts
+    if (payload.event === "PreToolUse") {
+      clearGateFile();
+    }
+
     const snapshot = sm.processEvent(payload);
     res.json({ ok: true, state: snapshot });
   });
@@ -87,18 +93,18 @@ export function createApp(): DeckyApp {
     socket.on("action", (data: { action: string; [key: string]: unknown }) => {
       console.log(`[io] action received: ${JSON.stringify(data)}`);
 
-      switch (data.action) {
-        case "approve":
-          sm.forceState("tool-executing", "approved via StreamDeck");
-          break;
-        case "deny":
-          sm.forceState("thinking", "denied via StreamDeck");
-          break;
-        case "cancel":
-          sm.forceState("stopped", "cancelled via StreamDeck");
-          break;
-        default:
-          console.log(`[io] unknown action: ${data.action}`);
+      const validActions: Record<string, { result: ApprovalResult; state: string; reason: string }> = {
+        approve: { result: "approve", state: "tool-executing", reason: "approved via StreamDeck" },
+        deny:    { result: "deny",    state: "thinking",       reason: "denied via StreamDeck" },
+        cancel:  { result: "cancel",  state: "stopped",        reason: "cancelled via StreamDeck" },
+      };
+
+      const entry = validActions[data.action];
+      if (entry) {
+        writeGateFile(entry.result);
+        sm.forceState(entry.state as Parameters<typeof sm.forceState>[0], entry.reason);
+      } else {
+        console.log(`[io] unknown action: ${data.action}`);
       }
     });
 
