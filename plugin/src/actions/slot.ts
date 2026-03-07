@@ -89,6 +89,7 @@ export class SlotAction extends SingletonAction {
     if (!this.unsubConfig) {
       this.unsubConfig = bridgeRef.onConfigChange(() => {
         this.renderAll(bridgeRef!.getConnectionStatus(), bridgeRef!.getLastSnapshot()).catch(() => {});
+        this.sendConfigSnapshot().catch(() => {});
       });
     }
   }

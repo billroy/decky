@@ -113,7 +113,7 @@
       flex: 1;
     }
     .field-group.icon-group {
-      flex: 0 0 110px;
+      flex: 0 0 130px;
     }
     .macro-item label {
       display: block;
@@ -232,19 +232,20 @@
       align-items: center;
     }
     .swatch {
-      width: 18px;
-      height: 18px;
+      width: 22px;
+      height: 22px;
       border-radius: 50%;
-      border: 2px solid transparent;
+      border: 2px solid rgba(255,255,255,0.15);
       cursor: pointer;
-      transition: border-color 0.15s;
+      transition: border-color 0.15s, box-shadow 0.15s;
       box-sizing: border-box;
     }
     .swatch:hover {
-      border-color: rgba(255,255,255,0.4);
+      border-color: rgba(255,255,255,0.5);
     }
     .swatch.selected {
-      border-color: rgba(100,160,255,0.8);
+      border-color: #64a0ff;
+      box-shadow: 0 0 4px rgba(100,160,255,0.6);
     }
     .swatch.none {
       background: repeating-conic-gradient(#444 0% 25%, #222 0% 50%) 50%/8px 8px;
@@ -268,14 +269,19 @@
       font-weight: normal;
     }
     .macro-colors-toggle {
-      font-size: 9px;
-      color: #557;
+      font-size: 10px;
+      color: #888;
       cursor: pointer;
       user-select: none;
-      margin-top: 2px;
+      margin-top: 4px;
+      padding: 2px 4px;
+      background: rgba(255,255,255,0.05);
+      border-radius: 3px;
+      display: inline-block;
     }
     .macro-colors-toggle:hover {
-      color: #88a;
+      color: #aaa;
+      background: rgba(255,255,255,0.08);
     }
     .macro-colors-panel {
       margin-top: 4px;
