@@ -4,6 +4,7 @@ import {
   getLayout,
   getLayoutStates,
   setTheme,
+  setThemeSeed,
   setTargetBadgeOptions,
   type MacroInput,
 } from "../layouts.js";
@@ -11,6 +12,7 @@ import {
 describe("layouts", () => {
   afterEach(() => {
     setTheme("light");
+    setThemeSeed(0);
     setTargetBadgeOptions({ showTargetBadge: false, defaultTargetApp: "claude" });
   });
   describe("getLayoutStates", () => {
@@ -113,10 +115,10 @@ describe("layouts", () => {
       expect(config.svg).toContain("\u2B23");
     });
 
-    it("renders default blue style when no icon specified", () => {
+    it("renders theme macro style when no icon specified", () => {
       const macros: MacroInput[] = [{ label: "Summarize", text: "Summarize" }];
       const config = getSlotConfig("idle", 0, null, macros);
-      expect(config.svg).toContain('fill="#1e3a5f"');
+      expect(config.svg).toContain('fill="#ffffff"');
       expect(config.svg).toContain("\u25B6");
     });
 
@@ -231,13 +233,30 @@ describe("layouts", () => {
       const macros: MacroInput[] = [{ label: "Test", text: "test" }];
       const config = getSlotConfig("idle", 0, null, macros);
       expect(config.svg).toContain('fill="#0f172a"');
-      expect(config.svg).toContain('fill="#94a3b8"');
+      expect(config.svg).toContain('fill="#e2e8f0"');
     });
 
     it("renders empty slot with dark background", () => {
       setTheme("dark");
       const config = getSlotConfig("idle", 99);
       expect(config.svg).toContain('fill="#0f172a"');
+    });
+  });
+
+  describe("light theme", () => {
+    it("renders no-icon macro with light background", () => {
+      setTheme("light");
+      const macros: MacroInput[] = [{ label: "Summarize", text: "summarize" }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.svg).toContain('fill="#ffffff"');
+      expect(config.svg).toContain('fill="#1e293b"');
+    });
+
+    it("renders empty slot with light background", () => {
+      setTheme("light");
+      const config = getSlotConfig("idle", 99);
+      expect(config.svg).toContain('fill="#ffffff"');
+      expect(config.svg).toContain('fill="#64748b"');
     });
   });
 
@@ -260,19 +279,22 @@ describe("layouts", () => {
   describe("extended themes", () => {
     it("supports rainbow theme with per-slot variation", () => {
       setTheme("rainbow");
+      setThemeSeed(1);
       const macros: MacroInput[] = [
         { label: "One", text: "one" },
         { label: "Two", text: "two" },
       ];
       const slot0 = getSlotConfig("idle", 0, null, macros);
       const slot1 = getSlotConfig("idle", 1, null, macros);
-      expect(slot0.svg).toContain('fill="#ef4444"');
-      expect(slot1.svg).toContain('fill="#f97316"');
+      const rainbowColors = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#8b5cf6"];
+      expect(rainbowColors.some((c) => slot0.svg.includes(`fill="${c}"`))).toBe(true);
+      expect(rainbowColors.some((c) => slot1.svg.includes(`fill="${c}"`))).toBe(true);
       expect(slot0.svg).not.toEqual(slot1.svg);
     });
 
     it("supports random theme with deterministic per-slot colors", () => {
       setTheme("random");
+      setThemeSeed(1);
       const macros: MacroInput[] = [
         { label: "One", text: "one" },
         { label: "Two", text: "two" },
@@ -282,7 +304,21 @@ describe("layouts", () => {
       const a1 = getSlotConfig("idle", 1, null, macros);
       expect(a0.svg).toEqual(a0b.svg);
       expect(a0.svg).not.toEqual(a1.svg);
-      expect(a0.svg).toContain("hsl(");
+      expect(a0.svg).toMatch(/fill="#[0-9a-fA-F]{6}"/);
+    });
+
+    it("changes rainbow distribution when theme seed changes", () => {
+      const macros: MacroInput[] = [
+        { label: "One", text: "one" },
+        { label: "Two", text: "two" },
+        { label: "Three", text: "three" },
+      ];
+      setTheme("rainbow");
+      setThemeSeed(1);
+      const a = getSlotConfig("idle", 0, null, macros).svg;
+      setThemeSeed(2);
+      const b = getSlotConfig("idle", 0, null, macros).svg;
+      expect(a).not.toEqual(b);
     });
   });
 });

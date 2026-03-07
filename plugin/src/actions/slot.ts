@@ -22,6 +22,7 @@ import { type BridgeClient, type ConnectionStatus, type StateSnapshot } from "..
 import {
   getSlotConfig,
   setTheme,
+  setThemeSeed,
   setDefaultColors,
   setTargetBadgeOptions,
   type MacroInput,
@@ -125,6 +126,9 @@ export class SlotAction extends SingletonAction {
       });
       await ev.action.setImage(imageData);
       await ev.action.setTitle("");
+      // Ensure rank-based macro assignment converges as additional keys appear.
+      // Without this, startup order can leave many keys rendered as slot 0.
+      this.renderAll(connStatus, snapshot).catch(() => {});
     }
 
     // Subscribe to changes (only once — first instance sets up listeners)
@@ -219,6 +223,7 @@ export class SlotAction extends SingletonAction {
         return entry;
       }),
       theme: cfg?.theme ?? "light",
+      themeSeed: cfg?.themeSeed ?? 0,
       editor: cfg?.editor ?? "bbedit",
       approvalTimeout: cfg?.approvalTimeout ?? 30,
       defaultTargetApp: cfg?.defaultTargetApp ?? "claude",
@@ -283,6 +288,9 @@ export class SlotAction extends SingletonAction {
       const update: Record<string, unknown> = {};
       if (Array.isArray(payload.macros)) update.macros = payload.macros;
       if (typeof payload.theme === "string") update.theme = payload.theme;
+      if (typeof payload.themeSeed === "number" && Number.isFinite(payload.themeSeed)) {
+        update.themeSeed = Math.floor(payload.themeSeed);
+      }
       if (typeof payload.editor === "string") update.editor = payload.editor;
       if (typeof payload.approvalTimeout === "number") update.approvalTimeout = payload.approvalTimeout;
       if (typeof payload.defaultTargetApp === "string") update.defaultTargetApp = payload.defaultTargetApp;
@@ -298,6 +306,7 @@ export class SlotAction extends SingletonAction {
       bridgeRef?.sendAction("updateConfig", update);
       pushDebug("plugin->bridge:updateConfig", ev.action.id, getSlotRank(ev.action.id), {
         theme: update.theme ?? null,
+        themeSeed: update.themeSeed ?? null,
         themeApplyMode: update.themeApplyMode ?? null,
         hasColorsField: Object.prototype.hasOwnProperty.call(update, "colors"),
       });
@@ -307,6 +316,7 @@ export class SlotAction extends SingletonAction {
   private getMacros(): MacroInput[] | undefined {
     const cfg = bridgeRef?.getLastConfig();
     if (cfg?.theme) setTheme(cfg.theme);
+    setThemeSeed(cfg?.themeSeed ?? 0);
     setDefaultColors(cfg?.colors ?? {});
     setTargetBadgeOptions({
       showTargetBadge: cfg?.showTargetBadge ?? false,

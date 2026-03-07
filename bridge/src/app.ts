@@ -163,6 +163,10 @@ export function createApp(): DeckyApp {
         let macros = Array.isArray(data.macros) ? data.macros : undefined;
         const timeout = typeof data.approvalTimeout === "number" ? data.approvalTimeout : undefined;
         const theme = isTheme(data.theme) ? data.theme : undefined;
+        let themeSeed =
+          typeof data.themeSeed === "number" && Number.isFinite(data.themeSeed)
+            ? Math.floor(data.themeSeed)
+            : undefined;
         const editor = typeof data.editor === "string" ? data.editor : undefined;
         let colors = data.colors && typeof data.colors === "object" ? data.colors : undefined;
         const defaultTargetApp =
@@ -181,6 +185,15 @@ export function createApp(): DeckyApp {
           data.themeApplyMode === "clear-all"
             ? data.themeApplyMode
             : undefined;
+        const effectiveTheme = theme ?? getConfig().theme;
+        if (
+          themeApplyMode &&
+          (effectiveTheme === "random" || effectiveTheme === "rainbow")
+        ) {
+          // Guarantee a fresh distribution for each explicit theme apply,
+          // even if the PI sent a stale/missing seed.
+          themeSeed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0;
+        }
         if (themeApplyMode === "clear-page" || themeApplyMode === "clear-all") {
           colors = {};
         }
@@ -197,6 +210,7 @@ export function createApp(): DeckyApp {
         if (macros) update.macros = macros;
         if (timeout !== undefined) update.approvalTimeout = timeout;
         if (theme) update.theme = theme;
+        if (themeSeed !== undefined) update.themeSeed = themeSeed;
         if (editor !== undefined) update.editor = editor;
         if (colors) update.colors = colors;
         if (defaultTargetApp) update.defaultTargetApp = defaultTargetApp;

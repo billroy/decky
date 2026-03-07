@@ -42,11 +42,11 @@ const PALETTES: Record<Theme, ThemePalette> = {
   light: {
     macroBg: "#ffffff",
     macroLabel: "#1e293b",
-    defaultBg: "#1e3a5f",
+    defaultBg: "#ffffff",
     defaultIcon: "#64748b",
-    defaultLabel: "#e2e8f0",
-    emptyBg: "#1e293b",
-    emptyText: "#475569",
+    defaultLabel: "#1e293b",
+    emptyBg: "#ffffff",
+    emptyText: "#64748b",
   },
   dark: {
     macroBg: "#0f172a",
@@ -133,6 +133,7 @@ const PALETTES: Record<Theme, ThemePalette> = {
 };
 
 let currentTheme: Theme = "light";
+let currentThemeSeed = 0;
 let showTargetBadge = false;
 let defaultTargetApp: TargetApp = "claude";
 
@@ -153,11 +154,15 @@ const TARGET_BADGE_COLORS: Record<TargetApp, { bg: string; text: string }> = {
 };
 
 export function setTheme(theme: Theme): void {
-  currentTheme = theme;
+  currentTheme = PALETTES[theme] ? theme : (theme === "rainbow" || theme === "random" ? theme : "light");
 }
 
 export function getTheme(): Theme {
   return currentTheme;
+}
+
+export function setThemeSeed(seed: number): void {
+  currentThemeSeed = Number.isFinite(seed) ? Math.floor(seed) : 0;
 }
 
 const RAINBOW_BG = ["#ef4444", "#f97316", "#eab308", "#22c55e", "#06b6d4", "#3b82f6", "#8b5cf6"];
@@ -174,19 +179,67 @@ function hash32(value: number): number {
   return x >>> 0;
 }
 
+function hslToHex(h: number, sPct: number, lPct: number): string {
+  const s = Math.max(0, Math.min(100, sPct)) / 100;
+  const l = Math.max(0, Math.min(100, lPct)) / 100;
+  const c = (1 - Math.abs(2 * l - 1)) * s;
+  const hh = ((h % 360) + 360) % 360 / 60;
+  const x = c * (1 - Math.abs((hh % 2) - 1));
+  let r1 = 0;
+  let g1 = 0;
+  let b1 = 0;
+  if (hh >= 0 && hh < 1) {
+    r1 = c; g1 = x;
+  } else if (hh < 2) {
+    r1 = x; g1 = c;
+  } else if (hh < 3) {
+    g1 = c; b1 = x;
+  } else if (hh < 4) {
+    g1 = x; b1 = c;
+  } else if (hh < 5) {
+    r1 = x; b1 = c;
+  } else {
+    r1 = c; b1 = x;
+  }
+  const m = l - c / 2;
+  const r = Math.round((r1 + m) * 255);
+  const g = Math.round((g1 + m) * 255);
+  const b = Math.round((b1 + m) * 255);
+  const toHex = (n: number): string => n.toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
 function randomColorFromIndex(index: number, channel: number): string {
-  const h = hash32(index * 131 + channel * 911);
+  const h = hash32(index * 131 + channel * 911 + currentThemeSeed * 17);
   const hue = h % 360;
   const sat = 58 + ((h >>> 8) % 28); // 58..85
   const light = 30 + ((h >>> 16) % 36); // 30..65
-  return `hsl(${hue} ${sat}% ${light}%)`;
+  return hslToHex(hue, sat, light);
+}
+
+function seededUnit(seed: number): number {
+  return (hash32(seed) % 1000000) / 1000000;
+}
+
+function shuffledRainbow(): { bg: string; fg: string }[] {
+  const pairs = RAINBOW_BG.map((bg, i) => ({ bg, fg: RAINBOW_FG[i] }));
+  const out = pairs.slice();
+  for (let i = out.length - 1; i > 0; i--) {
+    const r = seededUnit(currentThemeSeed + i * 97);
+    const j = Math.floor(r * (i + 1));
+    const tmp = out[i];
+    out[i] = out[j];
+    out[j] = tmp;
+  }
+  return out;
 }
 
 function resolveThemePaletteForSlot(theme: Theme, slotIndex: number): ThemePalette {
   if (theme === "rainbow") {
-    const idx = ((slotIndex % RAINBOW_BG.length) + RAINBOW_BG.length) % RAINBOW_BG.length;
-    const bg = RAINBOW_BG[idx];
-    const fg = RAINBOW_FG[idx];
+    const pairs = shuffledRainbow();
+    const idx = ((slotIndex % pairs.length) + pairs.length) % pairs.length;
+    const bg = pairs[idx].bg;
+    const fg = pairs[idx].fg;
     return {
       macroBg: bg,
       macroLabel: fg,
@@ -211,7 +264,7 @@ function resolveThemePaletteForSlot(theme: Theme, slotIndex: number): ThemePalet
       emptyText: text,
     };
   }
-  return PALETTES[theme];
+  return PALETTES[theme] ?? PALETTES.light;
 }
 
 export function setTargetBadgeOptions(options: {
@@ -293,11 +346,18 @@ function macroSVG(slotIndex: number, label: string, icon?: string, colors?: Colo
   const p = resolveThemePaletteForSlot(currentTheme, slotIndex);
   const displayLabel = label.length > 10 ? label.slice(0, 9) + "\u2026" : label;
   const fontSize = displayLabel.length > 6 ? 26 : 32;
+  const dynamicTheme = currentTheme === "rainbow" || currentTheme === "random";
+  const pageBg = dynamicTheme ? undefined : defaultColors.bg;
+  const pageText = dynamicTheme ? undefined : defaultColors.text;
+  const pageIcon = dynamicTheme ? undefined : defaultColors.icon;
+  const macroBgOverride = dynamicTheme ? undefined : colors?.bg;
+  const macroTextOverride = dynamicTheme ? undefined : colors?.text;
+  const macroIconOverride = dynamicTheme ? undefined : colors?.icon;
 
   // Resolve colors: theme < page defaults < macro overrides
-  const bg = resolveColor(p.macroBg, defaultColors.bg, colors?.bg);
-  const textColor = resolveColor(p.macroLabel, defaultColors.text, colors?.text);
-  const iconColor = resolveColor(p.macroLabel, defaultColors.icon, colors?.icon);
+  const bg = resolveColor(p.macroBg, pageBg, macroBgOverride);
+  const textColor = resolveColor(p.macroLabel, pageText, macroTextOverride);
+  const iconColor = resolveColor(p.macroLabel, pageIcon, macroIconOverride);
 
   // Lucide SVG path icon
   if (icon && LUCIDE_ICONS[icon]) {
@@ -312,8 +372,8 @@ function macroSVG(slotIndex: number, label: string, icon?: string, colors?: Colo
   // Legacy Unicode icon (checkmark, stop, exclamation)
   if (icon && ICON_SYMBOLS[icon]) {
     const symbol = ICON_SYMBOLS[icon];
-    const legacyDefaultIcon = ICON_COLORS[icon] ?? p.defaultIcon;
-    const resolvedIcon = resolveColor(legacyDefaultIcon, defaultColors.icon, colors?.icon);
+    const legacyDefaultIcon = dynamicTheme ? p.defaultIcon : (ICON_COLORS[icon] ?? p.defaultIcon);
+    const resolvedIcon = resolveColor(legacyDefaultIcon, pageIcon, macroIconOverride);
     const fontWeight = icon === "exclamation" ? ' font-weight="bold"' : "";
     return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
       <rect width="144" height="144" rx="16" fill="${bg}" />
@@ -324,9 +384,10 @@ function macroSVG(slotIndex: number, label: string, icon?: string, colors?: Colo
   }
 
   // Default: no icon — play arrow style
-  const resolvedBg = resolveColor(p.defaultBg, defaultColors.bg, colors?.bg);
-  const resolvedIcon = resolveColor(p.defaultIcon, defaultColors.icon, colors?.icon);
-  const resolvedText = resolveColor(p.defaultLabel, defaultColors.text, colors?.text);
+  // No explicit icon: still use macro palette so all macros in a theme are consistent.
+  const resolvedBg = resolveColor(p.macroBg, pageBg, macroBgOverride);
+  const resolvedIcon = resolveColor(p.defaultIcon, pageIcon, macroIconOverride);
+  const resolvedText = resolveColor(p.macroLabel, pageText, macroTextOverride);
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <rect width="144" height="144" rx="16" fill="${resolvedBg}" />
     <text x="72" y="72" font-size="60" font-family="sans-serif" text-anchor="middle" fill="${resolvedIcon}">\u25B6</text>
