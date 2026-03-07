@@ -1,0 +1,201 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <script src="sdpi-components.js"></script>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 8px;
+      color: #c8c8c8;
+      background: transparent;
+    }
+    .macro-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .macro-item {
+      background: rgba(255,255,255,0.05);
+      border-radius: 6px;
+      padding: 8px;
+    }
+    .macro-item .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 6px;
+    }
+    .macro-item .number {
+      font-size: 11px;
+      color: #888;
+      font-weight: 600;
+    }
+    .macro-item label {
+      display: block;
+      font-size: 11px;
+      color: #888;
+      margin-bottom: 2px;
+    }
+    .macro-item input,
+    .macro-item textarea {
+      width: 100%;
+      box-sizing: border-box;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 4px;
+      color: #e0e0e0;
+      font-size: 12px;
+      padding: 4px 6px;
+      font-family: inherit;
+      resize: vertical;
+    }
+    .macro-item input:focus,
+    .macro-item textarea:focus {
+      outline: none;
+      border-color: rgba(100,160,255,0.5);
+    }
+    .macro-item textarea {
+      min-height: 36px;
+    }
+    .btn-row {
+      display: flex;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    button {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15);
+      border-radius: 4px;
+      color: #c8c8c8;
+      font-size: 11px;
+      padding: 4px 10px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: rgba(255,255,255,0.15);
+    }
+    button.primary {
+      background: rgba(34,197,94,0.2);
+      border-color: rgba(34,197,94,0.3);
+      color: #86efac;
+    }
+    button.primary:hover {
+      background: rgba(34,197,94,0.3);
+    }
+    button.danger {
+      background: rgba(239,68,68,0.15);
+      border-color: rgba(239,68,68,0.2);
+      color: #fca5a5;
+      font-size: 10px;
+      padding: 2px 6px;
+    }
+    button.danger:hover {
+      background: rgba(239,68,68,0.25);
+    }
+    .status {
+      font-size: 10px;
+      color: #666;
+      margin-top: 6px;
+      text-align: center;
+    }
+    .status.saved {
+      color: #86efac;
+    }
+    h3 {
+      font-size: 12px;
+      margin: 0 0 8px 0;
+      color: #a0a0a0;
+    }
+  </style>
+</head>
+<body>
+  <h3>Macro Buttons</h3>
+  <div id="macro-list" class="macro-list"></div>
+  <div class="btn-row">
+    <button class="primary" id="btn-save">Save</button>
+    <button id="btn-add">Add Macro</button>
+  </div>
+  <div id="status" class="status"></div>
+
+  <script>
+    const MAX_MACROS = 6;
+    let macros = [];
+    const client = SDPIComponents.streamDeckClient;
+
+    // Receive config from plugin
+    client.sendToPropertyInspector.subscribe((msg) => {
+      if (msg && msg.type === "configSnapshot" && Array.isArray(msg.macros)) {
+        macros = msg.macros.map((m) => ({ label: m.label || "", text: m.text || "" }));
+        render();
+      }
+    });
+
+    function render() {
+      const list = document.getElementById("macro-list");
+      list.innerHTML = "";
+      macros.forEach((macro, i) => {
+        const item = document.createElement("div");
+        item.className = "macro-item";
+        item.innerHTML = `
+          <div class="header">
+            <span class="number">Slot ${i + 1}</span>
+            <button class="danger" data-remove="${i}">&times;</button>
+          </div>
+          <label>Label</label>
+          <input type="text" data-field="label" data-index="${i}" value="${esc(macro.label)}" placeholder="Button label" maxlength="20" />
+          <label style="margin-top:4px">Text to send</label>
+          <textarea data-field="text" data-index="${i}" placeholder="Text injected into Claude">${esc(macro.text)}</textarea>
+        `;
+        list.appendChild(item);
+      });
+
+      // Update add button state
+      const addBtn = document.getElementById("btn-add");
+      addBtn.disabled = macros.length >= MAX_MACROS;
+
+      // Bind events
+      list.querySelectorAll("input, textarea").forEach((el) => {
+        el.addEventListener("input", (e) => {
+          const idx = parseInt(e.target.dataset.index);
+          const field = e.target.dataset.field;
+          macros[idx][field] = e.target.value;
+        });
+      });
+      list.querySelectorAll("[data-remove]").forEach((btn) => {
+        btn.addEventListener("click", (e) => {
+          const idx = parseInt(e.target.dataset.remove);
+          macros.splice(idx, 1);
+          render();
+        });
+      });
+    }
+
+    function esc(str) {
+      return str.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    document.getElementById("btn-save").addEventListener("click", () => {
+      client.send("sendToPlugin", {
+        type: "updateConfig",
+        macros: macros.map((m) => ({ label: m.label, text: m.text })),
+      });
+      const status = document.getElementById("status");
+      status.textContent = "Saved";
+      status.className = "status saved";
+      setTimeout(() => { status.textContent = ""; status.className = "status"; }, 2000);
+    });
+
+    document.getElementById("btn-add").addEventListener("click", () => {
+      if (macros.length < MAX_MACROS) {
+        macros.push({ label: "", text: "" });
+        render();
+      }
+    });
+
+    // Initial empty render
+    render();
+  </script>
+</body>
+</html>

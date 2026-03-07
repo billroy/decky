@@ -84,6 +84,24 @@ export function reloadConfig(): DeckyConfig {
   return loadConfig();
 }
 
+/** Save config to disk and update in-memory copy. Returns the saved config. */
+export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
+  ensureDir();
+
+  const merged: DeckyConfig = {
+    macros: Array.isArray(update.macros) ? update.macros : currentConfig.macros,
+    approvalTimeout:
+      typeof update.approvalTimeout === "number"
+        ? update.approvalTimeout
+        : currentConfig.approvalTimeout,
+  };
+
+  writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), "utf-8");
+  currentConfig = merged;
+  console.log(`[config] saved ${merged.macros.length} macros to ${CONFIG_PATH}`);
+  return currentConfig;
+}
+
 /** Exposed for testing. */
 export const CONFIG_PATH_VALUE = CONFIG_PATH;
 export const DECKY_DIR_VALUE = DECKY_DIR;

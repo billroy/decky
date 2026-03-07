@@ -7,13 +7,16 @@
  * the appropriate icon/title/action from the layout definitions.
  */
 
-import {
+import streamDeck, {
   action,
   SingletonAction,
   type WillAppearEvent,
   type WillDisappearEvent,
   type KeyDownEvent,
+  type PropertyInspectorDidAppearEvent,
+  type SendToPluginEvent,
 } from "@elgato/streamdeck";
+import type { JsonValue, JsonObject } from "@elgato/utils";
 import { type BridgeClient, type ConnectionStatus, type StateSnapshot } from "../bridge-client.js";
 import { getSlotConfig, type MacroInput } from "../layouts.js";
 
@@ -110,6 +113,22 @@ export class SlotAction extends SingletonAction {
 
     if (config.action && bridgeRef.getConnectionStatus() === "connected") {
       bridgeRef.sendAction(config.action, config.data);
+    }
+  }
+
+  override async onPropertyInspectorDidAppear(_ev: PropertyInspectorDidAppearEvent): Promise<void> {
+    const cfg = bridgeRef?.getLastConfig();
+    const macros = cfg?.macros ?? [];
+    await streamDeck.ui.sendToPropertyInspector({
+      type: "configSnapshot",
+      macros: macros.map((m) => ({ label: m.label, text: m.text })),
+    });
+  }
+
+  override async onSendToPlugin(ev: SendToPluginEvent<JsonValue, JsonObject>): Promise<void> {
+    const payload = ev.payload as Record<string, unknown>;
+    if (payload?.type === "updateConfig" && Array.isArray(payload.macros)) {
+      bridgeRef?.sendAction("updateConfig", { macros: payload.macros });
     }
   }
 

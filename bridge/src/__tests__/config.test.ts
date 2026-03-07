@@ -48,4 +48,47 @@ describe("config endpoints", () => {
     expect(data.ok).toBe(true);
     expect(data.config).toHaveProperty("macros");
   });
+
+  it("PUT /config saves updated macros", async () => {
+    const newMacros = [
+      { label: "Test", text: "test text" },
+      { label: "Other", text: "other text" },
+    ];
+
+    const res = await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ macros: newMacros }),
+    });
+
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.ok).toBe(true);
+    expect(data.config.macros).toHaveLength(2);
+    expect(data.config.macros[0].label).toBe("Test");
+    expect(data.config.macros[1].text).toBe("other text");
+  });
+
+  it("PUT /config preserves approvalTimeout when not provided", async () => {
+    const res = await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ macros: [{ label: "A", text: "B" }] }),
+    });
+
+    const data = await res.json();
+    expect(data.config.approvalTimeout).toBe(30);
+  });
+
+  it("GET /config reflects saved changes", async () => {
+    await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ macros: [{ label: "Saved", text: "saved text" }] }),
+    });
+
+    const res = await fetch(`${baseUrl}/config`);
+    const data = await res.json();
+    expect(data.macros[0].label).toBe("Saved");
+  });
 });

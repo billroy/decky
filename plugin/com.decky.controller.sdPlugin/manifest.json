@@ -56,6 +56,7 @@
       "Tooltip": "Dynamic button that changes based on Claude Code state. Place multiple for full layout.",
       "Icon": "imgs/actions/slot/icon",
       "Controllers": ["Keypad"],
+      "PropertyInspectorPath": "ui/property-inspector.html",
       "States": [
         { "Image": "imgs/actions/slot/key", "Title": "Slot" }
       ]

@@ -11,7 +11,7 @@ import { createServer, type Server as HttpServer } from "node:http";
 import { Server as SocketIOServer } from "socket.io";
 import { StateMachine, type HookPayload, type HookEvent } from "./state-machine.js";
 import { writeGateFile, clearGateFile, type ApprovalResult } from "./approval-gate.js";
-import { loadConfig, getConfig, reloadConfig } from "./config.js";
+import { loadConfig, getConfig, reloadConfig, saveConfig } from "./config.js";
 import { executeMacro } from "./macro-exec.js";
 
 const VALID_EVENTS: Set<string> = new Set([
@@ -92,6 +92,13 @@ export function createApp(): DeckyApp {
     res.json(getConfig());
   });
 
+  app.put("/config", (req, res) => {
+    const body = req.body as Record<string, unknown>;
+    const config = saveConfig(body);
+    io.emit("configUpdate", config);
+    res.json({ ok: true, config });
+  });
+
   app.post("/config/reload", (_req, res) => {
     const config = reloadConfig();
     io.emit("configUpdate", config);
@@ -129,6 +136,13 @@ export function createApp(): DeckyApp {
           });
         } else {
           console.log(`[io] macro pressed with no text: ${JSON.stringify(data)}`);
+        }
+      } else if (data.action === "updateConfig") {
+        const macros = Array.isArray(data.macros) ? data.macros : undefined;
+        const timeout = typeof data.approvalTimeout === "number" ? data.approvalTimeout : undefined;
+        if (macros || timeout !== undefined) {
+          const config = saveConfig({ macros, approvalTimeout: timeout });
+          io.emit("configUpdate", config);
         }
       } else {
         console.log(`[io] unknown action: ${data.action}`);
