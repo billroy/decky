@@ -309,7 +309,7 @@
 </head>
 <body>
   <!-- Connection status -->
-  <div id="conn-status" class="conn-status disconnected">Waiting for bridge...</div>
+  <div id="conn-status" class="conn-status" style="color:#888;background:rgba(255,255,255,0.05)">Connecting...</div>
 
   <!-- Settings -->
   <div class="section">
@@ -436,9 +436,14 @@
     });
 
     // Readiness handshake: tell the plugin we're ready to receive the config snapshot.
-    // This fixes the race condition where onPropertyInspectorDidAppear fires before
-    // the PI's subscribe listener is registered.
-    client.send("sendToPlugin", { type: "piReady" });
+    // Retry periodically until we get a response, covering race conditions where
+    // the plugin's UIController hasn't set #action yet.
+    function sendPiReady() { client.send("sendToPlugin", { type: "piReady" }); }
+    sendPiReady();
+    var piReadyInterval = setInterval(function () {
+      if (configLoaded) { clearInterval(piReadyInterval); return; }
+      sendPiReady();
+    }, 500);
 
     function buildSwatchRow(labelText, selectedValue, onSelect) {
       var row = document.createElement("div");

@@ -130,7 +130,10 @@ export class SlotAction extends SingletonAction {
   }
 
   override async onPropertyInspectorDidAppear(_ev: PropertyInspectorDidAppearEvent): Promise<void> {
+    // Send immediately (may be lost if PI hasn't subscribed yet)
     await this.sendConfigSnapshot();
+    // Retry after a short delay to cover the PI initialization race
+    setTimeout(() => { this.sendConfigSnapshot().catch(() => {}); }, 200);
   }
 
   private async sendConfigSnapshot(): Promise<void> {
