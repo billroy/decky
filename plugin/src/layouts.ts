@@ -38,7 +38,15 @@ function macroSVG(label: string, icon?: string): string {
   if (icon === "stop") {
     return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
       <rect width="144" height="144" rx="16" fill="#ffffff" />
-      <text x="72" y="88" font-size="80" font-family="sans-serif" text-anchor="middle" fill="#ef4444">\u2B23</text>
+      <text x="72" y="92" font-size="90" font-family="sans-serif" text-anchor="middle" fill="#ef4444">\u2B23</text>
+      <text x="72" y="130" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="#1e293b">${displayLabel}</text>
+    </svg>`;
+  }
+
+  if (icon === "exclamation") {
+    return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+      <rect width="144" height="144" rx="16" fill="#ffffff" />
+      <text x="72" y="92" font-size="90" font-family="sans-serif" text-anchor="middle" fill="#f59e0b" font-weight="bold">!</text>
       <text x="72" y="130" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="#1e293b">${displayLabel}</text>
     </svg>`;
   }
@@ -70,7 +78,8 @@ function thinkingSVG(): string {
 }
 
 const EMPTY_SVG = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
-  <rect width="144" height="144" rx="16" fill="#0f172a" opacity="0.5" />
+  <rect width="144" height="144" rx="16" fill="#1e293b" />
+  <text x="72" y="82" font-size="36" font-family="sans-serif" text-anchor="middle" fill="#475569">\u2022\u2022\u2022</text>
 </svg>`;
 
 // --- Slot config factories ---

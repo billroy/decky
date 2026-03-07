@@ -26,8 +26,15 @@ export function setSlotClient(client: BridgeClient): void {
   bridgeRef = client;
 }
 
-/** Map from action context ID to assigned slot index. */
+/** Map from action context ID to position index (row * columns + column). */
 const slotAssignments = new Map<string, number>();
+
+/** Get the rank (sorted order) of an action among all active slots.
+ *  Macros are assigned by rank so they fill sequentially regardless of position gaps. */
+function getSlotRank(actionId: string): number {
+  const sorted = [...slotAssignments.entries()].sort((a, b) => a[1] - b[1]);
+  return sorted.findIndex(([id]) => id === actionId);
+}
 
 /** Exported for testing. */
 export function resetSlots(): void {
@@ -54,11 +61,12 @@ export class SlotAction extends SingletonAction {
 
     // Render this specific action immediately (it may not be in this.actions yet)
     if (slotIndex !== undefined) {
+      const rank = getSlotRank(ev.action.id);
       const connStatus = bridgeRef.getConnectionStatus();
       const snapshot = bridgeRef.getLastSnapshot();
       const state = connStatus === "connected" ? (snapshot?.state ?? "idle") : "stopped";
       const macros = this.getMacros();
-      const config = getSlotConfig(state, slotIndex, snapshot?.tool, macros);
+      const config = getSlotConfig(state, rank, snapshot?.tool, macros);
       const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
       await ev.action.setImage(imageData);
       await ev.action.setTitle("");
@@ -101,13 +109,13 @@ export class SlotAction extends SingletonAction {
   override async onKeyDown(ev: KeyDownEvent): Promise<void> {
     if (!bridgeRef) return;
 
-    const slotIndex = slotAssignments.get(ev.action.id);
-    if (slotIndex === undefined) return;
+    const rank = getSlotRank(ev.action.id);
+    if (rank === -1) return;
 
     const snapshot = bridgeRef.getLastSnapshot();
     const state = snapshot?.state ?? "idle";
     const macros = this.getMacros();
-    const config = getSlotConfig(state, slotIndex, snapshot?.tool, macros);
+    const config = getSlotConfig(state, rank, snapshot?.tool, macros);
 
     if (config.action && bridgeRef.getConnectionStatus() === "connected") {
       bridgeRef.sendAction(config.action, config.data);
@@ -142,10 +150,10 @@ export class SlotAction extends SingletonAction {
     const macros = this.getMacros();
 
     for (const instance of this.actions) {
-      const slotIndex = slotAssignments.get(instance.id);
-      if (slotIndex === undefined) continue;
+      const rank = getSlotRank(instance.id);
+      if (rank === -1) continue;
 
-      const config = getSlotConfig(state, slotIndex, toolName, macros);
+      const config = getSlotConfig(state, rank, toolName, macros);
       const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
 
       await instance.setImage(imageData);
