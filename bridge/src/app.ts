@@ -140,8 +140,15 @@ export function createApp(): DeckyApp {
       } else if (data.action === "updateConfig") {
         const macros = Array.isArray(data.macros) ? data.macros : undefined;
         const timeout = typeof data.approvalTimeout === "number" ? data.approvalTimeout : undefined;
-        if (macros || timeout !== undefined) {
-          const config = saveConfig({ macros, approvalTimeout: timeout });
+        const theme = data.theme === "dark" ? "dark" as const : data.theme === "light" ? "light" as const : undefined;
+        const editor = typeof data.editor === "string" ? data.editor : undefined;
+        const update: Record<string, unknown> = {};
+        if (macros) update.macros = macros;
+        if (timeout !== undefined) update.approvalTimeout = timeout;
+        if (theme) update.theme = theme;
+        if (editor !== undefined) update.editor = editor;
+        if (Object.keys(update).length > 0) {
+          const config = saveConfig(update);
           io.emit("configUpdate", config);
         }
       } else {

@@ -11,37 +11,38 @@
       color: #c8c8c8;
       background: transparent;
     }
-    .macro-list {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
+
+    /* --- Sections --- */
+    .section {
+      margin-bottom: 12px;
     }
-    .macro-item {
-      background: rgba(255,255,255,0.05);
-      border-radius: 6px;
-      padding: 8px;
+    h3 {
+      font-size: 12px;
+      margin: 0 0 8px 0;
+      color: #a0a0a0;
     }
-    .macro-item .header {
+    hr {
+      border: none;
+      border-top: 1px solid rgba(255,255,255,0.08);
+      margin: 12px 0;
+    }
+
+    /* --- Settings row --- */
+    .setting-row {
       display: flex;
       align-items: center;
-      justify-content: space-between;
+      gap: 8px;
       margin-bottom: 6px;
     }
-    .macro-item .number {
+    .setting-row label {
       font-size: 11px;
       color: #888;
-      font-weight: 600;
+      min-width: 90px;
+      flex-shrink: 0;
     }
-    .macro-item label {
-      display: block;
-      font-size: 11px;
-      color: #888;
-      margin-bottom: 2px;
-    }
-    .macro-item input,
-    .macro-item textarea {
-      width: 100%;
-      box-sizing: border-box;
+    .setting-row input,
+    .setting-row select {
+      flex: 1;
       background: rgba(0,0,0,0.3);
       border: 1px solid rgba(255,255,255,0.1);
       border-radius: 4px;
@@ -49,16 +50,105 @@
       font-size: 12px;
       padding: 4px 6px;
       font-family: inherit;
-      resize: vertical;
+    }
+    .setting-row input:focus,
+    .setting-row select:focus {
+      outline: none;
+      border-color: rgba(100,160,255,0.5);
+    }
+    .setting-row select {
+      cursor: pointer;
+    }
+
+    /* --- Macro list --- */
+    .macro-list {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .macro-item {
+      background: rgba(255,255,255,0.05);
+      border-radius: 6px;
+      padding: 8px;
+      cursor: grab;
+      transition: background 0.15s;
+    }
+    .macro-item.dragging {
+      opacity: 0.4;
+    }
+    .macro-item.drag-over {
+      background: rgba(100,160,255,0.12);
+      border-top: 2px solid rgba(100,160,255,0.5);
+    }
+    .macro-item .header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .macro-item .header-left {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .macro-item .number {
+      font-size: 11px;
+      color: #888;
+      font-weight: 600;
+    }
+    .macro-item .grip {
+      font-size: 10px;
+      color: #555;
+      cursor: grab;
+      user-select: none;
+    }
+    .field-row {
+      display: flex;
+      gap: 6px;
+      margin-bottom: 3px;
+    }
+    .field-group {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+    }
+    .field-group.icon-group {
+      flex: 0 0 80px;
+    }
+    .macro-item label {
+      display: block;
+      font-size: 10px;
+      color: #666;
+      margin-bottom: 1px;
+    }
+    .macro-item input,
+    .macro-item textarea,
+    .macro-item select {
+      width: 100%;
+      box-sizing: border-box;
+      background: rgba(0,0,0,0.3);
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 4px;
+      color: #e0e0e0;
+      font-size: 12px;
+      padding: 3px 5px;
+      font-family: inherit;
     }
     .macro-item input:focus,
-    .macro-item textarea:focus {
+    .macro-item textarea:focus,
+    .macro-item select:focus {
       outline: none;
       border-color: rgba(100,160,255,0.5);
     }
     .macro-item textarea {
-      min-height: 36px;
+      resize: vertical;
+      min-height: 28px;
     }
+    .macro-item select {
+      cursor: pointer;
+    }
+
+    /* --- Buttons --- */
     .btn-row {
       display: flex;
       gap: 6px;
@@ -75,6 +165,10 @@
     }
     button:hover {
       background: rgba(255,255,255,0.15);
+    }
+    button:disabled {
+      opacity: 0.4;
+      cursor: default;
     }
     button.primary {
       background: rgba(34,197,94,0.2);
@@ -94,6 +188,8 @@
     button.danger:hover {
       background: rgba(239,68,68,0.25);
     }
+
+    /* --- Status --- */
     .status {
       font-size: 10px;
       color: #666;
@@ -103,99 +199,248 @@
     .status.saved {
       color: #86efac;
     }
-    h3 {
-      font-size: 12px;
-      margin: 0 0 8px 0;
-      color: #a0a0a0;
+    .status.error {
+      color: #fca5a5;
     }
   </style>
 </head>
 <body>
-  <h3>Macro Buttons</h3>
-  <div id="macro-list" class="macro-list"></div>
-  <div class="btn-row">
-    <button class="primary" id="btn-save">Save</button>
-    <button id="btn-add">Add Macro</button>
+  <!-- Settings -->
+  <div class="section">
+    <h3>Settings</h3>
+    <div class="setting-row">
+      <label>Theme</label>
+      <select id="theme">
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </div>
+    <div class="setting-row">
+      <label>Editor</label>
+      <input type="text" id="editor" placeholder="e.g. bbedit, code, open" />
+    </div>
+    <div class="setting-row">
+      <label>Approval timeout</label>
+      <input type="number" id="timeout" min="5" max="300" step="5" />
+    </div>
   </div>
-  <div id="status" class="status"></div>
+
+  <hr />
+
+  <!-- Macros -->
+  <div class="section">
+    <h3>Macro Buttons <span id="macro-count" style="color:#666; font-weight:normal"></span></h3>
+    <div id="macro-list" class="macro-list"></div>
+    <div class="btn-row">
+      <button class="primary" id="btn-save">Save</button>
+      <button id="btn-add">+ Add Macro</button>
+    </div>
+    <div id="status" class="status"></div>
+  </div>
 
   <script>
-    const MAX_MACROS = 6;
+    const MAX_MACROS = 36;
+    const ICONS = [
+      { value: "", label: "None" },
+      { value: "checkmark", label: "\u2713 Checkmark" },
+      { value: "stop", label: "\u2B23 Stop" },
+      { value: "exclamation", label: "! Exclamation" },
+    ];
     let macros = [];
+    let settings = { theme: "light", editor: "", approvalTimeout: 30 };
     const client = SDPIComponents.streamDeckClient;
 
     // Receive config from plugin
     client.sendToPropertyInspector.subscribe((msg) => {
-      if (msg && msg.type === "configSnapshot" && Array.isArray(msg.macros)) {
-        macros = msg.macros.map((m) => ({ label: m.label || "", text: m.text || "" }));
-        render();
+      if (msg && msg.type === "configSnapshot") {
+        if (Array.isArray(msg.macros)) {
+          macros = msg.macros.map((m) => ({
+            label: m.label || "",
+            text: m.text || "",
+            icon: m.icon || "",
+          }));
+        }
+        if (msg.theme) settings.theme = msg.theme;
+        if (msg.editor !== undefined) settings.editor = msg.editor || "";
+        if (msg.approvalTimeout !== undefined) settings.approvalTimeout = msg.approvalTimeout;
+
+        document.getElementById("theme").value = settings.theme;
+        document.getElementById("editor").value = settings.editor;
+        document.getElementById("timeout").value = settings.approvalTimeout;
+        renderMacros();
       }
     });
 
-    function render() {
+    function renderMacros() {
       const list = document.getElementById("macro-list");
       list.innerHTML = "";
+      document.getElementById("macro-count").textContent = "(" + macros.length + "/" + MAX_MACROS + ")";
+
       macros.forEach((macro, i) => {
         const item = document.createElement("div");
         item.className = "macro-item";
-        item.innerHTML = `
-          <div class="header">
-            <span class="number">Slot ${i + 1}</span>
-            <button class="danger" data-remove="${i}">&times;</button>
-          </div>
-          <label>Label</label>
-          <input type="text" data-field="label" data-index="${i}" value="${esc(macro.label)}" placeholder="Button label" maxlength="20" />
-          <label style="margin-top:4px">Text to send</label>
-          <textarea data-field="text" data-index="${i}" placeholder="Text injected into Claude">${esc(macro.text)}</textarea>
-        `;
+        item.draggable = true;
+        item.dataset.index = i;
+
+        const iconOptions = ICONS.map(
+          (ic) => '<option value="' + esc(ic.value) + '"' + (macro.icon === ic.value ? " selected" : "") + ">" + esc(ic.label) + "</option>"
+        ).join("");
+
+        item.innerHTML =
+          '<div class="header">' +
+            '<div class="header-left">' +
+              '<span class="grip">\u2630</span>' +
+              '<span class="number">' + (i + 1) + "</span>" +
+            "</div>" +
+            '<button class="danger" data-remove="' + i + '">&times;</button>' +
+          "</div>" +
+          '<div class="field-row">' +
+            '<div class="field-group">' +
+              "<label>Label</label>" +
+              '<input type="text" data-field="label" data-index="' + i + '" value="' + esc(macro.label) + '" placeholder="Button label" maxlength="20" />' +
+            "</div>" +
+            '<div class="field-group icon-group">' +
+              "<label>Icon</label>" +
+              '<select data-field="icon" data-index="' + i + '">' + iconOptions + "</select>" +
+            "</div>" +
+          "</div>" +
+          "<label>Text to send</label>" +
+          '<textarea data-field="text" data-index="' + i + '" placeholder="Text injected into Claude">' + esc(macro.text) + "</textarea>";
+
         list.appendChild(item);
       });
 
-      // Update add button state
-      const addBtn = document.getElementById("btn-add");
-      addBtn.disabled = macros.length >= MAX_MACROS;
+      // Update add button
+      document.getElementById("btn-add").disabled = macros.length >= MAX_MACROS;
 
-      // Bind events
-      list.querySelectorAll("input, textarea").forEach((el) => {
-        el.addEventListener("input", (e) => {
-          const idx = parseInt(e.target.dataset.index);
-          const field = e.target.dataset.field;
+      // Bind input events
+      list.querySelectorAll("input, textarea, select").forEach(function (el) {
+        el.addEventListener("input", function (e) {
+          var idx = parseInt(e.target.dataset.index);
+          var field = e.target.dataset.field;
+          macros[idx][field] = e.target.value;
+        });
+        el.addEventListener("change", function (e) {
+          var idx = parseInt(e.target.dataset.index);
+          var field = e.target.dataset.field;
           macros[idx][field] = e.target.value;
         });
       });
-      list.querySelectorAll("[data-remove]").forEach((btn) => {
-        btn.addEventListener("click", (e) => {
-          const idx = parseInt(e.target.dataset.remove);
+
+      // Bind remove buttons
+      list.querySelectorAll("[data-remove]").forEach(function (btn) {
+        btn.addEventListener("click", function (e) {
+          var idx = parseInt(e.target.dataset.remove);
           macros.splice(idx, 1);
-          render();
+          renderMacros();
         });
       });
-    }
 
-    function esc(str) {
-      return str.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    }
-
-    document.getElementById("btn-save").addEventListener("click", () => {
-      client.send("sendToPlugin", {
-        type: "updateConfig",
-        macros: macros.map((m) => ({ label: m.label, text: m.text })),
+      // Drag and drop for reordering
+      list.querySelectorAll(".macro-item").forEach(function (item) {
+        item.addEventListener("dragstart", handleDragStart);
+        item.addEventListener("dragover", handleDragOver);
+        item.addEventListener("dragenter", handleDragEnter);
+        item.addEventListener("dragleave", handleDragLeave);
+        item.addEventListener("drop", handleDrop);
+        item.addEventListener("dragend", handleDragEnd);
       });
-      const status = document.getElementById("status");
-      status.textContent = "Saved";
-      status.className = "status saved";
-      setTimeout(() => { status.textContent = ""; status.className = "status"; }, 2000);
+    }
+
+    // --- Drag and drop ---
+    var dragSrcIndex = null;
+
+    function handleDragStart(e) {
+      dragSrcIndex = parseInt(this.dataset.index);
+      this.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", dragSrcIndex);
+    }
+
+    function handleDragOver(e) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+    }
+
+    function handleDragEnter(e) {
+      e.preventDefault();
+      this.classList.add("drag-over");
+    }
+
+    function handleDragLeave() {
+      this.classList.remove("drag-over");
+    }
+
+    function handleDrop(e) {
+      e.stopPropagation();
+      e.preventDefault();
+      this.classList.remove("drag-over");
+      var targetIndex = parseInt(this.dataset.index);
+      if (dragSrcIndex !== null && dragSrcIndex !== targetIndex) {
+        var moved = macros.splice(dragSrcIndex, 1)[0];
+        macros.splice(targetIndex, 0, moved);
+        renderMacros();
+      }
+    }
+
+    function handleDragEnd() {
+      document.querySelectorAll(".macro-item").forEach(function (item) {
+        item.classList.remove("dragging", "drag-over");
+      });
+      dragSrcIndex = null;
+    }
+
+    // --- Helpers ---
+    function esc(str) {
+      return String(str).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    function showStatus(msg, cls) {
+      var el = document.getElementById("status");
+      el.textContent = msg;
+      el.className = "status " + (cls || "");
+      if (cls === "saved") {
+        setTimeout(function () { el.textContent = ""; el.className = "status"; }, 2000);
+      }
+    }
+
+    // --- Save ---
+    document.getElementById("btn-save").addEventListener("click", function () {
+      // Validate: no empty labels
+      var invalid = macros.some(function (m) { return !m.label.trim(); });
+      if (invalid) {
+        showStatus("All macros need a label", "error");
+        return;
+      }
+
+      var payload = {
+        type: "updateConfig",
+        macros: macros.map(function (m) {
+          var o = { label: m.label, text: m.text };
+          if (m.icon) o.icon = m.icon;
+          return o;
+        }),
+        theme: document.getElementById("theme").value,
+        editor: document.getElementById("editor").value,
+        approvalTimeout: parseInt(document.getElementById("timeout").value) || 30,
+      };
+      client.send("sendToPlugin", payload);
+      showStatus("Saved", "saved");
     });
 
-    document.getElementById("btn-add").addEventListener("click", () => {
+    // --- Add macro ---
+    document.getElementById("btn-add").addEventListener("click", function () {
       if (macros.length < MAX_MACROS) {
-        macros.push({ label: "", text: "" });
-        render();
+        macros.push({ label: "", text: "", icon: "" });
+        renderMacros();
+        // Scroll to bottom
+        var list = document.getElementById("macro-list");
+        list.lastElementChild && list.lastElementChild.scrollIntoView({ behavior: "smooth" });
       }
     });
 
-    // Initial empty render
-    render();
+    // Initial render
+    renderMacros();
   </script>
 </body>
 </html>

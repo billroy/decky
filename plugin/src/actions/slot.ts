@@ -135,13 +135,21 @@ export class SlotAction extends SingletonAction {
     await streamDeck.ui.sendToPropertyInspector({
       type: "configSnapshot",
       macros: macros.map((m) => ({ label: m.label, text: m.text, icon: m.icon })),
+      theme: cfg?.theme ?? "light",
+      editor: cfg?.editor ?? "",
+      approvalTimeout: cfg?.approvalTimeout ?? 30,
     });
   }
 
   override async onSendToPlugin(ev: SendToPluginEvent<JsonValue, JsonObject>): Promise<void> {
     const payload = ev.payload as Record<string, unknown>;
-    if (payload?.type === "updateConfig" && Array.isArray(payload.macros)) {
-      bridgeRef?.sendAction("updateConfig", { macros: payload.macros });
+    if (payload?.type === "updateConfig") {
+      const update: Record<string, unknown> = {};
+      if (Array.isArray(payload.macros)) update.macros = payload.macros;
+      if (typeof payload.theme === "string") update.theme = payload.theme;
+      if (typeof payload.editor === "string") update.editor = payload.editor;
+      if (typeof payload.approvalTimeout === "number") update.approvalTimeout = payload.approvalTimeout;
+      bridgeRef?.sendAction("updateConfig", update);
     }
   }
 
