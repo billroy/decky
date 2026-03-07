@@ -1,8 +1,23 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { createApp, type DeckyApp } from "../app.js";
+import { CONFIG_PATH_VALUE } from "../config.js";
 
 let decky: DeckyApp;
 let baseUrl: string;
+let savedConfig: string | null = null;
+
+beforeAll(() => {
+  savedConfig = existsSync(CONFIG_PATH_VALUE)
+    ? readFileSync(CONFIG_PATH_VALUE, "utf-8")
+    : null;
+});
+
+afterAll(() => {
+  if (savedConfig !== null) {
+    writeFileSync(CONFIG_PATH_VALUE, savedConfig, "utf-8");
+  }
+});
 
 beforeEach(async () => {
   decky = createApp();
