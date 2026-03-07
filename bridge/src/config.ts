@@ -105,7 +105,7 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
       typeof update.approvalTimeout === "number"
         ? update.approvalTimeout
         : currentConfig.approvalTimeout,
-    theme: update_obj.theme === "dark" ? "dark" : currentConfig.theme,
+    theme: update_obj.theme === "dark" ? "dark" : update_obj.theme === "light" ? "light" : currentConfig.theme,
     ...(typeof update_obj.editor === "string" ? { editor: update_obj.editor } : currentConfig.editor ? { editor: currentConfig.editor } : {}),
   };
 

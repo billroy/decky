@@ -248,6 +248,7 @@
     ];
     let macros = [];
     let settings = { theme: "light", editor: "", approvalTimeout: 30 };
+    let configLoaded = false;
     const client = SDPIComponents.streamDeckClient;
 
     // Receive config from plugin
@@ -264,9 +265,11 @@
         if (msg.editor !== undefined) settings.editor = msg.editor || "";
         if (msg.approvalTimeout !== undefined) settings.approvalTimeout = msg.approvalTimeout;
 
+        configLoaded = true;
         document.getElementById("theme").value = settings.theme;
         document.getElementById("editor").value = settings.editor;
         document.getElementById("timeout").value = settings.approvalTimeout;
+        document.getElementById("btn-save").disabled = false;
         renderMacros();
       }
     });
@@ -405,7 +408,13 @@
     }
 
     // --- Save ---
+    document.getElementById("btn-save").disabled = true;
     document.getElementById("btn-save").addEventListener("click", function () {
+      if (!configLoaded) {
+        showStatus("Not connected to bridge", "error");
+        return;
+      }
+
       // Validate: no empty labels
       var invalid = macros.some(function (m) { return !m.label.trim(); });
       if (invalid) {
