@@ -1,0 +1,4 @@
+node_modules/
+com.decky.controller.sdPlugin/bin/
+com.decky.controller.sdPlugin/imgs/
+*.tsbuildinfo
