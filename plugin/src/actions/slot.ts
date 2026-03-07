@@ -28,25 +28,10 @@ export function setSlotClient(client: BridgeClient): void {
 
 /** Map from action context ID to assigned slot index. */
 const slotAssignments = new Map<string, number>();
-let nextSlotIndex = 0;
-
-function getSlotIndex(contextId: string): number {
-  let idx = slotAssignments.get(contextId);
-  if (idx === undefined) {
-    idx = nextSlotIndex++;
-    slotAssignments.set(contextId, idx);
-  }
-  return idx;
-}
-
-function releaseSlot(contextId: string): void {
-  slotAssignments.delete(contextId);
-}
 
 /** Exported for testing. */
 export function resetSlots(): void {
   slotAssignments.clear();
-  nextSlotIndex = 0;
 }
 
 @action({ UUID: "com.decky.controller.slot" })
@@ -56,11 +41,14 @@ export class SlotAction extends SingletonAction {
   private unsubConfig?: () => void;
 
   override async onWillAppear(ev: WillAppearEvent): Promise<void> {
-    if (!bridgeRef) return;
+    // Compute slot index from physical position on the deck
+    if (!ev.payload.isInMultiAction) {
+      const { column, row } = ev.payload.coordinates;
+      const columns = ev.action.device.size.columns;
+      slotAssignments.set(ev.action.id, row * columns + column);
+    }
 
-    // Assign slot index for this instance
-    const contextId = ev.action.id;
-    getSlotIndex(contextId);
+    if (!bridgeRef) return;
 
     // Render current state immediately
     await this.renderAll(bridgeRef.getConnectionStatus(), bridgeRef.getLastSnapshot());
@@ -86,7 +74,7 @@ export class SlotAction extends SingletonAction {
   }
 
   override async onWillDisappear(ev: WillDisappearEvent): Promise<void> {
-    releaseSlot(ev.action.id);
+    slotAssignments.delete(ev.action.id);
 
     // If no more instances, clean up listeners
     if (slotAssignments.size === 0) {
@@ -96,7 +84,6 @@ export class SlotAction extends SingletonAction {
       this.unsubConnection = undefined;
       this.unsubState = undefined;
       this.unsubConfig = undefined;
-      resetSlots();
     }
   }
 
