@@ -42,16 +42,27 @@ export class SlotAction extends SingletonAction {
 
   override async onWillAppear(ev: WillAppearEvent): Promise<void> {
     // Compute slot index from physical position on the deck
+    let slotIndex: number | undefined;
     if (!ev.payload.isInMultiAction) {
       const { column, row } = ev.payload.coordinates;
       const columns = ev.action.device.size.columns;
-      slotAssignments.set(ev.action.id, row * columns + column);
+      slotIndex = row * columns + column;
+      slotAssignments.set(ev.action.id, slotIndex);
     }
 
     if (!bridgeRef) return;
 
-    // Render current state immediately
-    await this.renderAll(bridgeRef.getConnectionStatus(), bridgeRef.getLastSnapshot());
+    // Render this specific action immediately (it may not be in this.actions yet)
+    if (slotIndex !== undefined) {
+      const connStatus = bridgeRef.getConnectionStatus();
+      const snapshot = bridgeRef.getLastSnapshot();
+      const state = connStatus === "connected" ? (snapshot?.state ?? "idle") : "stopped";
+      const macros = this.getMacros();
+      const config = getSlotConfig(state, slotIndex, snapshot?.tool, macros);
+      const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
+      await ev.action.setImage(imageData);
+      await ev.action.setTitle("");
+    }
 
     // Subscribe to changes (only once — first instance sets up listeners)
     if (!this.unsubConnection) {
