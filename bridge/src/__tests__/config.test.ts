@@ -113,6 +113,16 @@ describe("config endpoints", () => {
     expect(data.config.macros[0].targetApp).toBe("chatgpt");
   });
 
+  it("PUT /config saves extended theme values", async () => {
+    const res = await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ theme: "rainbow" }),
+    });
+    const data = await res.json();
+    expect(data.config.theme).toBe("rainbow");
+  });
+
   it("GET /config reflects saved changes", async () => {
     await fetch(`${baseUrl}/config`, {
       method: "PUT",

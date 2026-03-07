@@ -256,4 +256,33 @@ describe("layouts", () => {
       expect(config.svg).toContain("CDX");
     });
   });
+
+  describe("extended themes", () => {
+    it("supports rainbow theme with per-slot variation", () => {
+      setTheme("rainbow");
+      const macros: MacroInput[] = [
+        { label: "One", text: "one" },
+        { label: "Two", text: "two" },
+      ];
+      const slot0 = getSlotConfig("idle", 0, null, macros);
+      const slot1 = getSlotConfig("idle", 1, null, macros);
+      expect(slot0.svg).toContain('fill="#ef4444"');
+      expect(slot1.svg).toContain('fill="#f97316"');
+      expect(slot0.svg).not.toEqual(slot1.svg);
+    });
+
+    it("supports random theme with deterministic per-slot colors", () => {
+      setTheme("random");
+      const macros: MacroInput[] = [
+        { label: "One", text: "one" },
+        { label: "Two", text: "two" },
+      ];
+      const a0 = getSlotConfig("idle", 0, null, macros);
+      const a0b = getSlotConfig("idle", 0, null, macros);
+      const a1 = getSlotConfig("idle", 1, null, macros);
+      expect(a0.svg).toEqual(a0b.svg);
+      expect(a0.svg).not.toEqual(a1.svg);
+      expect(a0.svg).toContain("hsl(");
+    });
+  });
 });

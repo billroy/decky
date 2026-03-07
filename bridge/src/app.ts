@@ -11,7 +11,7 @@ import { createServer, type Server as HttpServer } from "node:http";
 import { Server as SocketIOServer } from "socket.io";
 import { StateMachine, type HookPayload, type HookEvent } from "./state-machine.js";
 import { writeGateFile, clearGateFile, type ApprovalResult } from "./approval-gate.js";
-import { loadConfig, getConfig, reloadConfig, saveConfig } from "./config.js";
+import { loadConfig, getConfig, reloadConfig, saveConfig, type Theme } from "./config.js";
 import { executeMacro } from "./macro-exec.js";
 
 const VALID_EVENTS: Set<string> = new Set([
@@ -21,6 +21,19 @@ const VALID_EVENTS: Set<string> = new Set([
   "Stop",
   "SubagentStop",
 ]);
+
+function isTheme(value: unknown): value is Theme {
+  return value === "light" ||
+    value === "dark" ||
+    value === "dracula" ||
+    value === "monokai" ||
+    value === "solarized-dark" ||
+    value === "solarized-light" ||
+    value === "nord" ||
+    value === "github-dark" ||
+    value === "rainbow" ||
+    value === "random";
+}
 
 export interface DeckyApp {
   app: express.Express;
@@ -147,11 +160,11 @@ export function createApp(): DeckyApp {
           console.log(`[io] macro pressed with no text: ${JSON.stringify(data)}`);
         }
       } else if (data.action === "updateConfig") {
-        const macros = Array.isArray(data.macros) ? data.macros : undefined;
+        let macros = Array.isArray(data.macros) ? data.macros : undefined;
         const timeout = typeof data.approvalTimeout === "number" ? data.approvalTimeout : undefined;
-        const theme = data.theme === "dark" ? "dark" as const : data.theme === "light" ? "light" as const : undefined;
+        const theme = isTheme(data.theme) ? data.theme : undefined;
         const editor = typeof data.editor === "string" ? data.editor : undefined;
-        const colors = data.colors && typeof data.colors === "object" ? data.colors : undefined;
+        let colors = data.colors && typeof data.colors === "object" ? data.colors : undefined;
         const defaultTargetApp =
           data.defaultTargetApp === "claude" ||
           data.defaultTargetApp === "codex" ||
@@ -162,6 +175,24 @@ export function createApp(): DeckyApp {
             : undefined;
         const showTargetBadge =
           typeof data.showTargetBadge === "boolean" ? data.showTargetBadge : undefined;
+        const themeApplyMode =
+          data.themeApplyMode === "keep" ||
+          data.themeApplyMode === "clear-page" ||
+          data.themeApplyMode === "clear-all"
+            ? data.themeApplyMode
+            : undefined;
+        if (themeApplyMode === "clear-page" || themeApplyMode === "clear-all") {
+          colors = {};
+        }
+        if (themeApplyMode === "clear-all") {
+          const source = Array.isArray(macros) ? macros : getConfig().macros;
+          macros = source.map((m) => {
+            if (!m || typeof m !== "object") return m;
+            const clone = { ...(m as Record<string, unknown>) };
+            delete clone.colors;
+            return clone;
+          });
+        }
         const update: Record<string, unknown> = {};
         if (macros) update.macros = macros;
         if (timeout !== undefined) update.approvalTimeout = timeout;
