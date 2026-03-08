@@ -159,4 +159,13 @@ describe("config endpoints", () => {
     });
     expect(res.status).toBe(400);
   });
+
+  it("rejects unsafe editor command values", async () => {
+    const res = await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
+      body: JSON.stringify({ editor: "bbedit; rm -rf /" }),
+    });
+    expect(res.status).toBe(400);
+  });
 });

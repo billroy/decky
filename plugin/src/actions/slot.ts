@@ -17,7 +17,9 @@ import streamDeck, {
   type SendToPluginEvent,
 } from "@elgato/streamdeck";
 import type { JsonValue, JsonObject } from "@elgato/utils";
-import { exec } from "node:child_process";
+import { execFile } from "node:child_process";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { type BridgeClient, type ConnectionStatus, type StateSnapshot } from "../bridge-client.js";
 import {
   getSlotConfig,
@@ -67,6 +69,23 @@ function summarizeSvg(svg: string): Record<string, unknown> {
   const fills = svg.match(/fill="[^"]+"/g)?.slice(0, 6) ?? [];
   const strokes = svg.match(/stroke="[^"]+"/g)?.slice(0, 4) ?? [];
   return { fills, strokes, len: svg.length };
+}
+
+function launchConfigEditor(editorRaw: string): void {
+  const editor = editorRaw.trim().toLowerCase();
+  const configPath = join(homedir(), ".decky", "config.json");
+  const appName =
+    editor === "bbedit" ? "BBEdit" :
+    editor === "code" ? "Visual Studio Code" :
+    editor === "cursor" ? "Cursor" :
+    editor === "windsurf" ? "Windsurf" :
+    editor === "textedit" ? "TextEdit" :
+    "BBEdit";
+  execFile("open", ["-a", appName, configPath], (err) => {
+    if (err) {
+      pushDebug("openConfig:error", undefined, -1, { editor, message: err.message });
+    }
+  });
 }
 
 export function setSlotClient(client: BridgeClient): void {
@@ -180,7 +199,7 @@ export class SlotAction extends SingletonAction {
 
     if (config.action === "openConfig") {
       const editor = bridgeRef.getLastConfig()?.editor ?? "bbedit";
-      exec(`${editor} ~/.decky/config.json`);
+      launchConfigEditor(editor);
       return;
     }
 
