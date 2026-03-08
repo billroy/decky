@@ -31,7 +31,10 @@ export class DictationAction extends SingletonAction {
   private unsubConfig?: () => void;
 
   override async onWillAppear(_ev: WillAppearEvent): Promise<void> {
-    if (!bridgeRef) return;
+    if (!bridgeRef) {
+      await this.render("disconnected");
+      return;
+    }
     await this.render(bridgeRef.getConnectionStatus());
     this.unsubConnection = bridgeRef.onConnectionChange((status) => {
       this.render(status).catch(() => {});
@@ -61,7 +64,7 @@ export class DictationAction extends SingletonAction {
     for (const instance of this.actions) {
       try {
         await instance.setImage(image);
-        await instance.setTitle(active ? "Talk" : "");
+        await instance.setTitle("");
       } catch {
         // ignore action disposal races
       }
