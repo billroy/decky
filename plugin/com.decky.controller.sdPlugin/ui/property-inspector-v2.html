@@ -635,6 +635,8 @@
         requestId: requestId || "",
         macros: macros.map(function (m) {
           var o = { label: m.label, text: m.text };
+          if (m.type) o.type = m.type;
+          if (m.widget) o.widget = m.widget;
           if (m.icon) o.icon = m.icon;
           var macroTarget = (m.targetApp || "").trim();
           if (macroTarget) o.targetApp = macroTarget;
@@ -851,6 +853,8 @@
             text: m.text || "",
             icon: m.icon || "",
             targetApp: m.targetApp || "",
+            type: m.type || "",
+            widget: m.widget || null,
             colors: { bg: (m.colors && m.colors.bg) || "", text: (m.colors && m.colors.text) || "", icon: (m.colors && m.colors.icon) || "" },
           }));
         }
@@ -1327,7 +1331,7 @@
     // --- Add macro ---
     document.getElementById("btn-add").addEventListener("click", function () {
       if (macros.length < MAX_MACROS) {
-        macros.push({ label: "", text: "", icon: "", targetApp: "", colors: { bg: "", text: "", icon: "" } });
+        macros.push({ label: "", text: "", icon: "", targetApp: "", type: "macro", widget: null, colors: { bg: "", text: "", icon: "" } });
         selectedMacroIndex = macros.length - 1;
         showAllMacros = false;
         renderMacros();

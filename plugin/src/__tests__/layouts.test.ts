@@ -6,6 +6,7 @@ import {
   setTheme,
   setThemeSeed,
   setTargetBadgeOptions,
+  setWidgetRenderContext,
   type MacroInput,
 } from "../layouts.js";
 
@@ -362,6 +363,29 @@ describe("layouts", () => {
       setThemeSeed(2);
       const b = getSlotConfig("idle", 0, null, macros).svg;
       expect(a).not.toEqual(b);
+    });
+  });
+
+  describe("widget macros", () => {
+    it("renders bridge-status widget with refresh action", () => {
+      setTheme("dark");
+      setWidgetRenderContext({
+        connectionStatus: "connected",
+        state: "idle",
+        timestamp: Date.now() - 10_000,
+      });
+      const macros: MacroInput[] = [
+        {
+          label: "Status",
+          text: "",
+          type: "widget",
+          widget: { kind: "bridge-status", refreshMode: "onClick" },
+        },
+      ];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.action).toBe("widget-refresh");
+      expect(config.svg).toContain("Bridge:OK");
+      expect(config.svg).toContain("State:idle");
     });
   });
 });

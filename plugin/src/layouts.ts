@@ -14,6 +14,14 @@ export interface SlotConfig {
 
 export type LayoutDef = Record<number, SlotConfig>;
 export type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";
+export type ConnectionStatus = "connected" | "disconnected" | "connecting";
+export type WidgetKind = "bridge-status";
+export type WidgetRefreshMode = "onClick" | "interval";
+export interface WidgetDef {
+  kind: WidgetKind;
+  refreshMode?: WidgetRefreshMode;
+  intervalMinutes?: number;
+}
 export type Theme =
   | "light"
   | "dark"
@@ -520,6 +528,8 @@ export interface MacroInput {
   icon?: string;
   colors?: ColorOverrides;
   targetApp?: TargetApp;
+  type?: "macro" | "widget";
+  widget?: WidgetDef;
 }
 
 /** Page-level default colors, set from config. */
@@ -540,12 +550,63 @@ function resolveColor(base: string, pageOverride?: string, macroOverride?: strin
 }
 
 function macroSlot(index: number, macro: MacroInput): SlotConfig {
+  if (macro.type === "widget" && macro.widget?.kind === "bridge-status") {
+    return widgetSlot(index, macro);
+  }
   const targetApp = macro.targetApp ?? "claude";
   return {
     svg: macroSVG(index, macro.label, macro.icon, macro.colors, targetApp),
     title: macro.label,
     action: "macro",
     data: { text: macro.text, targetApp },
+  };
+}
+
+let widgetRenderContext: {
+  connectionStatus?: ConnectionStatus;
+  state?: string;
+  timestamp?: number;
+} = {};
+
+export function setWidgetRenderContext(context: {
+  connectionStatus?: ConnectionStatus;
+  state?: string;
+  timestamp?: number;
+}): void {
+  widgetRenderContext = { ...context };
+}
+
+function widgetSVG(slotIndex: number, label: string, widget: WidgetDef): string {
+  const p = resolveThemePaletteForSlot(currentTheme, slotIndex);
+  const bg = resolveColor(p.macroBg, defaultColors.bg, undefined);
+  const fg = resolveColor(p.macroLabel, defaultColors.text, undefined);
+  const conn = widgetRenderContext.connectionStatus ?? "disconnected";
+  const stateRaw = widgetRenderContext.state ?? (conn === "connected" ? "idle" : "offline");
+  const state = stateRaw.length > 10 ? `${stateRaw.slice(0, 9)}…` : stateRaw;
+  const stamp = widgetRenderContext.timestamp ?? Date.now();
+  const ageSec = Math.max(0, Math.floor((Date.now() - stamp) / 1000));
+  const ageText = ageSec < 60 ? `${ageSec}s` : `${Math.floor(ageSec / 60)}m`;
+  const mode = widget.refreshMode === "interval" ? `I:${widget.intervalMinutes ?? 1}m` : "Click";
+  return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+    <rect width="144" height="144" rx="16" fill="${bg}" />
+    <text x="72" y="28" font-size="16" font-family="sans-serif" text-anchor="middle" fill="${fg}" opacity="0.9">${label || "Widget"}</text>
+    <text x="72" y="64" font-size="18" font-family="sans-serif" text-anchor="middle" fill="${fg}">${conn === "connected" ? "Bridge:OK" : "Bridge:OFF"}</text>
+    <text x="72" y="90" font-size="16" font-family="sans-serif" text-anchor="middle" fill="${fg}">State:${state}</text>
+    <text x="72" y="116" font-size="14" font-family="sans-serif" text-anchor="middle" fill="${fg}" opacity="0.85">${mode} · ${ageText}</text>
+  </svg>`;
+}
+
+function widgetSlot(index: number, macro: MacroInput): SlotConfig {
+  const widget = macro.widget ?? { kind: "bridge-status" };
+  return {
+    svg: widgetSVG(index, macro.label, widget),
+    title: macro.label,
+    action: "widget-refresh",
+    data: {
+      widgetKind: widget.kind,
+      refreshMode: widget.refreshMode ?? "onClick",
+      intervalMinutes: widget.intervalMinutes ?? 1,
+    },
   };
 }
 

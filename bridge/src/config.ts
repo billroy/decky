@@ -15,6 +15,15 @@ export interface ColorOverrides {
   icon?: string;
 }
 
+export type WidgetKind = "bridge-status";
+export type WidgetRefreshMode = "onClick" | "interval";
+
+export interface WidgetDef {
+  kind: WidgetKind;
+  refreshMode?: WidgetRefreshMode;
+  intervalMinutes?: number;
+}
+
 export type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";
 export type Theme =
   | "light"
@@ -34,6 +43,8 @@ export interface MacroDef {
   icon?: string;
   colors?: ColorOverrides;
   targetApp?: TargetApp;
+  type?: "macro" | "widget";
+  widget?: WidgetDef;
 }
 
 export interface DeckyConfig {
@@ -86,6 +97,8 @@ export const MAX_MACROS = 36;
 export const MAX_LABEL_LENGTH = 20;
 export const MAX_TEXT_LENGTH = 2000;
 export const MAX_ICON_LENGTH = 64;
+export const MIN_WIDGET_INTERVAL_MINUTES = 1;
+export const MAX_WIDGET_INTERVAL_MINUTES = 60;
 export const MAX_EDITOR_LENGTH = 128;
 export const MIN_APPROVAL_TIMEOUT = 5;
 export const MAX_APPROVAL_TIMEOUT = 300;
@@ -136,7 +149,30 @@ function normalizeMacro(value: unknown, fallbackTarget: TargetApp): MacroDef | n
   if (macro.targetApp !== undefined) {
     normalized.targetApp = normalizeTargetApp(macro.targetApp, fallbackTarget);
   }
+  if (macro.type === "widget") {
+    normalized.type = "widget";
+    const widget = normalizeWidget(macro.widget);
+    if (widget) normalized.widget = widget;
+  }
   return normalized;
+}
+
+function normalizeWidget(value: unknown): WidgetDef | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const obj = value as Record<string, unknown>;
+  const kind = obj.kind === "bridge-status" ? "bridge-status" : undefined;
+  if (!kind) return undefined;
+  const out: WidgetDef = { kind };
+  if (obj.refreshMode === "onClick" || obj.refreshMode === "interval") {
+    out.refreshMode = obj.refreshMode;
+  }
+  if (typeof obj.intervalMinutes === "number" && Number.isFinite(obj.intervalMinutes)) {
+    const n = Math.floor(obj.intervalMinutes);
+    if (n >= MIN_WIDGET_INTERVAL_MINUTES && n <= MAX_WIDGET_INTERVAL_MINUTES) {
+      out.intervalMinutes = n;
+    }
+  }
+  return out;
 }
 
 function parseMacroStrict(value: unknown, fallbackTarget: TargetApp): MacroDef {
@@ -162,6 +198,17 @@ function parseMacroStrict(value: unknown, fallbackTarget: TargetApp): MacroDef {
     if (macro.icon.length > 0) out.icon = macro.icon;
   }
   if (macro.targetApp !== undefined) out.targetApp = normalizeTargetApp(macro.targetApp, fallbackTarget);
+  if (macro.type !== undefined) {
+    if (macro.type !== "macro" && macro.type !== "widget") {
+      throw new ConfigValidationError("Macro type must be 'macro' or 'widget'");
+    }
+    if (macro.type === "widget") {
+      out.type = "widget";
+      const widget = normalizeWidget(macro.widget);
+      if (!widget) throw new ConfigValidationError("Widget macro must include a valid widget definition");
+      out.widget = widget;
+    }
+  }
   if (macro.colors !== undefined) {
     const colors = normalizeColorOverrides(macro.colors);
     if (!colors) throw new ConfigValidationError("Macro colors must contain valid hex color values");
