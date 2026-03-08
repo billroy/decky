@@ -387,6 +387,31 @@ describe("layouts", () => {
       expect(a0.svg).toMatch(/fill="#[0-9a-fA-F]{6}"/);
     });
 
+    it("applies page default overrides in random theme", () => {
+      setTheme("random");
+      setThemeSeed(11);
+      setDefaultColors({ bg: "#ef4444", text: "#ffffff", icon: "#ffffff" });
+      const macros: MacroInput[] = [{ label: "One", text: "one" }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.svg).toContain('fill="#ef4444"');
+      expect(config.svg).toContain('fill="#ffffff"');
+    });
+
+    it("applies macro overrides in rainbow theme", () => {
+      setTheme("rainbow");
+      setThemeSeed(3);
+      setDefaultColors({ bg: "#22c55e", text: "#111827", icon: "#111827" });
+      const macros: MacroInput[] = [{
+        label: "One",
+        text: "one",
+        colors: { bg: "#0f172a", text: "#f8fafc", icon: "#f8fafc" },
+      }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.svg).toContain('fill="#0f172a"');
+      expect(config.svg).toContain('fill="#f8fafc"');
+      expect(config.svg).not.toContain('fill="#22c55e"');
+    });
+
     it("keeps random text/icon colors high contrast against background", () => {
       setTheme("random");
       setThemeSeed(7);

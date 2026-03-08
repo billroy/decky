@@ -177,7 +177,7 @@ describe("SlotAction render path", () => {
     expect(svgB).not.toEqual(svgA);
   });
 
-  it("re-renders random theme even when page/macro overrides exist", async () => {
+  it("keeps random output stable when explicit overrides exist", async () => {
     const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
     resetSlots();
 
@@ -211,7 +211,33 @@ describe("SlotAction render path", () => {
     await new Promise((r) => setTimeout(r, 0));
     const svgB = latestSvg(action);
 
-    expect(svgB).not.toEqual(svgA);
+    expect(svgB).toEqual(svgA);
+  });
+
+  it("applies page color overrides while random theme is active", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge({
+      ...baseConfig(),
+      theme: "random",
+      themeSeed: 10,
+      colors: { bg: "#000000", text: "#22c55e", icon: "#22c55e" },
+    });
+    setSlotClient(bridge as any);
+
+    const action = makeKeyAction();
+    const slot = new SlotAction();
+    (slot as any).actions = [action];
+
+    await slot.onWillAppear({
+      action,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+
+    const svg = latestSvg(action);
+    expect(svg).toContain('fill="#000000"');
+    expect(svg).toContain('fill="#22c55e"');
   });
 
   it("re-renders badge when selected macro target changes to codex", async () => {
@@ -288,6 +314,38 @@ describe("SlotAction render path", () => {
 
     const after = [latestSvg(action), latestSvg(action2), latestSvg(action3)];
     expect(after.some((svg, i) => svg !== before[i])).toBe(true);
+  });
+
+  it("applies macro color overrides while rainbow theme is active", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge({
+      ...baseConfig(),
+      theme: "rainbow",
+      themeSeed: 100,
+      macros: [
+        {
+          label: "One",
+          text: "one",
+          colors: { bg: "#111111", text: "#f8fafc", icon: "#f8fafc" },
+        },
+      ],
+    });
+    setSlotClient(bridge as any);
+
+    const action = makeKeyAction("action-1");
+    const slot = new SlotAction();
+    (slot as any).actions = [action];
+
+    await slot.onWillAppear({
+      action,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+
+    const svg = latestSvg(action);
+    expect(svg).toContain('fill="#111111"');
+    expect(svg).toContain('fill="#f8fafc"');
   });
 
   it("applies page color updates to assigned keys and defers unassigned keys", async () => {
