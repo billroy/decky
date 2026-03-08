@@ -858,22 +858,6 @@
       row.appendChild(lbl);
       var group = document.createElement("div");
       group.className = "swatch-group";
-      function bindSwatchActivate(el, handler) {
-        var fired = false;
-        el.addEventListener("pointerdown", function (ev) {
-          fired = true;
-          ev.preventDefault();
-          handler();
-        });
-        el.addEventListener("click", function (ev) {
-          if (fired) {
-            fired = false;
-            return;
-          }
-          ev.preventDefault();
-          handler();
-        });
-      }
       var paletteValues = COLOR_PALETTE.map(function (c) { return c.value; });
       COLOR_PALETTE.forEach(function (c) {
         var sw = document.createElement("div");
@@ -881,12 +865,11 @@
         sw.textContent = "";
         if (c.value) sw.style.background = c.value;
         sw.title = c.label;
-        bindSwatchActivate(sw, function () {
+        sw.addEventListener("click", function () {
           group.querySelectorAll(".swatch").forEach(function (s) { s.classList.remove("selected"); });
           sw.classList.add("selected");
           onSelect(c.value);
           markDirty();
-          applyConfig(false, true, false);
         });
         group.appendChild(sw);
       });
@@ -899,10 +882,9 @@
         custom.style.background = selectedValue;
         custom.title = "Custom " + selectedValue;
         custom.textContent = "";
-        bindSwatchActivate(custom, function () {
+        custom.addEventListener("click", function () {
           onSelect(selectedValue);
           markDirty();
-          applyConfig(false, true, false);
         });
         group.appendChild(custom);
 
@@ -1172,7 +1154,6 @@
       if (selectedMacroIndex < 0 || selectedMacroIndex >= macros.length) return;
       macros[selectedMacroIndex].targetApp = e.target.value || "";
       markDirty();
-      applyConfig(false, true, false);
     });
     document.getElementById("theme").addEventListener("change", function () {
       pendingThemeChange = document.getElementById("theme").value !== savedTheme;

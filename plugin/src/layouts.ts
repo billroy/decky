@@ -135,7 +135,6 @@ const PALETTES: Record<Theme, ThemePalette> = {
 let currentTheme: Theme = "light";
 let currentThemeSeed = 0;
 let showTargetBadge = false;
-let defaultTargetApp: TargetApp = "claude";
 
 const TARGET_CODES: Record<TargetApp, string> = {
   claude: "CLD",
@@ -146,11 +145,12 @@ const TARGET_CODES: Record<TargetApp, string> = {
 };
 
 const TARGET_BADGE_COLORS: Record<TargetApp, { bg: string; text: string }> = {
-  claude: { bg: "#f59e0b", text: "#111827" },
-  codex: { bg: "#10b981", text: "#052e16" },
-  chatgpt: { bg: "#22c55e", text: "#052e16" },
-  cursor: { bg: "#60a5fa", text: "#082f49" },
-  windsurf: { bg: "#a78bfa", text: "#2e1065" },
+  // Functional provider-identification colors (not official logo assets/colors).
+  claude: { bg: "#b45309", text: "#ffffff" },
+  codex: { bg: "#0f766e", text: "#ffffff" },
+  chatgpt: { bg: "#15803d", text: "#ffffff" },
+  cursor: { bg: "#1d4ed8", text: "#ffffff" },
+  windsurf: { bg: "#6d28d9", text: "#ffffff" },
 };
 
 export function setTheme(theme: Theme): void {
@@ -217,6 +217,49 @@ function randomColorFromIndex(index: number, channel: number): string {
   return hslToHex(hue, sat, light);
 }
 
+function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
+  if (!/^#[0-9a-fA-F]{6}$/.test(hex)) return null;
+  return {
+    r: Number.parseInt(hex.slice(1, 3), 16),
+    g: Number.parseInt(hex.slice(3, 5), 16),
+    b: Number.parseInt(hex.slice(5, 7), 16),
+  };
+}
+
+function srgbChannel(v: number): number {
+  const c = v / 255;
+  return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+}
+
+function relativeLuminance(hex: string): number {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return 0;
+  return 0.2126 * srgbChannel(rgb.r) + 0.7152 * srgbChannel(rgb.g) + 0.0722 * srgbChannel(rgb.b);
+}
+
+function contrastRatio(a: string, b: string): number {
+  const l1 = relativeLuminance(a);
+  const l2 = relativeLuminance(b);
+  const hi = Math.max(l1, l2);
+  const lo = Math.min(l1, l2);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+function ensureContrast(bg: string, candidate: string, minimum: number): string {
+  if (contrastRatio(bg, candidate) >= minimum) return candidate;
+  const fallbackPool = ["#ffffff", "#111827", "#f8fafc", "#0f172a"];
+  let best = fallbackPool[0];
+  let bestRatio = contrastRatio(bg, best);
+  for (const option of fallbackPool.slice(1)) {
+    const ratio = contrastRatio(bg, option);
+    if (ratio > bestRatio) {
+      best = option;
+      bestRatio = ratio;
+    }
+  }
+  return best;
+}
+
 function seededUnit(seed: number): number {
   return (hash32(seed) % 1000000) / 1000000;
 }
@@ -252,8 +295,10 @@ function resolveThemePaletteForSlot(theme: Theme, slotIndex: number): ThemePalet
   }
   if (theme === "random") {
     const bg = randomColorFromIndex(slotIndex, 1);
-    const text = randomColorFromIndex(slotIndex, 2);
-    const icon = randomColorFromIndex(slotIndex, 3);
+    const textRaw = randomColorFromIndex(slotIndex, 2);
+    const iconRaw = randomColorFromIndex(slotIndex, 3);
+    const text = ensureContrast(bg, textRaw, 4.5);
+    const icon = ensureContrast(bg, iconRaw, 4.5);
     return {
       macroBg: bg,
       macroLabel: text,
@@ -264,24 +309,25 @@ function resolveThemePaletteForSlot(theme: Theme, slotIndex: number): ThemePalet
       emptyText: text,
     };
   }
-  return PALETTES[theme] ?? PALETTES.light;
+  const staticPalette = (PALETTES as Record<string, ThemePalette | undefined>)[String(theme)];
+  return staticPalette ?? PALETTES.light;
 }
 
 export function setTargetBadgeOptions(options: {
   showTargetBadge: boolean;
-  defaultTargetApp: TargetApp;
 }): void {
   showTargetBadge = options.showTargetBadge;
-  defaultTargetApp = options.defaultTargetApp;
 }
 
 function targetBadge(targetApp?: TargetApp): string {
   if (!showTargetBadge) return "";
-  const target = targetApp ?? defaultTargetApp;
+  if (!targetApp || targetApp === "claude") return "";
+  const target = targetApp;
   const palette = TARGET_BADGE_COLORS[target];
   return `<g>
-    <rect x="6" y="6" width="34" height="14" rx="3" fill="${palette.bg}" opacity="0.95" />
-    <text x="23" y="16" font-size="8" font-family="sans-serif" font-weight="700" text-anchor="middle" fill="${palette.text}">${TARGET_CODES[target]}</text>
+    <rect x="3" y="3" width="68" height="30" rx="7" fill="${palette.bg}" opacity="0.98" />
+    <rect x="3.5" y="3.5" width="67" height="29" rx="6.5" fill="none" stroke="#000000" stroke-opacity="0.32" />
+    <text x="37" y="25" font-size="13" font-family="sans-serif" font-weight="700" text-anchor="middle" fill="${palette.text}">${TARGET_CODES[target]}</text>
   </g>`;
 }
 
@@ -415,10 +461,12 @@ function thinkingSVG(): string {
 }
 
 function emptySVG(slotIndex = 0): string {
-  const p = resolveThemePaletteForSlot(currentTheme, slotIndex);
+  const p = resolveThemePaletteForSlot(currentTheme, slotIndex) ?? PALETTES.light;
+  const emptyBg = p.emptyBg ?? PALETTES.light.emptyBg;
+  const emptyText = p.emptyText ?? PALETTES.light.emptyText;
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
-  <rect width="144" height="144" rx="16" fill="${p.emptyBg}" />
-  <text x="72" y="70" font-size="36" font-family="sans-serif" text-anchor="middle" fill="${p.emptyText}">\u2022\u2022\u2022</text>
+  <rect width="144" height="144" rx="16" fill="${emptyBg}" />
+  <text x="72" y="70" font-size="36" font-family="sans-serif" text-anchor="middle" fill="${emptyText}">\u2022\u2022\u2022</text>
 </svg>`;
 }
 
@@ -491,9 +539,9 @@ function resolveColor(base: string, pageOverride?: string, macroOverride?: strin
 }
 
 function macroSlot(index: number, macro: MacroInput): SlotConfig {
-  const targetApp = macro.targetApp ?? defaultTargetApp;
+  const targetApp = macro.targetApp ?? "claude";
   return {
-    svg: macroSVG(index, macro.label, macro.icon, macro.colors, targetApp),
+    svg: macroSVG(index, macro.label, macro.icon, macro.colors, macro.targetApp),
     title: macro.label,
     action: "macro",
     data: { text: macro.text, targetApp },

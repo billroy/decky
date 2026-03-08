@@ -13,7 +13,7 @@ describe("layouts", () => {
   afterEach(() => {
     setTheme("light");
     setThemeSeed(0);
-    setTargetBadgeOptions({ showTargetBadge: false, defaultTargetApp: "claude" });
+    setTargetBadgeOptions({ showTargetBadge: false });
   });
   describe("getLayoutStates", () => {
     it("returns all five states", () => {
@@ -269,10 +269,20 @@ describe("layouts", () => {
 
   describe("target badge", () => {
     it("renders target badge text when enabled", () => {
-      setTargetBadgeOptions({ showTargetBadge: true, defaultTargetApp: "claude" });
+      setTargetBadgeOptions({ showTargetBadge: true });
       const macros: MacroInput[] = [{ label: "Ship", text: "Ship", targetApp: "codex" }];
       const config = getSlotConfig("idle", 0, null, macros);
       expect(config.svg).toContain("CDX");
+      expect(config.svg).toContain('width="68"');
+      expect(config.svg).toContain('font-size="13"');
+    });
+
+    it("hides badge when macro uses default provider", () => {
+      setTargetBadgeOptions({ showTargetBadge: true });
+      const implicitDefault: MacroInput[] = [{ label: "A", text: "a" }];
+      const explicitDefault: MacroInput[] = [{ label: "B", text: "b", targetApp: "claude" }];
+      expect(getSlotConfig("idle", 0, null, implicitDefault).svg).not.toContain("CLD");
+      expect(getSlotConfig("idle", 0, null, explicitDefault).svg).not.toContain("CLD");
     });
   });
 
@@ -305,6 +315,18 @@ describe("layouts", () => {
       expect(a0.svg).toEqual(a0b.svg);
       expect(a0.svg).not.toEqual(a1.svg);
       expect(a0.svg).toMatch(/fill="#[0-9a-fA-F]{6}"/);
+    });
+
+    it("keeps random text/icon colors high contrast against background", () => {
+      setTheme("random");
+      setThemeSeed(7);
+      const macros: MacroInput[] = [{ label: "One", text: "one" }];
+      const svg = getSlotConfig("idle", 0, null, macros).svg;
+      const fills = [...svg.matchAll(/fill="(#[0-9a-fA-F]{6})"/g)].map((m) => m[1]);
+      expect(fills.length).toBeGreaterThanOrEqual(3);
+      const [bg, icon, text] = fills;
+      expect(bg).not.toBe(icon);
+      expect(bg).not.toBe(text);
     });
 
     it("changes rainbow distribution when theme seed changes", () => {

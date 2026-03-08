@@ -193,9 +193,6 @@ export class SlotAction extends SingletonAction {
     this.activePiActionId = ev.action.id;
     pushDebug("piAppear", ev.action.id, getSlotRank(ev.action.id), {});
     await this.sendConfigSnapshot(ev.action.id);
-    // Bridge config may not be loaded yet when PI appears.
-    setTimeout(() => { this.sendConfigSnapshot(ev.action.id).catch(() => {}); }, 250);
-    setTimeout(() => { this.sendConfigSnapshot(ev.action.id).catch(() => {}); }, 750);
   }
 
   private async sendConfigSnapshot(actionId?: string): Promise<void> {
@@ -320,7 +317,6 @@ export class SlotAction extends SingletonAction {
     setDefaultColors(cfg?.colors ?? {});
     setTargetBadgeOptions({
       showTargetBadge: cfg?.showTargetBadge ?? false,
-      defaultTargetApp: cfg?.defaultTargetApp ?? "claude",
     });
     if (!cfg?.macros?.length) return undefined;
     return cfg.macros.map((m) => ({
