@@ -6,18 +6,25 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
-// Import bridge app factory directly by path — vitest resolves this fine
-import { createApp } from "../../../bridge/src/app.js";
-import type { DeckyApp } from "../../../bridge/src/app.js";
-import { getBridgeToken } from "../../../bridge/src/security.js";
+import { join } from "node:path";
+import { rmSync } from "node:fs";
 import { BridgeClient, type ConnectionStatus, type StateSnapshot } from "../bridge-client.js";
 
-let decky: DeckyApp;
+let decky: { io: { close: () => void }; httpServer: { listen: (port: number, cb: () => void) => void; address: () => unknown; close: (cb: () => void) => void } };
 let port: number;
 let bridgeUrl: string;
-const token = getBridgeToken();
+let token = "";
+
+const TEST_DECKY_HOME = join(process.cwd(), ".decky-test-plugin");
 
 beforeAll(async () => {
+  rmSync(TEST_DECKY_HOME, { recursive: true, force: true });
+  process.env.DECKY_HOME = TEST_DECKY_HOME;
+  const [{ createApp }, { getBridgeToken }] = await Promise.all([
+    import("../../../bridge/src/app.js"),
+    import("../../../bridge/src/security.js"),
+  ]);
+  token = getBridgeToken();
   decky = createApp();
   await new Promise<void>((resolve) => {
     decky.httpServer.listen(0, () => resolve());
@@ -30,6 +37,7 @@ beforeAll(async () => {
 afterAll(async () => {
   decky.io.close();
   await new Promise<void>((resolve) => decky.httpServer.close(() => resolve()));
+  rmSync(TEST_DECKY_HOME, { recursive: true, force: true });
 });
 
 function waitForConnection(
