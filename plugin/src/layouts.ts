@@ -402,12 +402,12 @@ function macroSVG(slotIndex: number, label: string, icon?: string, colors?: Colo
   const displayLabel = label.length > 10 ? label.slice(0, 9) + "\u2026" : label;
   const fontSize = displayLabel.length > 6 ? 26 : 32;
   const dynamicTheme = currentTheme === "rainbow" || currentTheme === "random";
-  const pageBg = dynamicTheme ? undefined : defaultColors.bg;
-  const pageText = dynamicTheme ? undefined : defaultColors.text;
-  const pageIcon = dynamicTheme ? undefined : defaultColors.icon;
-  const macroBgOverride = dynamicTheme ? undefined : colors?.bg;
-  const macroTextOverride = dynamicTheme ? undefined : colors?.text;
-  const macroIconOverride = dynamicTheme ? undefined : colors?.icon;
+  const pageBg = defaultColors.bg;
+  const pageText = defaultColors.text;
+  const pageIcon = defaultColors.icon;
+  const macroBgOverride = colors?.bg;
+  const macroTextOverride = colors?.text;
+  const macroIconOverride = colors?.icon;
 
   // Resolve colors: theme < page defaults < macro overrides
   const bg = resolveColor(p.macroBg, pageBg, macroBgOverride);
