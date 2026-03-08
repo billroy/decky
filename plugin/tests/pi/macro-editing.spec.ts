@@ -6,6 +6,11 @@ function findMacro(update: Record<string, unknown>, index: number): Record<strin
   return macros[index];
 }
 
+async function clickColor(page: import("@playwright/test").Page, root: string, rowLabel: string, title: string) {
+  const row = page.locator(`${root} .color-row`).filter({ hasText: rowLabel }).first();
+  await row.locator(`.swatch[title="${title}"]`).click();
+}
+
 test.describe("PI macro editing", () => {
   test("label, text, and icon edits are persisted", async ({ piHarness }) => {
     const { page } = piHarness;
@@ -140,5 +145,41 @@ test.describe("PI unconfigured slot promotion", () => {
     expect(macros[4].label).toBe("");
     expect(macros[5].label).toBe("T6");
     expect(macros[5].text).toBe("slot six");
+  });
+
+  test("per-slot colors apply on unconfigured slot before label/icon promotion", async ({ piHarness }) => {
+    const { page } = piHarness;
+
+    await expect(page.locator("#macro-count")).toContainText("slot 6 of 6");
+    if (await page.locator(".macro-colors-panel").count() === 0) {
+      await page.click('[data-colorindex="5"]');
+    }
+    await clickColor(page, ".macro-colors-panel", "Bg", "Green");
+
+    const update = await piHarness.waitForUpdateConfig();
+    const macros = update.macros as Array<Record<string, unknown>>;
+    expect(macros).toHaveLength(6);
+    expect(macros[5].label).toBe("");
+    expect(macros[5].text).toBe("");
+    expect((macros[5].colors as Record<string, unknown>).bg).toBe("#22c55e");
+  });
+
+  test("canonicalizes stale placeholder metadata on color-only updates", async ({ piHarness }) => {
+    const { page } = piHarness;
+
+    await page.selectOption("#selected-target-app", "codex");
+    if (await page.locator(".macro-colors-panel").count() === 0) {
+      await page.click('[data-colorindex="5"]');
+    }
+    await clickColor(page, ".macro-colors-panel", "Bg", "Green");
+
+    const update = await piHarness.waitForUpdateConfig();
+    const macros = update.macros as Array<Record<string, unknown>>;
+    expect(macros).toHaveLength(6);
+    expect(macros[5].label).toBe("");
+    expect(macros[5].text).toBe("");
+    expect(macros[5].targetApp).toBeUndefined();
+    expect(macros[5].submit).toBeUndefined();
+    expect((macros[5].colors as Record<string, unknown>).bg).toBe("#22c55e");
   });
 });

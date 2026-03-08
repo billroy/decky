@@ -210,53 +210,39 @@ function parseMacroStrict(value: unknown, fallbackTarget: TargetApp): MacroDef {
   if (typeof macro.text !== "string") throw new ConfigValidationError("Macro text must be a string");
   const label = macro.label.trim();
   const text = macro.text;
+  const macroIcon = typeof macro.icon === "string" ? macro.icon : "";
   if (text.length > MAX_TEXT_LENGTH) {
     throw new ConfigValidationError(`Macro text exceeds ${MAX_TEXT_LENGTH} characters`);
   }
   if (macro.icon !== undefined && typeof macro.icon !== "string") {
     throw new ConfigValidationError("Macro icon must be a string");
   }
+  if (macroIcon.length > MAX_ICON_LENGTH) {
+    throw new ConfigValidationError(`Macro icon exceeds ${MAX_ICON_LENGTH} characters`);
+  }
+
+  const isPlaceholder =
+    (macro.type === undefined || macro.type === "macro") &&
+    label.length === 0 &&
+    text.trim().length === 0 &&
+    macroIcon.length === 0;
 
   // Empty label+text is a reserved sparse-slot placeholder used to preserve
   // physical slot index mapping for unconfigured Decky keys.
-  if (label.length === 0) {
-    if (text.trim().length !== 0) {
-      throw new ConfigValidationError("Unconfigured placeholder text must be empty");
-    }
-    if (typeof macro.icon === "string" && macro.icon.length > 0) {
-      throw new ConfigValidationError("Unconfigured placeholder icon must be empty");
-    }
-    if (macro.submit === false) {
-      throw new ConfigValidationError("Unconfigured placeholder cannot disable submit");
-    }
-    if (macro.targetApp !== undefined) {
-      const rawTarget = String(macro.targetApp).trim();
-      if (rawTarget.length > 0) {
-        throw new ConfigValidationError("Unconfigured placeholder targetApp must be empty");
-      }
-    }
-    if (macro.type !== undefined && macro.type !== "macro") {
-      throw new ConfigValidationError("Unconfigured placeholder type must be macro");
-    }
+  // Placeholders may carry color overrides and stale metadata from older builds.
+  // Canonicalize to label/text/colors only so per-slot color edits remain robust.
+  if (isPlaceholder) {
+    const out: MacroDef = { label: "", text: "" };
     const placeholderColors = normalizeColorOverrides(macro.colors);
-    if (placeholderColors) {
-      throw new ConfigValidationError("Unconfigured placeholder cannot define colors");
-    }
-    return { label: "", text: "" };
+    if (placeholderColors) out.colors = placeholderColors;
+    return out;
   }
 
   if (label.length > MAX_LABEL_LENGTH) {
     throw new ConfigValidationError(`Macro label exceeds ${MAX_LABEL_LENGTH} characters`);
   }
   const out: MacroDef = { label, text };
-  if (macro.icon !== undefined) {
-    const macroIcon = macro.icon;
-    if (typeof macroIcon !== "string") throw new ConfigValidationError("Macro icon must be a string");
-    if (macroIcon.length > MAX_ICON_LENGTH) {
-      throw new ConfigValidationError(`Macro icon exceeds ${MAX_ICON_LENGTH} characters`);
-    }
-    if (macroIcon.length > 0) out.icon = macroIcon;
-  }
+  if (macroIcon.length > 0) out.icon = macroIcon;
   if (macro.targetApp !== undefined) out.targetApp = normalizeTargetApp(macro.targetApp, fallbackTarget);
   if (macro.submit !== undefined) {
     if (typeof macro.submit !== "boolean") throw new ConfigValidationError("Macro submit must be a boolean");
