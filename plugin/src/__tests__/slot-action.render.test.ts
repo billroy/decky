@@ -81,6 +81,12 @@ class FakeBridge {
     this.config = config;
     for (const cb of this.configListeners) cb(config);
   }
+
+  triggerConfigFirstOnly(config: any) {
+    this.config = config;
+    const first = this.configListeners[0];
+    if (first) first(config);
+  }
 }
 
 function makeKeyAction(id = "action-1") {
@@ -364,5 +370,54 @@ describe("SlotAction render path", () => {
     for (const action of actions) {
       expect(latestSvg(action)).toContain(`fill="${sequence[sequence.length - 1]}"`);
     }
+  });
+
+  it("re-renders all keys even if only one config listener fires", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge({
+      ...baseConfig(),
+      macros: [
+        { label: "One", text: "one" },
+        { label: "Two", text: "two" },
+        { label: "Three", text: "three" },
+      ],
+      colors: { bg: "#ffffff", text: "#1e293b", icon: "#64748b" },
+    });
+    setSlotClient(bridge as any);
+
+    const action1 = makeKeyAction("action-1");
+    const action2 = makeKeyAction("action-2");
+    const action3 = makeKeyAction("action-3");
+    const slot1 = new SlotAction();
+    const slot2 = new SlotAction();
+    const slot3 = new SlotAction();
+    (slot1 as any).actions = [action1];
+    (slot2 as any).actions = [action2];
+    (slot3 as any).actions = [action3];
+
+    await slot1.onWillAppear({
+      action: action1,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+    await slot2.onWillAppear({
+      action: action2,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 1 } },
+    } as any);
+    await slot3.onWillAppear({
+      action: action3,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 2 } },
+    } as any);
+
+    bridge.triggerConfigFirstOnly({
+      ...bridge.config,
+      colors: { bg: "#ef4444", text: "#ffffff", icon: "#ffffff" },
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(latestSvg(action1)).toContain('fill="#ef4444"');
+    expect(latestSvg(action2)).toContain('fill="#ef4444"');
+    expect(latestSvg(action3)).toContain('fill="#ef4444"');
   });
 });
