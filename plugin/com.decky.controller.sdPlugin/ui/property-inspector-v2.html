@@ -1160,10 +1160,13 @@
       el.addEventListener("change", markDirty);
     });
     document.getElementById("selected-target-app").addEventListener("change", function (e) {
-      if (selectedMacroIndex < 0 || selectedMacroIndex >= macros.length) return;
+      if (!macros.length) return;
+      if (selectedMacroIndex < 0 || selectedMacroIndex >= macros.length) {
+        selectedMacroIndex = 0;
+      }
       macros[selectedMacroIndex].targetApp = e.target.value || "";
       markDirty();
-      applyConfig(false, true, false);
+      showStatus("Target change pending. Click Apply now.", "error");
     });
     document.getElementById("theme").addEventListener("change", function () {
       pendingThemeChange = document.getElementById("theme").value !== savedTheme;
