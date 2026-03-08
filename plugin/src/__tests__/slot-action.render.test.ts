@@ -456,6 +456,40 @@ describe("SlotAction render path", () => {
     expect(svgEmpty).not.toContain('fill="#ef4444"');
   });
 
+  it("uses physical slot index instead of rank compaction for sparse key placement", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge({
+      ...baseConfig(),
+      macros: [
+        { label: "S0", text: "zero" },
+        { label: "S1", text: "one" },
+        { label: "S2", text: "two" },
+        { label: "S3", text: "three" },
+        { label: "S4", text: "four" },
+      ],
+    });
+    setSlotClient(bridge as any);
+
+    const actionLeft = makeKeyAction("left");
+    const actionRight = makeKeyAction("right");
+    const slot = new SlotAction();
+    (slot as any).actions = [actionLeft, actionRight];
+
+    await slot.onWillAppear({
+      action: actionLeft,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+    await slot.onWillAppear({
+      action: actionRight,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 4 } },
+    } as any);
+
+    expect(latestSvg(actionLeft)).toContain("S0");
+    expect(latestSvg(actionRight)).toContain("S4");
+  });
+
   it("converges all active keys after rapid color updates", async () => {
     const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
     resetSlots();

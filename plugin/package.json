@@ -7,6 +7,7 @@
     "build": "rollup -c && node scripts/generate-icons.mjs",
     "watch": "rollup -c -w",
     "icons": "node scripts/generate-icons.mjs",
+    "check:pi-sync": "node scripts/check-pi-sync.mjs",
     "test": "vitest run src/__tests__",
     "test:pi": "playwright test",
     "test:pi:coverage-map": "node scripts/check-pi-coverage-map.mjs"

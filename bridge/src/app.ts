@@ -11,7 +11,16 @@ import { createServer, type Server as HttpServer } from "node:http";
 import { Server as SocketIOServer } from "socket.io";
 import { StateMachine, type HookPayload, type HookEvent } from "./state-machine.js";
 import { writeGateFile, clearGateFile, type ApprovalResult } from "./approval-gate.js";
-import { loadConfig, getConfig, reloadConfig, saveConfig, type Theme, ConfigValidationError } from "./config.js";
+import {
+  loadConfig,
+  getConfig,
+  listConfigBackups,
+  reloadConfig,
+  restoreConfigBackup,
+  saveConfig,
+  type Theme,
+  ConfigValidationError,
+} from "./config.js";
 import { executeMacro, approveOnceInClaude, startDictationForClaude } from "./macro-exec.js";
 import { getBridgeToken, readRequestToken, redactActionForLog } from "./security.js";
 
@@ -34,6 +43,9 @@ function isTheme(value: unknown): value is Theme {
     value === "solarized-light" ||
     value === "nord" ||
     value === "github-dark" ||
+    value === "candy-cane" ||
+    value === "gradient-blue" ||
+    value === "wormhole" ||
     value === "rainbow" ||
     value === "random";
 }
@@ -147,6 +159,27 @@ export function createApp(): DeckyApp {
     const config = reloadConfig();
     io.emit("configUpdate", config);
     res.json({ ok: true, config });
+  });
+
+  app.get("/config/backups", (_req, res) => {
+    res.json({ backups: listConfigBackups() });
+  });
+
+  app.post("/config/restore", (req, res) => {
+    const body = req.body as Record<string, unknown>;
+    const idxRaw = body?.index;
+    const index = typeof idxRaw === "number" ? Math.floor(idxRaw) : Number.NaN;
+    try {
+      const config = restoreConfigBackup(index);
+      io.emit("configUpdate", config);
+      res.json({ ok: true, config, restoredIndex: index, backups: listConfigBackups() });
+    } catch (err) {
+      if (err instanceof ConfigValidationError) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
+      res.status(500).json({ error: "Failed to restore config backup" });
+    }
   });
 
   // --- Socket.io connections ---

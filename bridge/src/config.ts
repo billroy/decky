@@ -5,7 +5,16 @@
  * If the file doesn't exist, a default config is created.
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
@@ -34,6 +43,9 @@ export type Theme =
   | "solarized-light"
   | "nord"
   | "github-dark"
+  | "candy-cane"
+  | "gradient-blue"
+  | "wormhole"
   | "rainbow"
   | "random";
 
@@ -79,8 +91,14 @@ export class ConfigValidationError extends Error {
   }
 }
 
-const DECKY_DIR = process.env.DECKY_HOME || join(homedir(), ".decky");
+const IS_TEST_RUNTIME =
+  process.env.NODE_ENV === "test" ||
+  process.env.VITEST === "true" ||
+  process.argv.some((arg) => arg.includes("vitest"));
+const DECKY_DIR = process.env.DECKY_HOME || (IS_TEST_RUNTIME ? join(process.cwd(), ".decky-test") : join(homedir(), ".decky"));
 const CONFIG_PATH = join(DECKY_DIR, "config.json");
+const CONFIG_BACKUP_COUNT = 10;
+const CONFIG_TMP_PREFIX = "config.json.tmp";
 
 const DEFAULT_EDITOR: EditorName = "bbedit";
 
@@ -120,6 +138,13 @@ const ALLOWED_EDITORS: readonly EditorName[] = ["bbedit", "code", "cursor", "win
 
 let currentConfig: DeckyConfig = { ...DEFAULT_CONFIG };
 
+export interface ConfigBackupInfo {
+  index: number;
+  path: string;
+  modifiedAt: number;
+  size: number;
+}
+
 function normalizeTheme(value: unknown, fallback: Theme): Theme {
   return value === "light" ||
     value === "dark" ||
@@ -129,6 +154,9 @@ function normalizeTheme(value: unknown, fallback: Theme): Theme {
     value === "solarized-light" ||
     value === "nord" ||
     value === "github-dark" ||
+    value === "candy-cane" ||
+    value === "gradient-blue" ||
+    value === "wormhole" ||
     value === "rainbow" ||
     value === "random"
     ? value
@@ -299,6 +327,79 @@ function normalizeColorOverrides(value: unknown): ColorOverrides | undefined {
   return out;
 }
 
+function backupPath(index: number): string {
+  return join(DECKY_DIR, `config.json.bak.${index}`);
+}
+
+function rotateBackups(): void {
+  for (let i = CONFIG_BACKUP_COUNT - 1; i >= 0; i--) {
+    const src = backupPath(i);
+    if (!existsSync(src)) continue;
+    if (i === CONFIG_BACKUP_COUNT - 1) {
+      unlinkSync(src);
+      continue;
+    }
+    renameSync(src, backupPath(i + 1));
+  }
+  if (existsSync(CONFIG_PATH)) {
+    copyFileSync(CONFIG_PATH, backupPath(0));
+  }
+}
+
+function writeConfigAtomically(raw: string): void {
+  const tmpPath = join(DECKY_DIR, `${CONFIG_TMP_PREFIX}-${process.pid}-${Date.now()}`);
+  try {
+    writeFileSync(tmpPath, raw, "utf-8");
+    renameSync(tmpPath, CONFIG_PATH);
+  } finally {
+    if (existsSync(tmpPath)) {
+      try {
+        unlinkSync(tmpPath);
+      } catch {
+        // Best-effort cleanup only.
+      }
+    }
+  }
+}
+
+export function listConfigBackups(): ConfigBackupInfo[] {
+  ensureDir();
+  const out: ConfigBackupInfo[] = [];
+  for (let i = 0; i < CONFIG_BACKUP_COUNT; i++) {
+    const path = backupPath(i);
+    if (!existsSync(path)) continue;
+    const st = statSync(path);
+    out.push({
+      index: i,
+      path,
+      modifiedAt: st.mtimeMs,
+      size: st.size,
+    });
+  }
+  return out;
+}
+
+export function restoreConfigBackup(index: number): DeckyConfig {
+  ensureDir();
+  if (!Number.isInteger(index) || index < 0 || index >= CONFIG_BACKUP_COUNT) {
+    throw new ConfigValidationError(`backup index must be between 0 and ${CONFIG_BACKUP_COUNT - 1}`);
+  }
+  const src = backupPath(index);
+  if (!existsSync(src)) {
+    throw new ConfigValidationError(`backup index ${index} does not exist`);
+  }
+  const raw = readFileSync(src, "utf-8");
+  // Ensure backup is at least parseable before replacing live config.
+  try {
+    JSON.parse(raw);
+  } catch {
+    throw new ConfigValidationError(`backup index ${index} is not valid JSON`);
+  }
+  rotateBackups();
+  writeConfigAtomically(raw);
+  return loadConfig();
+}
+
 /** Ensure ~/.decky/ directory exists. */
 function ensureDir(): void {
   mkdirSync(DECKY_DIR, { recursive: true });
@@ -309,7 +410,7 @@ export function loadConfig(): DeckyConfig {
   ensureDir();
 
   if (!existsSync(CONFIG_PATH)) {
-    writeFileSync(CONFIG_PATH, JSON.stringify(DEFAULT_CONFIG, null, 2), "utf-8");
+    writeConfigAtomically(JSON.stringify(DEFAULT_CONFIG, null, 2));
     console.log(`[config] created default config at ${CONFIG_PATH}`);
     currentConfig = { ...DEFAULT_CONFIG };
     return currentConfig;
@@ -481,7 +582,8 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
       : (currentConfig.colors ? { colors: currentConfig.colors } : {})),
   };
 
-  writeFileSync(CONFIG_PATH, JSON.stringify(merged, null, 2), "utf-8");
+  rotateBackups();
+  writeConfigAtomically(JSON.stringify(merged, null, 2));
   currentConfig = merged;
   console.log(`[config] saved ${merged.macros.length} macros to ${CONFIG_PATH}`);
   return currentConfig;
