@@ -57,6 +57,8 @@ export interface DeckyConfig {
   colors?: ColorOverrides;
   defaultTargetApp: TargetApp;
   showTargetBadge: boolean;
+  enableApproveOnce: boolean;
+  enableDictation: boolean;
 }
 
 export type EditorName = "bbedit" | "code" | "cursor" | "windsurf" | "textedit";
@@ -92,6 +94,8 @@ const DEFAULT_CONFIG: DeckyConfig = {
   editor: DEFAULT_EDITOR,
   defaultTargetApp: "claude",
   showTargetBadge: false,
+  enableApproveOnce: true,
+  enableDictation: true,
 };
 
 export const MAX_MACROS = 36;
@@ -290,6 +294,14 @@ export function loadConfig(): DeckyConfig {
         typeof raw_obj.showTargetBadge === "boolean"
           ? raw_obj.showTargetBadge
           : DEFAULT_CONFIG.showTargetBadge,
+      enableApproveOnce:
+        typeof raw_obj.enableApproveOnce === "boolean"
+          ? raw_obj.enableApproveOnce
+          : DEFAULT_CONFIG.enableApproveOnce,
+      enableDictation:
+        typeof raw_obj.enableDictation === "boolean"
+          ? raw_obj.enableDictation
+          : DEFAULT_CONFIG.enableDictation,
       ...(colors ? { colors } : {}),
     };
 
@@ -353,6 +365,12 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
   if (update_obj.showTargetBadge !== undefined && typeof update_obj.showTargetBadge !== "boolean") {
     throw new ConfigValidationError("showTargetBadge must be a boolean");
   }
+  if (update_obj.enableApproveOnce !== undefined && typeof update_obj.enableApproveOnce !== "boolean") {
+    throw new ConfigValidationError("enableApproveOnce must be a boolean");
+  }
+  if (update_obj.enableDictation !== undefined && typeof update_obj.enableDictation !== "boolean") {
+    throw new ConfigValidationError("enableDictation must be a boolean");
+  }
   if (update_obj.defaultTargetApp !== undefined) {
     const v = update_obj.defaultTargetApp;
     if (v !== "claude" && v !== "codex" && v !== "chatgpt" && v !== "cursor" && v !== "windsurf") {
@@ -401,6 +419,14 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
       typeof update_obj.showTargetBadge === "boolean"
         ? update_obj.showTargetBadge
         : currentConfig.showTargetBadge,
+    enableApproveOnce:
+      typeof update_obj.enableApproveOnce === "boolean"
+        ? update_obj.enableApproveOnce
+        : currentConfig.enableApproveOnce,
+    enableDictation:
+      typeof update_obj.enableDictation === "boolean"
+        ? update_obj.enableDictation
+        : currentConfig.enableDictation,
     ...(hasColorsField
       ? (normalizedUpdateColors ? { colors: normalizedUpdateColors } : {})
       : (currentConfig.colors ? { colors: currentConfig.colors } : {})),

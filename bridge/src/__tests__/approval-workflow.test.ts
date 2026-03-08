@@ -15,6 +15,7 @@ import {
   gateFileExists,
   GATE_FILE_PATH,
 } from "../approval-gate.js";
+import { saveConfig } from "../config.js";
 import { readFileSync } from "node:fs";
 import { getBridgeToken } from "../security.js";
 
@@ -43,6 +44,7 @@ afterAll(async () => {
 afterEach(() => {
   clearGateFile();
   decky.sm.forceState("idle", "test cleanup");
+  saveConfig({ enableApproveOnce: true, enableDictation: true });
 });
 
 async function postHook(body: Record<string, unknown>) {
@@ -70,6 +72,12 @@ function waitForState(sock: ClientSocket, targetState: string): Promise<void> {
         resolve();
       }
     });
+  });
+}
+
+function waitForSocketError(sock: ClientSocket): Promise<string> {
+  return new Promise((resolve) => {
+    sock.once("error", (payload: { error?: string }) => resolve(payload?.error ?? ""));
   });
 }
 
@@ -140,6 +148,24 @@ describe("approval workflow — gate file", () => {
 
     expect(gateFileExists()).toBe(true);
     expect(readFileSync(GATE_FILE_PATH, "utf-8")).toBe("approve");
+    sock.disconnect();
+  });
+
+  it("approveOnceInClaude is blocked when feature is disabled", async () => {
+    await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
+      body: JSON.stringify({ enableApproveOnce: false }),
+    });
+    await postHook({ event: "PreToolUse", tool: "Bash" });
+
+    const sock = await connectClient();
+    const errPromise = waitForSocketError(sock);
+    sock.emit("action", { action: "approveOnceInClaude" });
+    const err = await errPromise;
+
+    expect(err).toContain("disabled");
+    expect(gateFileExists()).toBe(false);
     sock.disconnect();
   });
 });

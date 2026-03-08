@@ -66,6 +66,8 @@ export interface DeckyConfig {
   colors?: ColorOverrides;
   defaultTargetApp: TargetApp;
   showTargetBadge: boolean;
+  enableApproveOnce?: boolean;
+  enableDictation?: boolean;
 }
 
 export type ConnectionStatus = "connected" | "disconnected" | "connecting";

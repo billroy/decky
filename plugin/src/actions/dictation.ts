@@ -28,6 +28,7 @@ export function setDictationClient(client: BridgeClient): void {
 @action({ UUID: "com.decky.controller.startDictationForClaude" })
 export class DictationAction extends SingletonAction {
   private unsubConnection?: () => void;
+  private unsubConfig?: () => void;
 
   override async onWillAppear(_ev: WillAppearEvent): Promise<void> {
     if (!bridgeRef) return;
@@ -35,19 +36,26 @@ export class DictationAction extends SingletonAction {
     this.unsubConnection = bridgeRef.onConnectionChange((status) => {
       this.render(status).catch(() => {});
     });
+    this.unsubConfig = bridgeRef.onConfigChange(() => {
+      this.render(bridgeRef!.getConnectionStatus()).catch(() => {});
+    });
   }
 
   override async onWillDisappear(_ev: WillDisappearEvent): Promise<void> {
     this.unsubConnection?.();
+    this.unsubConfig?.();
   }
 
   override async onKeyDown(_ev: KeyDownEvent): Promise<void> {
     if (!bridgeRef || bridgeRef.getConnectionStatus() !== "connected") return;
+    const cfg = bridgeRef.getLastConfig();
+    if (cfg?.enableDictation === false) return;
     bridgeRef.sendAction("startDictationForClaude");
   }
 
   private async render(conn: ConnectionStatus): Promise<void> {
-    const active = conn === "connected";
+    const cfg = bridgeRef?.getLastConfig();
+    const active = conn === "connected" && cfg?.enableDictation !== false;
     const svg = renderSVG(active ? ACTIVE_COLOR : INACTIVE_COLOR);
     const image = `data:image/svg+xml,${encodeURIComponent(svg)}`;
     for (const instance of this.actions) {

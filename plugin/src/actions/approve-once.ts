@@ -28,6 +28,7 @@ export function setApproveOnceClient(client: BridgeClient): void {
 export class ApproveOnceAction extends SingletonAction {
   private unsubConnection?: () => void;
   private unsubState?: () => void;
+  private unsubConfig?: () => void;
 
   override async onWillAppear(_ev: WillAppearEvent): Promise<void> {
     if (!bridgeRef) return;
@@ -38,15 +39,21 @@ export class ApproveOnceAction extends SingletonAction {
     this.unsubState = bridgeRef.onStateChange((snapshot) => {
       this.render(bridgeRef!.getConnectionStatus(), snapshot).catch(() => {});
     });
+    this.unsubConfig = bridgeRef.onConfigChange(() => {
+      this.render(bridgeRef!.getConnectionStatus(), bridgeRef!.getLastSnapshot()).catch(() => {});
+    });
   }
 
   override async onWillDisappear(_ev: WillDisappearEvent): Promise<void> {
     this.unsubConnection?.();
     this.unsubState?.();
+    this.unsubConfig?.();
   }
 
   override async onKeyDown(_ev: KeyDownEvent): Promise<void> {
     if (!bridgeRef) return;
+    const cfg = bridgeRef.getLastConfig();
+    if (cfg?.enableApproveOnce === false) return;
     const snapshot = bridgeRef.getLastSnapshot();
     if (snapshot?.state === "awaiting-approval") {
       bridgeRef.sendAction("approveOnceInClaude");
@@ -54,7 +61,9 @@ export class ApproveOnceAction extends SingletonAction {
   }
 
   private async render(conn: ConnectionStatus, snapshot: StateSnapshot | null): Promise<void> {
-    const active = conn === "connected" && snapshot?.state === "awaiting-approval";
+    const cfg = bridgeRef?.getLastConfig();
+    const enabled = cfg?.enableApproveOnce !== false;
+    const active = enabled && conn === "connected" && snapshot?.state === "awaiting-approval";
     const svg = renderSVG(active ? ACTIVE_COLOR : INACTIVE_COLOR);
     const image = `data:image/svg+xml,${encodeURIComponent(svg)}`;
     for (const instance of this.actions) {

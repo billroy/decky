@@ -246,6 +246,8 @@ export class SlotAction extends SingletonAction {
       approvalTimeout: cfg?.approvalTimeout ?? 30,
       defaultTargetApp: cfg?.defaultTargetApp ?? "claude",
       showTargetBadge: cfg?.showTargetBadge ?? false,
+      enableApproveOnce: cfg?.enableApproveOnce ?? true,
+      enableDictation: cfg?.enableDictation ?? true,
     };
     if (typeof selectedMacroIndex === "number" && selectedMacroIndex >= 0) {
       snapshot.selectedMacroIndex = selectedMacroIndex;
@@ -315,6 +317,8 @@ export class SlotAction extends SingletonAction {
       if (typeof payload.approvalTimeout === "number") update.approvalTimeout = payload.approvalTimeout;
       if (typeof payload.defaultTargetApp === "string") update.defaultTargetApp = payload.defaultTargetApp;
       if (typeof payload.showTargetBadge === "boolean") update.showTargetBadge = payload.showTargetBadge;
+      if (typeof payload.enableApproveOnce === "boolean") update.enableApproveOnce = payload.enableApproveOnce;
+      if (typeof payload.enableDictation === "boolean") update.enableDictation = payload.enableDictation;
       if (payload.colors && typeof payload.colors === "object") update.colors = payload.colors;
       if (
         payload.themeApplyMode === "keep" ||

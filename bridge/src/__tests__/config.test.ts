@@ -109,12 +109,16 @@ describe("config endpoints", () => {
       body: JSON.stringify({
         defaultTargetApp: "codex",
         showTargetBadge: true,
+        enableApproveOnce: false,
+        enableDictation: false,
         macros: [{ label: "Ship", text: "Ship it", targetApp: "chatgpt" }],
       }),
     });
     const data = await res.json();
     expect(data.config.defaultTargetApp).toBe("codex");
     expect(data.config.showTargetBadge).toBe(true);
+    expect(data.config.enableApproveOnce).toBe(false);
+    expect(data.config.enableDictation).toBe(false);
     expect(data.config.macros[0].targetApp).toBe("chatgpt");
   });
 

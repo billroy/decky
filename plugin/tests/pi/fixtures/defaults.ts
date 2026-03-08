@@ -22,6 +22,8 @@ export interface ConfigSnapshot {
   approvalTimeout: number;
   defaultTargetApp: string;
   showTargetBadge: boolean;
+  enableApproveOnce?: boolean;
+  enableDictation?: boolean;
   selectedMacroIndex: number;
   colors?: { bg?: string; text?: string; icon?: string };
 }
@@ -45,6 +47,8 @@ export const DEFAULT_TEST_CONFIG: ConfigSnapshot = {
   approvalTimeout: 30,
   defaultTargetApp: "claude",
   showTargetBadge: true,
+  enableApproveOnce: true,
+  enableDictation: true,
   selectedMacroIndex: 0,
   colors: { bg: "", text: "", icon: "" },
 };
@@ -64,6 +68,8 @@ export function applyUpdateToConfig(
   if (typeof update.approvalTimeout === "number") next.approvalTimeout = update.approvalTimeout;
   if (typeof update.defaultTargetApp === "string") next.defaultTargetApp = update.defaultTargetApp;
   if (typeof update.showTargetBadge === "boolean") next.showTargetBadge = update.showTargetBadge;
+  if (typeof update.enableApproveOnce === "boolean") next.enableApproveOnce = update.enableApproveOnce;
+  if (typeof update.enableDictation === "boolean") next.enableDictation = update.enableDictation;
   if (Object.prototype.hasOwnProperty.call(update, "colors")) {
     const colors = update.colors as { bg?: string; text?: string; icon?: string } | undefined;
     if (colors && (colors.bg || colors.text || colors.icon)) {

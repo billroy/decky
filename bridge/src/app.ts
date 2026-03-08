@@ -207,6 +207,10 @@ export function createApp(): DeckyApp {
           socket.emit("error", { error: "Invalid macro payload" });
         }
       } else if (data.action === "approveOnceInClaude") {
+        if (getConfig().enableApproveOnce === false) {
+          socket.emit("error", { error: "approveOnceInClaude is disabled in config" });
+          return;
+        }
         if (sm.getSnapshot().state !== "awaiting-approval") {
           socket.emit("error", { error: "approveOnceInClaude ignored: not awaiting approval" });
           return;
@@ -218,6 +222,10 @@ export function createApp(): DeckyApp {
           console.error("[io] approveOnceInClaude failed:", err);
         });
       } else if (data.action === "startDictationForClaude") {
+        if (getConfig().enableDictation === false) {
+          socket.emit("error", { error: "startDictationForClaude is disabled in config" });
+          return;
+        }
         startDictationForClaude().catch((err) => {
           console.error("[io] startDictationForClaude failed:", err);
           socket.emit("error", { error: "Failed to start dictation in Claude" });
@@ -246,6 +254,10 @@ export function createApp(): DeckyApp {
             : undefined;
         const showTargetBadge =
           typeof data.showTargetBadge === "boolean" ? data.showTargetBadge : undefined;
+        const enableApproveOnce =
+          typeof data.enableApproveOnce === "boolean" ? data.enableApproveOnce : undefined;
+        const enableDictation =
+          typeof data.enableDictation === "boolean" ? data.enableDictation : undefined;
         const themeApplyMode =
           data.themeApplyMode === "keep" ||
           data.themeApplyMode === "clear-page" ||
@@ -282,6 +294,8 @@ export function createApp(): DeckyApp {
         if (colors) update.colors = colors;
         if (defaultTargetApp) update.defaultTargetApp = defaultTargetApp;
         if (showTargetBadge !== undefined) update.showTargetBadge = showTargetBadge;
+        if (enableApproveOnce !== undefined) update.enableApproveOnce = enableApproveOnce;
+        if (enableDictation !== undefined) update.enableDictation = enableDictation;
         if (Object.keys(update).length > 0) {
           try {
             const config = saveConfig(update);

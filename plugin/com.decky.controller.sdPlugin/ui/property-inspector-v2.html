@@ -448,6 +448,14 @@
       <label>Target badge</label>
       <input type="checkbox" id="show-target-badge" />
     </div>
+    <div class="setting-row">
+      <label>Approve once action</label>
+      <input type="checkbox" id="enable-approve-once" checked />
+    </div>
+    <div class="setting-row">
+      <label>Talk to Claude action</label>
+      <input type="checkbox" id="enable-dictation" checked />
+    </div>
     <div class="debug-panel">
       <div class="btn-row" style="margin-top:0">
         <button id="btn-debug-probe">Test selected key render</button>
@@ -610,6 +618,8 @@
       theme: "light",
       approvalTimeout: 30,
       showTargetBadge: false,
+      enableApproveOnce: true,
+      enableDictation: true,
     };
     let defaultColors = { bg: "", text: "", icon: "" };
     let configLoaded = false;
@@ -623,6 +633,8 @@
     let pendingThemeChange = false;
     let savedThemeSeed = 0;
     let savedShowTargetBadge = false;
+    let savedEnableApproveOnce = true;
+    let savedEnableDictation = true;
     let pendingThemeSeed = null;
     let awaitingConfigAck = false;
     let pendingApplyRequestId = "";
@@ -674,6 +686,14 @@
       var showTargetBadge = document.getElementById("show-target-badge").checked;
       if (showTargetBadge !== savedShowTargetBadge) {
         payload.showTargetBadge = showTargetBadge;
+      }
+      var enableApproveOnce = document.getElementById("enable-approve-once").checked;
+      if (enableApproveOnce !== savedEnableApproveOnce) {
+        payload.enableApproveOnce = enableApproveOnce;
+      }
+      var enableDictation = document.getElementById("enable-dictation").checked;
+      if (enableDictation !== savedEnableDictation) {
+        payload.enableDictation = enableDictation;
       }
       if (forceIncludeColorsField || defaultColors.bg || defaultColors.text || defaultColors.icon) {
         payload.colors = defaultColors;
@@ -894,7 +914,11 @@
         pendingThemeSeed = null;
         if (msg.approvalTimeout !== undefined) settings.approvalTimeout = msg.approvalTimeout;
         if (msg.showTargetBadge !== undefined) settings.showTargetBadge = !!msg.showTargetBadge;
+        if (msg.enableApproveOnce !== undefined) settings.enableApproveOnce = !!msg.enableApproveOnce;
+        if (msg.enableDictation !== undefined) settings.enableDictation = !!msg.enableDictation;
         savedShowTargetBadge = settings.showTargetBadge;
+        savedEnableApproveOnce = settings.enableApproveOnce;
+        savedEnableDictation = settings.enableDictation;
         if (msg.colors) {
           defaultColors.bg = msg.colors.bg || "";
           defaultColors.text = msg.colors.text || "";
@@ -917,6 +941,8 @@
         document.getElementById("theme").value = settings.theme;
         document.getElementById("timeout").value = settings.approvalTimeout;
         document.getElementById("show-target-badge").checked = settings.showTargetBadge;
+        document.getElementById("enable-approve-once").checked = settings.enableApproveOnce;
+        document.getElementById("enable-dictation").checked = settings.enableDictation;
         baselinePayload = JSON.stringify(buildPayload(""));
         forceIncludeColorsField = false;
         pendingThemeApplyMode = "";
@@ -1362,7 +1388,7 @@
 
     // --- Save ---
     document.getElementById("btn-save").disabled = true;
-    ["timeout", "show-target-badge"].forEach(function (id) {
+    ["timeout", "show-target-badge", "enable-approve-once", "enable-dictation"].forEach(function (id) {
       var el = document.getElementById(id);
       el.addEventListener("input", markDirty);
       el.addEventListener("change", markDirty);
