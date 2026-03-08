@@ -6,6 +6,18 @@ async function clickColor(page: import("@playwright/test").Page, root: string, r
 }
 
 test.describe("PI color controls", () => {
+  test("color click auto-saves without Apply now click", async ({ piHarness }) => {
+    const { page } = piHarness;
+    const cursor = piHarness.markMessageCursor();
+
+    await clickColor(page, "#default-colors", "Bg", "Green");
+    const update = await piHarness.waitForUpdateConfigAfter(cursor);
+    expect((update.colors as Record<string, unknown>).bg).toBe("#22c55e");
+
+    await piHarness.ackWithSnapshot(update);
+    await expect(page.locator("#btn-save")).toBeDisabled();
+  });
+
   test("page default bg color writes colors.bg", async ({ piHarness }) => {
     const { page } = piHarness;
 

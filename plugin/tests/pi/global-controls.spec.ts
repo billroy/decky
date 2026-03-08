@@ -43,4 +43,44 @@ test.describe("PI global controls", () => {
     const sent = server.getMessages().filter((m) => m.event === "sendToPlugin" && m.payload?.type === "updateConfig");
     expect(sent.length).toBe(0);
   });
+
+  test("random theme re-apply emits a new seed each apply", async ({ piHarness }) => {
+    const { page } = piHarness;
+
+    await page.selectOption("#theme", "random");
+    await page.check('input[name="theme-apply-mode"][value="keep"]');
+    await page.click("#btn-theme-apply-confirm");
+    const first = await piHarness.waitForUpdateConfig();
+    expect(first.theme).toBe("random");
+    expect(typeof first.themeSeed).toBe("number");
+    await piHarness.ackWithSnapshot(first);
+
+    await page.selectOption("#theme", "random");
+    await page.check('input[name="theme-apply-mode"][value="keep"]');
+    await page.click("#btn-theme-apply-confirm");
+    const second = await piHarness.waitForUpdateConfig();
+    expect(second.theme).toBe("random");
+    expect(typeof second.themeSeed).toBe("number");
+    expect(second.themeSeed).not.toBe(first.themeSeed);
+  });
+
+  test("rainbow theme re-apply emits a new seed each apply", async ({ piHarness }) => {
+    const { page } = piHarness;
+
+    await page.selectOption("#theme", "rainbow");
+    await page.check('input[name="theme-apply-mode"][value="keep"]');
+    await page.click("#btn-theme-apply-confirm");
+    const first = await piHarness.waitForUpdateConfig();
+    expect(first.theme).toBe("rainbow");
+    expect(typeof first.themeSeed).toBe("number");
+    await piHarness.ackWithSnapshot(first);
+
+    await page.selectOption("#theme", "rainbow");
+    await page.check('input[name="theme-apply-mode"][value="keep"]');
+    await page.click("#btn-theme-apply-confirm");
+    const second = await piHarness.waitForUpdateConfig();
+    expect(second.theme).toBe("rainbow");
+    expect(typeof second.themeSeed).toBe("number");
+    expect(second.themeSeed).not.toBe(first.themeSeed);
+  });
 });
