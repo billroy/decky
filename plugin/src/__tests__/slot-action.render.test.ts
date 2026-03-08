@@ -285,4 +285,53 @@ describe("SlotAction render path", () => {
     ];
     expect(after.some((svg, i) => svg !== before[i])).toBe(true);
   });
+
+  it("applies page color updates to all keys even when only one slot assignment is known", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge({
+      ...baseConfig(),
+      macros: [
+        { label: "One", text: "one" },
+        { label: "Two", text: "two" },
+        { label: "Three", text: "three" },
+      ],
+      colors: { bg: "#ffffff", text: "#1e293b", icon: "#64748b" },
+    });
+    setSlotClient(bridge as any);
+
+    const action = makeKeyAction("action-1");
+    const action2 = makeKeyAction("action-2");
+    const action3 = makeKeyAction("action-3");
+    const slot = new SlotAction();
+    (slot as any).actions = [action, action2, action3];
+
+    // Only first key has appeared/assigned so far.
+    await slot.onWillAppear({
+      action,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+
+    bridge.triggerConfig({
+      ...bridge.config,
+      colors: { bg: "#ef4444", text: "#ffffff", icon: "#ffffff" },
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(action.setImage.mock.calls.length).toBeGreaterThan(1);
+    expect(action2.setImage.mock.calls.length).toBeGreaterThan(0);
+    expect(action3.setImage.mock.calls.length).toBeGreaterThan(0);
+
+    const svg1 = decodeImageData(action.setImage.mock.calls.at(-1)[0]);
+    const svg2 = decodeImageData(action2.setImage.mock.calls.at(-1)[0]);
+    const svg3 = decodeImageData(action3.setImage.mock.calls.at(-1)[0]);
+
+    expect(svg1).toContain("One");
+    expect(svg2).toContain("Two");
+    expect(svg3).toContain("Three");
+    expect(svg1).toContain('fill="#ef4444"');
+    expect(svg2).toContain('fill="#ef4444"');
+    expect(svg3).toContain('fill="#ef4444"');
+  });
 });
