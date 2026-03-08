@@ -17,9 +17,6 @@ import streamDeck, {
   type SendToPluginEvent,
 } from "@elgato/streamdeck";
 import type { JsonValue, JsonObject } from "@elgato/utils";
-import { execFile } from "node:child_process";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { type BridgeClient, type ConnectionStatus, type StateSnapshot } from "../bridge-client.js";
 import {
   getSlotConfig,
@@ -69,23 +66,6 @@ function summarizeSvg(svg: string): Record<string, unknown> {
   const fills = svg.match(/fill="[^"]+"/g)?.slice(0, 6) ?? [];
   const strokes = svg.match(/stroke="[^"]+"/g)?.slice(0, 4) ?? [];
   return { fills, strokes, len: svg.length };
-}
-
-function launchConfigEditor(editorRaw: string): void {
-  const editor = editorRaw.trim().toLowerCase();
-  const configPath = join(homedir(), ".decky", "config.json");
-  const appName =
-    editor === "bbedit" ? "BBEdit" :
-    editor === "code" ? "Visual Studio Code" :
-    editor === "cursor" ? "Cursor" :
-    editor === "windsurf" ? "Windsurf" :
-    editor === "textedit" ? "TextEdit" :
-    "BBEdit";
-  execFile("open", ["-a", appName, configPath], (err) => {
-    if (err) {
-      pushDebug("openConfig:error", undefined, -1, { editor, message: err.message });
-    }
-  });
 }
 
 export function setSlotClient(client: BridgeClient): void {
@@ -197,12 +177,6 @@ export class SlotAction extends SingletonAction {
     const macros = this.getMacros();
     const config = getSlotConfig(state, rank, snapshot?.tool, macros);
 
-    if (config.action === "openConfig") {
-      const editor = bridgeRef.getLastConfig()?.editor ?? "bbedit";
-      launchConfigEditor(editor);
-      return;
-    }
-
     if (config.action && bridgeRef.getConnectionStatus() === "connected") {
       bridgeRef.sendAction(config.action, config.data);
     }
@@ -240,7 +214,6 @@ export class SlotAction extends SingletonAction {
       }),
       theme: cfg?.theme ?? "light",
       themeSeed: cfg?.themeSeed ?? 0,
-      editor: cfg?.editor ?? "bbedit",
       approvalTimeout: cfg?.approvalTimeout ?? 30,
       defaultTargetApp: cfg?.defaultTargetApp ?? "claude",
       showTargetBadge: cfg?.showTargetBadge ?? false,
@@ -307,7 +280,6 @@ export class SlotAction extends SingletonAction {
       if (typeof payload.themeSeed === "number" && Number.isFinite(payload.themeSeed)) {
         update.themeSeed = Math.floor(payload.themeSeed);
       }
-      if (typeof payload.editor === "string") update.editor = payload.editor;
       if (typeof payload.approvalTimeout === "number") update.approvalTimeout = payload.approvalTimeout;
       if (typeof payload.defaultTargetApp === "string") update.defaultTargetApp = payload.defaultTargetApp;
       if (typeof payload.showTargetBadge === "boolean") update.showTargetBadge = payload.showTargetBadge;
