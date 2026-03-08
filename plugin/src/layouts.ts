@@ -31,6 +31,9 @@ export type Theme =
   | "solarized-light"
   | "nord"
   | "github-dark"
+  | "candy-cane"
+  | "gradient-blue"
+  | "wormhole"
   | "rainbow"
   | "random";
 
@@ -118,6 +121,33 @@ const PALETTES: Record<Theme, ThemePalette> = {
     defaultLabel: "#c9d1d9",
     emptyBg: "#0b0f14",
     emptyText: "#6e7681",
+  },
+  "candy-cane": {
+    macroBg: "#dc2626",
+    macroLabel: "#ffffff",
+    defaultBg: "#dc2626",
+    defaultIcon: "#ffffff",
+    defaultLabel: "#ffffff",
+    emptyBg: "#dc2626",
+    emptyText: "#ffffff",
+  },
+  "gradient-blue": {
+    macroBg: "#0b2447",
+    macroLabel: "#ffffff",
+    defaultBg: "#0b2447",
+    defaultIcon: "#ffffff",
+    defaultLabel: "#ffffff",
+    emptyBg: "#0b2447",
+    emptyText: "#ffffff",
+  },
+  "wormhole": {
+    macroBg: "#20242d",
+    macroLabel: "#f8fafc",
+    defaultBg: "#20242d",
+    defaultIcon: "#f8fafc",
+    defaultLabel: "#f8fafc",
+    emptyBg: "#20242d",
+    emptyText: "#f8fafc",
   },
   // Dynamic themes are computed per slot by resolveThemePaletteForSlot.
   rainbow: {
@@ -234,6 +264,23 @@ function hexToRgb(hex: string): { r: number; g: number; b: number } | null {
   };
 }
 
+function rgbToHex(r: number, g: number, b: number): string {
+  const toHex = (n: number): string => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, "0");
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function mixHex(a: string, b: string, t: number): string {
+  const ra = hexToRgb(a);
+  const rb = hexToRgb(b);
+  if (!ra || !rb) return a;
+  const clamped = Math.max(0, Math.min(1, t));
+  return rgbToHex(
+    ra.r + (rb.r - ra.r) * clamped,
+    ra.g + (rb.g - ra.g) * clamped,
+    ra.b + (rb.b - ra.b) * clamped,
+  );
+}
+
 function srgbChannel(v: number): number {
   const c = v / 255;
   return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
@@ -286,6 +333,55 @@ function shuffledRainbow(): { bg: string; fg: string }[] {
 }
 
 function resolveThemePaletteForSlot(theme: Theme, slotIndex: number): ThemePalette {
+  if (theme === "candy-cane") {
+    const stripe = Math.abs((slotIndex + currentThemeSeed) % 4);
+    const bg = stripe % 2 === 0 ? "#dc2626" : "#f8fafc";
+    const fg = ensureContrast(bg, stripe % 2 === 0 ? "#ffffff" : "#111827", 4.5);
+    return {
+      macroBg: bg,
+      macroLabel: fg,
+      defaultBg: bg,
+      defaultIcon: fg,
+      defaultLabel: fg,
+      emptyBg: bg,
+      emptyText: fg,
+    };
+  }
+  if (theme === "gradient-blue") {
+    const x = ((slotIndex % 5) + 5) % 5;
+    const y = Math.floor(slotIndex / 5) % 3;
+    const t = ((x / 4) + (y / 2)) / 2;
+    const bg = mixHex("#0b2447", "#60a5fa", t);
+    const fg = ensureContrast(bg, "#ffffff", 4.5);
+    return {
+      macroBg: bg,
+      macroLabel: fg,
+      defaultBg: bg,
+      defaultIcon: fg,
+      defaultLabel: fg,
+      emptyBg: bg,
+      emptyText: fg,
+    };
+  }
+  if (theme === "wormhole") {
+    const x = ((slotIndex % 5) + 5) % 5;
+    const y = Math.floor(slotIndex / 5) % 3;
+    const dx = x - 2;
+    const dy = y - 1;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const norm = Math.max(0, Math.min(1, dist / Math.sqrt(5)));
+    const bg = hslToHex(220, 8 + norm * 12, 18 + norm * 58);
+    const fg = ensureContrast(bg, norm > 0.6 ? "#111827" : "#f8fafc", 4.5);
+    return {
+      macroBg: bg,
+      macroLabel: fg,
+      defaultBg: bg,
+      defaultIcon: fg,
+      defaultLabel: fg,
+      emptyBg: bg,
+      emptyText: fg,
+    };
+  }
   if (theme === "rainbow") {
     const pairs = shuffledRainbow();
     const idx = ((slotIndex % pairs.length) + pairs.length) % pairs.length;

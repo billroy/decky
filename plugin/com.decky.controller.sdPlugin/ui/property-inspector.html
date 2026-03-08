@@ -386,6 +386,18 @@
       white-space: pre-wrap;
       word-break: break-word;
     }
+    .scope-chip {
+      display: inline-block;
+      margin-left: 6px;
+      padding: 1px 5px;
+      border-radius: 999px;
+      font-size: 9px;
+      letter-spacing: 0.02em;
+      border: 1px solid rgba(255,255,255,0.18);
+      color: #9fb1cf;
+      background: rgba(255,255,255,0.04);
+      vertical-align: middle;
+    }
   </style>
 </head>
 <body>
@@ -396,7 +408,7 @@
 
   <!-- Settings -->
   <div class="section">
-    <h3>Settings</h3>
+    <h3>Global Behavior <span class="scope-chip">Global</span></h3>
     <div class="setting-row">
       <label>Theme</label>
       <select id="theme">
@@ -408,6 +420,9 @@
         <option value="solarized-light">Solarized Light</option>
         <option value="nord">Nord</option>
         <option value="github-dark">GitHub Dark</option>
+        <option value="candy-cane">Candy Cane</option>
+        <option value="gradient-blue">Gradient Blue</option>
+        <option value="wormhole">Wormhole</option>
         <option value="rainbow">Rainbow</option>
         <option value="random">Random</option>
       </select>
@@ -462,8 +477,8 @@
 
   <!-- Default Colors -->
   <div class="section">
-    <h3>Page Default Colors (All Buttons)</h3>
-    <div class="setting-hint" style="margin-left:0">These affect every macro unless a macro-specific override is set.</div>
+    <h3>Global Appearance <span class="scope-chip">Global</span></h3>
+    <div class="setting-hint" style="margin-left:0">Theme and page defaults affect all slots unless a per-slot override is set.</div>
     <div id="default-colors"></div>
     <div class="btn-row" style="margin-top:6px">
       <button id="btn-reset-default-colors">Reset page defaults</button>
@@ -475,8 +490,8 @@
 
   <!-- Macros -->
   <div class="section">
-    <h3>Macro Buttons <span id="macro-count" style="color:#666; font-weight:normal"></span></h3>
-    <div class="macro-help">Configure buttons shown on the deck during idle state. Label is the button text; Text to send is the prompt injected into Claude when pressed. Command macros require non-empty Text to send. Each macro has Icon and optional per-macro colors. <span id="pi-diag" style="color:#8aa3d9"></span></div>
+    <h3>Selected Slot Settings <span class="scope-chip">Selected Slot</span> <span id="macro-count" style="color:#666; font-weight:normal"></span></h3>
+    <div class="macro-help">Configure the selected slot in focused mode, or all slots in list mode. Label is deck text; Text to send is the prompt injected when pressed. Each slot can define Icon, Target app, and per-slot colors. <span id="pi-diag" style="color:#8aa3d9"></span></div>
     <div id="macro-list" class="macro-list"></div>
     <div class="btn-row">
       <button class="primary" id="btn-save">Apply now</button>
@@ -863,8 +878,11 @@
         }
         var out = (msg.entries || []).map(function (e) {
           var t = new Date(e.ts || Date.now()).toISOString().slice(11, 19);
+          var slotValue =
+            e.slotIndex !== undefined ? e.slotIndex :
+            (e.slotRank !== undefined ? e.slotRank : undefined);
           return t + " " + (e.event || "?") +
-            (e.slotRank !== undefined ? " slot=" + e.slotRank : "") +
+            (slotValue !== undefined ? " slot=" + slotValue : "") +
             (e.actionId ? " id=" + String(e.actionId).slice(-6) : "") +
             (e.details ? " " + JSON.stringify(e.details) : "");
         }).join("\n");

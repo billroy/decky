@@ -153,6 +153,23 @@ describe("layouts", () => {
       expect(config.title).toBe("Config");
       expect(config.svg).toContain("svg");
     });
+
+    it("supports all built-in utility action types", () => {
+      const cases: Array<{ type: NonNullable<MacroInput["type"]>; expected: string }> = [
+        { type: "approve", expected: "approve" },
+        { type: "deny", expected: "deny" },
+        { type: "cancel", expected: "cancel" },
+        { type: "restart", expected: "restart" },
+        { type: "openConfig", expected: "openConfig" },
+        { type: "approveOnceInClaude", expected: "approveOnceInClaude" },
+        { type: "startDictationForClaude", expected: "startDictationForClaude" },
+      ];
+      for (const c of cases) {
+        const macros: MacroInput[] = [{ label: c.type, text: "", type: c.type, icon: "checkmark" }];
+        const cfg = getSlotConfig("idle", 0, null, macros);
+        expect(cfg.action).toBe(c.expected);
+      }
+    });
   });
 
   describe("awaiting-approval layout", () => {
@@ -395,6 +412,45 @@ describe("layouts", () => {
   });
 
   describe("extended themes", () => {
+    it("supports candy-cane theme with alternating stripe palettes", () => {
+      setTheme("candy-cane");
+      setThemeSeed(0);
+      const macros: MacroInput[] = [
+        { label: "One", text: "one" },
+        { label: "Two", text: "two" },
+      ];
+      const slot0 = getSlotConfig("idle", 0, null, macros);
+      const slot1 = getSlotConfig("idle", 1, null, macros);
+      expect(slot0.svg).not.toEqual(slot1.svg);
+      expect(slot0.svg + slot1.svg).toMatch(/fill="#(dc2626|f8fafc)"/);
+    });
+
+    it("supports gradient-blue theme with position-based color interpolation", () => {
+      setTheme("gradient-blue");
+      const macros: MacroInput[] = [
+        { label: "One", text: "one" },
+        { label: "Two", text: "two" },
+      ];
+      const slot0 = getSlotConfig("idle", 0, null, macros);
+      const slot6 = getSlotConfig("idle", 6, null, macros);
+      expect(slot0.svg).toMatch(/fill="#[0-9a-fA-F]{6}"/);
+      expect(slot6.svg).toMatch(/fill="#[0-9a-fA-F]{6}"/);
+      expect(slot0.svg).not.toEqual(slot6.svg);
+    });
+
+    it("supports wormhole theme with radial monochrome variation", () => {
+      setTheme("wormhole");
+      const macros: MacroInput[] = [
+        { label: "One", text: "one" },
+        { label: "Two", text: "two" },
+      ];
+      const edge = getSlotConfig("idle", 0, null, macros);
+      const center = getSlotConfig("idle", 7, null, macros);
+      expect(edge.svg).toMatch(/fill="#[0-9a-fA-F]{6}"/);
+      expect(center.svg).toMatch(/fill="#[0-9a-fA-F]{6}"/);
+      expect(edge.svg).not.toEqual(center.svg);
+    });
+
     it("supports rainbow theme with per-slot variation", () => {
       setTheme("rainbow");
       setThemeSeed(1);

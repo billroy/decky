@@ -36,15 +36,15 @@ interface DebugEntry extends JsonObject {
   ts: number;
   event: string;
   actionId?: string;
-  slotRank?: number;
+  slotIndex?: number;
   details?: JsonObject;
 }
 
 const debugLog: DebugEntry[] = [];
 const DEBUG_MAX = 200;
 
-function pushDebug(event: string, actionId?: string, slotRank?: number, details?: JsonObject): void {
-  debugLog.push({ ts: Date.now(), event, actionId, slotRank, details });
+function pushDebug(event: string, actionId?: string, slotIndex?: number, details?: JsonObject): void {
+  debugLog.push({ ts: Date.now(), event, actionId, slotIndex, details });
   if (debugLog.length > DEBUG_MAX) debugLog.splice(0, debugLog.length - DEBUG_MAX);
 }
 
@@ -78,11 +78,9 @@ export function setSlotClient(client: BridgeClient): void {
 /** Map from action context ID to position index (row * columns + column). */
 const slotAssignments = new Map<string, number>();
 
-/** Get the rank (sorted order) of an action among all active slots.
- *  Macros are assigned by rank so they fill sequentially regardless of position gaps. */
-function getSlotRank(actionId: string): number {
-  const sorted = [...slotAssignments.entries()].sort((a, b) => a[1] - b[1]);
-  return sorted.findIndex(([id]) => id === actionId);
+/** Get physical slot index for an action (row * columns + column). */
+function getSlotIndex(actionId: string): number {
+  return slotAssignments.get(actionId) ?? -1;
 }
 
 /** Exported for testing. */
@@ -119,21 +117,21 @@ export class SlotAction extends SingletonAction {
       const physicalIndex = row * columns + column;
       slotIndex = physicalIndex;
       slotAssignments.set(ev.action.id, physicalIndex);
-      pushDebug("willAppear", ev.action.id, getSlotRank(ev.action.id), { slotIndex });
+      pushDebug("willAppear", ev.action.id, getSlotIndex(ev.action.id), { slotIndex });
     }
 
     if (!bridgeRef) return;
 
     // Render this specific action immediately (it may not be in this.actions yet)
     if (slotIndex !== undefined) {
-      const rank = getSlotRank(ev.action.id);
+      const assignedSlot = getSlotIndex(ev.action.id);
       const connStatus = bridgeRef.getConnectionStatus();
       const snapshot = bridgeRef.getLastSnapshot();
       const state = connStatus === "connected" ? (snapshot?.state ?? "idle") : "stopped";
       const macros = this.getMacros();
-      const config = getSlotConfig(state, rank, snapshot?.tool, macros);
+      const config = getSlotConfig(state, assignedSlot, snapshot?.tool, macros);
       const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
-      pushDebug("initialRender", ev.action.id, rank, {
+      pushDebug("initialRender", ev.action.id, assignedSlot, {
         state,
         tool: snapshot?.tool ?? null,
         title: config.title,
@@ -142,8 +140,7 @@ export class SlotAction extends SingletonAction {
       });
       await ev.action.setImage(imageData);
       await ev.action.setTitle("");
-      // Ensure rank-based macro assignment converges as additional keys appear.
-      // Without this, startup order can leave many keys rendered as slot 0.
+      // Ensure all active keys converge after each appear event.
       this.renderAll(connStatus, snapshot).catch(() => {});
     }
 
@@ -179,7 +176,7 @@ export class SlotAction extends SingletonAction {
   }
 
   override async onWillDisappear(ev: WillDisappearEvent): Promise<void> {
-    pushDebug("willDisappear", ev.action.id, getSlotRank(ev.action.id), {});
+    pushDebug("willDisappear", ev.action.id, getSlotIndex(ev.action.id), {});
     activeKeyActions.delete(ev.action.id);
     slotAssignments.delete(ev.action.id);
 
@@ -203,13 +200,13 @@ export class SlotAction extends SingletonAction {
   override async onKeyDown(ev: KeyDownEvent): Promise<void> {
     if (!bridgeRef) return;
 
-    const rank = getSlotRank(ev.action.id);
-    if (rank === -1) return;
+    const slotIndex = getSlotIndex(ev.action.id);
+    if (slotIndex === -1) return;
 
     const snapshot = bridgeRef.getLastSnapshot();
     const state = snapshot?.state ?? "idle";
     const macros = this.getMacros();
-    const config = getSlotConfig(state, rank, snapshot?.tool, macros);
+    const config = getSlotConfig(state, slotIndex, snapshot?.tool, macros);
 
     if (config.action === "widget-refresh") {
       await this.renderAll(bridgeRef.getConnectionStatus(), snapshot);
@@ -223,7 +220,7 @@ export class SlotAction extends SingletonAction {
 
   override async onPropertyInspectorDidAppear(ev: PropertyInspectorDidAppearEvent): Promise<void> {
     this.activePiActionId = ev.action.id;
-    pushDebug("piAppear", ev.action.id, getSlotRank(ev.action.id), {});
+    pushDebug("piAppear", ev.action.id, getSlotIndex(ev.action.id), {});
     await this.sendConfigSnapshot(ev.action.id);
   }
 
@@ -238,7 +235,7 @@ export class SlotAction extends SingletonAction {
     if (!cfg) return;
     const macros = cfg?.macros ?? [];
     const selectedMacroIndex =
-      actionId && slotAssignments.has(actionId) ? getSlotRank(actionId) : undefined;
+      actionId && slotAssignments.has(actionId) ? getSlotIndex(actionId) : undefined;
     const snapshot: Record<string, unknown> = {
       type: "configSnapshot",
       piProtocolVersion: PI_PROTOCOL_VERSION,
@@ -280,14 +277,14 @@ export class SlotAction extends SingletonAction {
     this.activePiActionId = ev.action.id;
     const payload = ev.payload as Record<string, unknown>;
     const payloadType = typeof payload?.type === "string" ? payload.type : "unknown";
-    pushDebug("pi->plugin", ev.action.id, getSlotRank(ev.action.id), { type: payloadType });
+    pushDebug("pi->plugin", ev.action.id, getSlotIndex(ev.action.id), { type: payloadType });
     if (payload?.type === "piReady") {
       // PI is ready to receive — send the config snapshot now
       await this.sendConfigSnapshot(ev.action.id);
       return;
     }
     if (payload?.type === "debugRenderProbe") {
-      const rank = getSlotRank(ev.action.id);
+      const slotIndex = getSlotIndex(ev.action.id);
       const stamp = new Date().toISOString().slice(11, 19);
       const probeSvg = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
         <rect width="144" height="144" rx="16" fill="#ff00aa"/>
@@ -300,9 +297,9 @@ export class SlotAction extends SingletonAction {
           await ev.action.setImage(`data:image/svg+xml,${encodeURIComponent(probeSvg)}`);
           await ev.action.setTitle("");
         }
-        pushDebug("probe:setImage:ok", ev.action.id, rank, { stamp });
+        pushDebug("probe:setImage:ok", ev.action.id, slotIndex, { stamp });
       } catch (err) {
-        pushDebug("probe:setImage:err", ev.action.id, rank, { err: String(err) });
+        pushDebug("probe:setImage:err", ev.action.id, slotIndex, { err: String(err) });
       }
       await streamDeck.ui.sendToPropertyInspector({
         type: "debugSnapshot",
@@ -346,7 +343,7 @@ export class SlotAction extends SingletonAction {
       const debugTheme = typeof update.theme === "string" ? update.theme : null;
       const debugThemeSeed = typeof update.themeSeed === "number" ? update.themeSeed : null;
       const debugThemeApplyMode = typeof update.themeApplyMode === "string" ? update.themeApplyMode : null;
-      pushDebug("plugin->bridge:updateConfig", ev.action.id, getSlotRank(ev.action.id), {
+      pushDebug("plugin->bridge:updateConfig", ev.action.id, getSlotIndex(ev.action.id), {
         theme: debugTheme,
         themeSeed: debugThemeSeed,
         themeApplyMode: debugThemeApplyMode,
@@ -408,14 +405,14 @@ export class SlotAction extends SingletonAction {
     const macros = this.getMacros();
 
     for (const instance of this.getRenderableActions().values()) {
-      const rank = getSlotRank(instance.id);
-      if (rank === -1) continue;
+      const slotIndex = getSlotIndex(instance.id);
+      if (slotIndex === -1) continue;
 
-      const config = getSlotConfig(state, rank, toolName, macros);
+      const config = getSlotConfig(state, slotIndex, toolName, macros);
       const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
 
       try {
-        pushDebug("renderAll:setImage", instance.id, rank, {
+        pushDebug("renderAll:setImage", instance.id, slotIndex, {
           state,
           title: config.title,
           action: config.action ?? null,
@@ -424,7 +421,7 @@ export class SlotAction extends SingletonAction {
         await instance.setImage(imageData);
         await instance.setTitle("");
       } catch {
-        pushDebug("renderAll:setImage:err", instance.id, rank, { state });
+        pushDebug("renderAll:setImage:err", instance.id, slotIndex, { state });
         // SDK may throw if the action disappeared mid-render; safe to ignore.
       }
     }
