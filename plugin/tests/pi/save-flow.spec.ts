@@ -65,21 +65,10 @@ test.describe("PI save flow", () => {
     await expect(page.locator("#selected-target-app")).toHaveValue("codex");
   });
 
-  test("global Claude utility toggles persist via Apply now", async ({ piHarness }) => {
+  test("legacy Claude utility toggles are not present in unified PI", async ({ piHarness }) => {
     const { page } = piHarness;
-
-    await page.uncheck("#enable-approve-once");
-    await page.uncheck("#enable-dictation");
-    await expect(page.locator("#btn-save")).toBeEnabled();
-
-    await page.click("#btn-save");
-    const update = await piHarness.waitForUpdateConfig();
-    expect(update.enableApproveOnce).toBe(false);
-    expect(update.enableDictation).toBe(false);
-
-    await piHarness.ackWithSnapshot(update);
-    await expect(page.locator("#enable-approve-once")).not.toBeChecked();
-    await expect(page.locator("#enable-dictation")).not.toBeChecked();
+    await expect(page.locator("#enable-approve-once")).toHaveCount(0);
+    await expect(page.locator("#enable-dictation")).toHaveCount(0);
   });
 
   test("Apply now does not reseed random theme", async ({ piHarness }) => {

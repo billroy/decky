@@ -32,18 +32,18 @@ import { PI_PROTOCOL_VERSION } from "../protocol.js";
 let bridgeRef: BridgeClient | null = null;
 const activeKeyActions = new Map<string, WillAppearEvent["action"]>();
 
-interface DebugEntry {
+interface DebugEntry extends JsonObject {
   ts: number;
   event: string;
   actionId?: string;
   slotRank?: number;
-  details?: Record<string, unknown>;
+  details?: JsonObject;
 }
 
 const debugLog: DebugEntry[] = [];
 const DEBUG_MAX = 200;
 
-function pushDebug(event: string, actionId?: string, slotRank?: number, details?: Record<string, unknown>): void {
+function pushDebug(event: string, actionId?: string, slotRank?: number, details?: JsonObject): void {
   debugLog.push({ ts: Date.now(), event, actionId, slotRank, details });
   if (debugLog.length > DEBUG_MAX) debugLog.splice(0, debugLog.length - DEBUG_MAX);
 }
@@ -52,7 +52,7 @@ function recentDebug(): DebugEntry[] {
   return debugLog.slice(-80);
 }
 
-function debugSummary(): Record<string, unknown> {
+function debugSummary(): JsonObject {
   const cfg = bridgeRef?.getLastConfig();
   return {
     connection: bridgeRef?.getConnectionStatus() ?? "none",
@@ -65,7 +65,7 @@ function debugSummary(): Record<string, unknown> {
   };
 }
 
-function summarizeSvg(svg: string): Record<string, unknown> {
+function summarizeSvg(svg: string): JsonObject {
   const fills = svg.match(/fill="[^"]+"/g)?.slice(0, 6) ?? [];
   const strokes = svg.match(/stroke="[^"]+"/g)?.slice(0, 4) ?? [];
   return { fills, strokes, len: svg.length };
@@ -100,8 +100,10 @@ export class SlotAction extends SingletonAction {
   private widgetInterval?: ReturnType<typeof setInterval>;
   private getRenderableActions(): Map<string, WillAppearEvent["action"]> {
     const all = new Map<string, WillAppearEvent["action"]>(activeKeyActions);
-    for (const action of this.actions as Array<WillAppearEvent["action"]>) {
-      if (!all.has(action.id)) all.set(action.id, action);
+    for (const action of this.actions) {
+      if ("setImage" in action && "setTitle" in action && !all.has(action.id)) {
+        all.set(action.id, action as WillAppearEvent["action"]);
+      }
     }
     return all;
   }
@@ -277,7 +279,8 @@ export class SlotAction extends SingletonAction {
   override async onSendToPlugin(ev: SendToPluginEvent<JsonValue, JsonObject>): Promise<void> {
     this.activePiActionId = ev.action.id;
     const payload = ev.payload as Record<string, unknown>;
-    pushDebug("pi->plugin", ev.action.id, getSlotRank(ev.action.id), { type: payload?.type ?? "unknown" });
+    const payloadType = typeof payload?.type === "string" ? payload.type : "unknown";
+    pushDebug("pi->plugin", ev.action.id, getSlotRank(ev.action.id), { type: payloadType });
     if (payload?.type === "piReady") {
       // PI is ready to receive — send the config snapshot now
       await this.sendConfigSnapshot(ev.action.id);
@@ -305,7 +308,7 @@ export class SlotAction extends SingletonAction {
         type: "debugSnapshot",
         entries: recentDebug(),
         summary: debugSummary(),
-      } as JsonObject);
+      });
       return;
     }
     if (payload?.type === "debugDump") {
@@ -313,7 +316,7 @@ export class SlotAction extends SingletonAction {
         type: "debugSnapshot",
         entries: recentDebug(),
         summary: debugSummary(),
-      } as JsonObject);
+      });
       return;
     }
     if (payload?.type === "updateConfig") {
@@ -340,10 +343,13 @@ export class SlotAction extends SingletonAction {
         update.themeApplyMode = payload.themeApplyMode;
       }
       bridgeRef?.sendAction("updateConfig", update);
+      const debugTheme = typeof update.theme === "string" ? update.theme : null;
+      const debugThemeSeed = typeof update.themeSeed === "number" ? update.themeSeed : null;
+      const debugThemeApplyMode = typeof update.themeApplyMode === "string" ? update.themeApplyMode : null;
       pushDebug("plugin->bridge:updateConfig", ev.action.id, getSlotRank(ev.action.id), {
-        theme: update.theme ?? null,
-        themeSeed: update.themeSeed ?? null,
-        themeApplyMode: update.themeApplyMode ?? null,
+        theme: debugTheme,
+        themeSeed: debugThemeSeed,
+        themeApplyMode: debugThemeApplyMode,
         hasColorsField: Object.prototype.hasOwnProperty.call(update, "colors"),
       });
     }
