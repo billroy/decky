@@ -199,21 +199,37 @@
       background: rgba(239,68,68,0.25);
     }
 
-    /* --- Connection status --- */
-    .conn-status {
+    /* --- Compact PI status --- */
+    .pi-meta {
+      display: flex;
+      align-items: center;
+      gap: 8px;
       font-size: 10px;
+      color: #98a2b3;
+      margin: 0 0 8px 0;
       padding: 4px 8px;
-      border-radius: 4px;
-      margin-bottom: 8px;
-      text-align: center;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
     }
-    .conn-status.connected {
-      background: rgba(34,197,94,0.15);
-      color: #86efac;
+    .conn-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+      flex: 0 0 auto;
+      box-shadow: 0 0 4px rgba(0,0,0,0.3);
     }
-    .conn-status.disconnected {
-      background: rgba(239,68,68,0.15);
-      color: #fca5a5;
+    .conn-dot.connected {
+      background: #22c55e;
+    }
+    .conn-dot.disconnected {
+      background: #ef4444;
+    }
+    .pi-build {
+      margin-left: auto;
+      color: #7b8497;
+      font-size: 9px;
     }
 
     /* --- Setting hints --- */
@@ -398,12 +414,20 @@
       background: rgba(255,255,255,0.04);
       vertical-align: middle;
     }
+    .scope-chip.inline {
+      margin-left: 4px;
+      padding: 0 4px;
+      font-size: 8px;
+    }
+    .helper {
+      font-size: 9px;
+      color: #76819a;
+      margin-top: 2px;
+      line-height: 1.3;
+    }
   </style>
 </head>
 <body>
-  <!-- Connection status -->
-  <div id="conn-status" class="conn-status" style="color:#888;background:rgba(255,255,255,0.05)">Connecting...</div>
-  <div id="pi-build" class="setting-hint" style="margin:0 0 8px 0">PI build: unknown</div>
   <div id="compat-warning" class="status error hidden" style="margin:0 0 8px 0"></div>
 
   <!-- Settings -->
@@ -428,7 +452,7 @@
       </select>
     </div>
     <div class="setting-row">
-      <label>Theme apply</label>
+      <label>Theme apply <span class="scope-chip inline">Global</span></label>
       <button id="btn-theme-apply">Apply Theme…</button>
     </div>
     <div id="theme-apply-panel" class="theme-apply-panel hidden">
@@ -443,33 +467,13 @@
       </div>
     </div>
     <div class="setting-row">
-      <label>Approval timeout</label>
+      <label>Approval timeout <span class="scope-chip inline">Global</span></label>
       <input type="number" id="timeout" min="5" max="300" step="5" />
     </div>
     <div class="setting-hint">Auto-deny tool requests after this many seconds</div>
     <div class="setting-row">
-      <label>Target app</label>
-      <select id="selected-target-app">
-        <option value="">Use default (Claude)</option>
-        <option value="claude">Claude (CLD)</option>
-        <option value="codex">Codex (CDX)</option>
-        <option value="chatgpt">ChatGPT (CGP)</option>
-        <option value="cursor">Cursor (CSR)</option>
-        <option value="windsurf">Windsurf (WDF)</option>
-      </select>
-    </div>
-    <div class="setting-hint" id="selected-target-hint">Applies to selected slot only.</div>
-    <div class="setting-row">
-      <label>Target badge</label>
+      <label>Target badge <span class="scope-chip inline">Global</span></label>
       <input type="checkbox" id="show-target-badge" />
-    </div>
-    <div class="debug-panel">
-      <div class="btn-row" style="margin-top:0">
-        <button id="btn-debug-probe">Test selected key render</button>
-        <button id="btn-debug-dump">Get debug log</button>
-        <button id="btn-debug-copy">Copy debug log</button>
-      </div>
-      <div id="debug-log" class="debug-log">No debug data yet.</div>
     </div>
   </div>
 
@@ -491,7 +495,19 @@
   <!-- Macros -->
   <div class="section">
     <h3>Selected Slot Settings <span class="scope-chip">Selected Slot</span> <span id="macro-count" style="color:#666; font-weight:normal"></span></h3>
-    <div class="macro-help">Configure the selected slot in focused mode, or all slots in list mode. Label is deck text; Text to send is the prompt injected when pressed. Each slot can define Icon, Target app, and per-slot colors. <span id="pi-diag" style="color:#8aa3d9"></span></div>
+    <div class="setting-row">
+      <label>Target app <span class="scope-chip inline">Selected slot</span></label>
+      <select id="selected-target-app">
+        <option value="">Use default (Claude)</option>
+        <option value="claude">Claude (CLD)</option>
+        <option value="codex">Codex (CDX)</option>
+        <option value="chatgpt">ChatGPT (CGP)</option>
+        <option value="cursor">Cursor (CSR)</option>
+        <option value="windsurf">Windsurf (WDF)</option>
+      </select>
+    </div>
+    <div class="setting-hint" id="selected-target-hint">Applies to selected slot only.</div>
+    <div class="macro-help">Configure the selected slot in focused mode, or all slots in list mode. Label is deck text; Prompt to send is injected when pressed. Each slot can define Icon, Target app, and per-slot colors. <span id="pi-diag" style="color:#8aa3d9"></span></div>
     <div id="macro-list" class="macro-list"></div>
     <div class="btn-row">
       <button class="primary" id="btn-save">Apply now</button>
@@ -501,8 +517,28 @@
     <div id="status" class="status"></div>
   </div>
 
+  <hr />
+
+  <div class="section">
+    <h3>Diagnostics <span class="scope-chip">Global</span></h3>
+    <div id="pi-meta" class="pi-meta">
+      <span id="conn-dot" class="conn-dot disconnected"></span>
+      <span id="conn-status">Connecting...</span>
+      <span id="pi-build" class="pi-build">PI build: unknown</span>
+    </div>
+    <details class="debug-panel" id="debug-panel">
+      <summary>Debug tools</summary>
+      <div class="btn-row" style="margin-top:6px">
+        <button id="btn-debug-probe">Test selected key render</button>
+        <button id="btn-debug-dump">Get debug log</button>
+        <button id="btn-debug-copy">Copy debug log</button>
+      </div>
+      <div id="debug-log" class="debug-log">No debug data yet.</div>
+    </details>
+  </div>
+
   <script>
-    const PI_BUILD_ID = "2026-03-08.0845";
+    const PI_BUILD_ID = "2026-03-08.1802";
     const REQUIRED_PI_PROTOCOL_VERSION = 2;
 
     // Native Stream Deck PI websocket bridge. This avoids runtime coupling to
@@ -669,6 +705,20 @@
     let awaitingPostAckSnapshot = false;
     let configAckTimer = null;
     document.getElementById("pi-build").textContent = "PI build: " + PI_BUILD_ID;
+    function setConnectionStatus(connected) {
+      var dotEl = document.getElementById("conn-dot");
+      var statusEl = document.getElementById("conn-status");
+      if (!dotEl || !statusEl) return;
+      dotEl.classList.remove("connected", "disconnected");
+      if (connected) {
+        dotEl.classList.add("connected");
+        statusEl.textContent = "Connected to bridge";
+      } else {
+        dotEl.classList.add("disconnected");
+        statusEl.textContent = "Connecting...";
+      }
+    }
+    setConnectionStatus(false);
     function setCompatWarning(message) {
       var el = document.getElementById("compat-warning");
       if (!message) {
@@ -1012,9 +1062,7 @@
         pendingApplyRequestId = "";
         setSaveEnabled(false);
         if (isApplySync) showStatus("Applied", "saved");
-        var connEl = document.getElementById("conn-status");
-        connEl.textContent = "Connected to bridge";
-        connEl.className = "conn-status connected";
+        setConnectionStatus(true);
         syncScopeButton();
         syncSelectedTargetControl();
         renderDefaultColors();
@@ -1190,6 +1238,7 @@
             '<div class="field-group">' +
               "<label>Label</label>" +
               '<input type="text" data-field="label" data-index="' + i + '" value="' + esc(macro.label) + '" placeholder="Button label" maxlength="20" />' +
+              '<div class="helper">Decky draws this label inside the icon. Stream Deck title text is not used.</div>' +
             "</div>" +
             '<div class="field-group">' +
               "<label>Type</label>" +
@@ -1232,8 +1281,8 @@
                   : "") +
               "</div>"
             : (macroType === "macro"
-              ? "<label>Text to send</label>" +
-                '<textarea data-field="text" data-index="' + i + '" placeholder="Text injected into Claude">' + esc(macro.text) + "</textarea>"
+              ? "<label>Prompt to send</label>" +
+                '<textarea data-field="text" data-index="' + i + '" placeholder="Prompt injected into target app">' + esc(macro.text) + "</textarea>"
               : '<div class="field-row"><div class="field-group"><label>Action</label><div class="helper">Uses built-in action behavior for this slot type.</div></div></div>')) +
           '<div class="macro-colors-toggle" data-colorindex="' + i + '">Per-macro colors \u25B6</div>' +
           '<div class="btn-row" style="margin-top:4px"><button data-reset-macro-colors="' + i + '">Reset this macro colors</button></div>';

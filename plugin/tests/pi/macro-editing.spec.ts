@@ -12,6 +12,14 @@ async function clickColor(page: import("@playwright/test").Page, root: string, r
 }
 
 test.describe("PI macro editing", () => {
+  test("uses Prompt wording and shows label/title guidance", async ({ piHarness }) => {
+    const { page } = piHarness;
+
+    await expect(page.locator('#macro-list label:has-text("Prompt to send")')).toHaveCount(1);
+    await expect(page.locator('#macro-list label:has-text("Text to send")')).toHaveCount(0);
+    await expect(page.locator('#macro-list .helper:has-text("Stream Deck title text is not used")')).toHaveCount(1);
+  });
+
   test("label, text, and icon edits are persisted", async ({ piHarness }) => {
     const { page } = piHarness;
 

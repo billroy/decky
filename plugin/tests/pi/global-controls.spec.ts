@@ -1,6 +1,30 @@
 import { test, expect } from "./fixtures/pi-fixture";
 
 test.describe("PI global controls", () => {
+  test("scope placement keeps target app in Selected Slot and target badge in Global", async ({ piHarness }) => {
+    const { page } = piHarness;
+
+    const globalSection = page.locator(".section").filter({
+      has: page.locator("h3").filter({ hasText: "Global Behavior" }),
+    });
+    const selectedSection = page.locator(".section").filter({
+      has: page.locator("h3").filter({ hasText: "Selected Slot Settings" }),
+    });
+
+    await expect(globalSection.locator("#selected-target-app")).toHaveCount(0);
+    await expect(globalSection.locator("#show-target-badge")).toHaveCount(1);
+    await expect(selectedSection.locator("#selected-target-app")).toHaveCount(1);
+  });
+
+  test("diagnostics are compact and collapsed by default", async ({ piHarness }) => {
+    const { page } = piHarness;
+
+    await expect(page.locator("#conn-status")).toContainText("Connected to bridge");
+    await expect(page.locator("#conn-dot.connected")).toHaveCount(1);
+    await expect(page.locator("#pi-build")).toContainText("PI build:");
+    await expect(page.locator("#debug-log")).not.toBeVisible();
+  });
+
   test("theme apply keep mode sends theme + mode and updates selection", async ({ piHarness }) => {
     const { page } = piHarness;
 
