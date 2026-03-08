@@ -81,7 +81,8 @@ export class BridgeClient {
   private loadAuthToken(): string {
     const envToken = process.env.DECKY_AUTH_TOKEN;
     if (typeof envToken === "string" && envToken.trim().length >= 16) return envToken.trim();
-    const tokenPath = join(homedir(), ".decky", "bridge-token");
+    const deckyHome = process.env.DECKY_HOME || join(homedir(), ".decky");
+    const tokenPath = join(deckyHome, "bridge-token");
     if (!existsSync(tokenPath)) return "";
     return readFileSync(tokenPath, "utf-8").trim();
   }
