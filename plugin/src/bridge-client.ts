@@ -132,6 +132,19 @@ export class BridgeClient {
     });
 
     this.socket.on("updateConfigAck", (payload: unknown) => {
+      // Some plugin flows depend on config freshness immediately after Apply.
+      // Treat ack.config as authoritative if present so UI/key render stays in sync
+      // even if a separate configUpdate event is delayed or dropped.
+      if (payload && typeof payload === "object") {
+        const maybeConfig = (payload as Record<string, unknown>).config;
+        if (maybeConfig && typeof maybeConfig === "object") {
+          const config = maybeConfig as DeckyConfig;
+          this.lastConfig = config;
+          for (const listener of this.configListeners) {
+            try { listener(config); } catch { /* listener errors must not crash the client */ }
+          }
+        }
+      }
       for (const listener of this.bridgeEventListeners) {
         try { listener("updateConfigAck", payload); } catch { /* listener errors must not crash the client */ }
       }

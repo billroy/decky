@@ -188,6 +188,9 @@ describe("BridgeClient", () => {
     client.connect();
     await waitForConnection(client, (s) => s === "connected");
 
+    const onConfig = vi.fn();
+    client.onConfigChange(onConfig);
+
     const eventPromise = waitForBridgeEvent(client, "updateConfigAck");
     client.sendAction("updateConfig", {
       requestId: "bridge-client-ack",
@@ -196,6 +199,8 @@ describe("BridgeClient", () => {
 
     const payload = await eventPromise as { requestId?: string };
     expect(payload.requestId).toBe("bridge-client-ack");
+    expect(client.getLastConfig()?.macros[0]?.label).toBe("A");
+    expect(onConfig).toHaveBeenCalled();
     client.disconnect();
   });
 });
