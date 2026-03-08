@@ -98,14 +98,24 @@ export class SlotAction extends SingletonAction {
   private activePiActionId?: string;
   private widgetInterval?: ReturnType<typeof setInterval>;
 
+  private getEffectiveRank(actionId: string): number {
+    const assignedRank = getSlotRank(actionId);
+    if (assignedRank >= 0) return assignedRank;
+    const fallback = [...this.actions]
+      .map((a) => a.id)
+      .sort((a, b) => a.localeCompare(b));
+    return fallback.indexOf(actionId);
+  }
+
   override async onWillAppear(ev: WillAppearEvent): Promise<void> {
     // Compute slot index from physical position on the deck
     let slotIndex: number | undefined;
     if (!ev.payload.isInMultiAction) {
       const { column, row } = ev.payload.coordinates;
       const columns = ev.action.device.size.columns;
-      slotIndex = row * columns + column;
-      slotAssignments.set(ev.action.id, slotIndex);
+      const physicalIndex = row * columns + column;
+      slotIndex = physicalIndex;
+      slotAssignments.set(ev.action.id, physicalIndex);
       pushDebug("willAppear", ev.action.id, getSlotRank(ev.action.id), { slotIndex });
     }
 
@@ -113,7 +123,7 @@ export class SlotAction extends SingletonAction {
 
     // Render this specific action immediately (it may not be in this.actions yet)
     if (slotIndex !== undefined) {
-      const rank = getSlotRank(ev.action.id);
+      const rank = this.getEffectiveRank(ev.action.id);
       const connStatus = bridgeRef.getConnectionStatus();
       const snapshot = bridgeRef.getLastSnapshot();
       const state = connStatus === "connected" ? (snapshot?.state ?? "idle") : "stopped";
@@ -189,7 +199,7 @@ export class SlotAction extends SingletonAction {
   override async onKeyDown(ev: KeyDownEvent): Promise<void> {
     if (!bridgeRef) return;
 
-    const rank = getSlotRank(ev.action.id);
+    const rank = this.getEffectiveRank(ev.action.id);
     if (rank === -1) return;
 
     const snapshot = bridgeRef.getLastSnapshot();
@@ -224,7 +234,7 @@ export class SlotAction extends SingletonAction {
     if (!cfg) return;
     const macros = cfg?.macros ?? [];
     const selectedMacroIndex =
-      actionId && slotAssignments.has(actionId) ? getSlotRank(actionId) : undefined;
+      actionId ? this.getEffectiveRank(actionId) : undefined;
     const snapshot: Record<string, unknown> = {
       type: "configSnapshot",
       piProtocolVersion: PI_PROTOCOL_VERSION,
@@ -391,13 +401,14 @@ export class SlotAction extends SingletonAction {
 
     for (const instance of this.actions) {
       const rank = getSlotRank(instance.id);
-      if (rank === -1) continue;
+      const effectiveRank = rank >= 0 ? rank : this.getEffectiveRank(instance.id);
+      if (effectiveRank === -1) continue;
 
-      const config = getSlotConfig(state, rank, toolName, macros);
+      const config = getSlotConfig(state, effectiveRank, toolName, macros);
       const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
 
       try {
-        pushDebug("renderAll:setImage", instance.id, rank, {
+        pushDebug("renderAll:setImage", instance.id, effectiveRank, {
           state,
           title: config.title,
           action: config.action ?? null,
@@ -406,7 +417,7 @@ export class SlotAction extends SingletonAction {
         await instance.setImage(imageData);
         await instance.setTitle("");
       } catch {
-        pushDebug("renderAll:setImage:err", instance.id, rank, { state });
+        pushDebug("renderAll:setImage:err", instance.id, effectiveRank, { state });
         // SDK may throw if the action disappeared mid-render; safe to ignore.
       }
     }
