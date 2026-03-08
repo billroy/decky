@@ -606,6 +606,7 @@
     let savedTheme = "light";
     let pendingThemeChange = false;
     let savedThemeSeed = 0;
+    let savedShowTargetBadge = false;
     let pendingThemeSeed = null;
     let awaitingConfigAck = false;
     let configAckTimer = null;
@@ -624,8 +625,11 @@
         }),
         theme: document.getElementById("theme").value,
         approvalTimeout: parseInt(document.getElementById("timeout").value) || 30,
-        showTargetBadge: document.getElementById("show-target-badge").checked,
       };
+      var showTargetBadge = document.getElementById("show-target-badge").checked;
+      if (showTargetBadge !== savedShowTargetBadge) {
+        payload.showTargetBadge = showTargetBadge;
+      }
       if (forceIncludeColorsField || defaultColors.bg || defaultColors.text || defaultColors.icon) {
         payload.colors = defaultColors;
       }
@@ -796,6 +800,7 @@
         pendingThemeSeed = null;
         if (msg.approvalTimeout !== undefined) settings.approvalTimeout = msg.approvalTimeout;
         if (msg.showTargetBadge !== undefined) settings.showTargetBadge = !!msg.showTargetBadge;
+        savedShowTargetBadge = settings.showTargetBadge;
         if (msg.colors) {
           defaultColors.bg = msg.colors.bg || "";
           defaultColors.text = msg.colors.text || "";
