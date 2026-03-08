@@ -335,6 +335,9 @@
     .status.error {
       color: #fca5a5;
     }
+    .hidden {
+      display: none;
+    }
     .theme-apply-panel {
       margin-top: 8px;
       padding: 8px;
@@ -389,6 +392,7 @@
   <!-- Connection status -->
   <div id="conn-status" class="conn-status" style="color:#888;background:rgba(255,255,255,0.05)">Connecting...</div>
   <div id="pi-build" class="setting-hint" style="margin:0 0 8px 0">PI build: unknown</div>
+  <div id="compat-warning" class="status error hidden" style="margin:0 0 8px 0"></div>
 
   <!-- Settings -->
   <div class="section">
@@ -483,7 +487,8 @@
   </div>
 
   <script>
-    const PI_BUILD_ID = "2026-03-07.1912";
+    const PI_BUILD_ID = "2026-03-08.0845";
+    const REQUIRED_PI_PROTOCOL_VERSION = 2;
 
     // Native Stream Deck PI websocket bridge. This avoids runtime coupling to
     // sdpi-components.js, which can fail to initialize on some Stream Deck builds.
@@ -612,6 +617,16 @@
     let awaitingPostAckSnapshot = false;
     let configAckTimer = null;
     document.getElementById("pi-build").textContent = "PI build: " + PI_BUILD_ID;
+    function setCompatWarning(message) {
+      var el = document.getElementById("compat-warning");
+      if (!message) {
+        el.textContent = "";
+        el.classList.add("hidden");
+        return;
+      }
+      el.textContent = message;
+      el.classList.remove("hidden");
+    }
 
     function buildPayload(requestId) {
       var payload = {
@@ -813,6 +828,18 @@
         return;
       }
       if (msg && msg.type === "configSnapshot") {
+        const protocol = typeof msg.piProtocolVersion === "number" ? msg.piProtocolVersion : null;
+        if (protocol !== REQUIRED_PI_PROTOCOL_VERSION) {
+          setCompatWarning(
+            "Plugin rebuild required: PI expects protocol v" +
+            REQUIRED_PI_PROTOCOL_VERSION +
+            ", plugin reports " +
+            (protocol === null ? "none" : "v" + protocol) +
+            ". Run `cd plugin && npm run build`, then restart Stream Deck."
+          );
+        } else {
+          setCompatWarning("");
+        }
         var isApplySync = awaitingConfigAck || awaitingPostAckSnapshot;
         // Deterministic sync model:
         // - accept first snapshot at PI load

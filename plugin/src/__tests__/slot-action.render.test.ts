@@ -165,6 +165,75 @@ describe("SlotAction render path", () => {
     expect(svgB).not.toEqual(svgA);
   });
 
+  it("re-renders random theme even when page/macro overrides exist", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge({
+      ...baseConfig(),
+      theme: "random",
+      themeSeed: 200,
+      colors: { bg: "#000000", text: "#22c55e", icon: "#22c55e" },
+      macros: [
+        {
+          label: "Yes",
+          text: "yes",
+          targetApp: "codex",
+          colors: { bg: "#000000", text: "#22c55e", icon: "#22c55e" },
+        },
+      ],
+    });
+    setSlotClient(bridge as any);
+
+    const action = makeKeyAction();
+    const slot = new SlotAction();
+    (slot as any).actions = [action];
+
+    await slot.onWillAppear({
+      action,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+
+    const svgA = decodeImageData(action.setImage.mock.calls.at(-1)[0]);
+    bridge.triggerConfig({ ...bridge.config, themeSeed: 201 });
+    await new Promise((r) => setTimeout(r, 0));
+    const svgB = decodeImageData(action.setImage.mock.calls.at(-1)[0]);
+
+    expect(svgB).not.toEqual(svgA);
+  });
+
+  it("re-renders badge when selected macro target changes to codex", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge({
+      ...baseConfig(),
+      macros: [{ label: "Yes", text: "Yes", targetApp: "claude" }],
+      showTargetBadge: true,
+    });
+    setSlotClient(bridge as any);
+
+    const action = makeKeyAction();
+    const slot = new SlotAction();
+    (slot as any).actions = [action];
+
+    await slot.onWillAppear({
+      action,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+    const beforeSvg = decodeImageData(action.setImage.mock.calls.at(-1)[0]);
+    expect(beforeSvg).not.toContain("CDX");
+
+    bridge.triggerConfig({
+      ...bridge.config,
+      macros: [{ label: "Yes", text: "Yes", targetApp: "codex" }],
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    const afterSvg = decodeImageData(action.setImage.mock.calls.at(-1)[0]);
+    expect(afterSvg).toContain("CDX");
+  });
+
   it("re-renders rainbow theme when seed changes", async () => {
     const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
     resetSlots();

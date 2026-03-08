@@ -26,6 +26,7 @@ import {
   setTargetBadgeOptions,
   type MacroInput,
 } from "../layouts.js";
+import { PI_PROTOCOL_VERSION } from "../protocol.js";
 
 let bridgeRef: BridgeClient | null = null;
 
@@ -215,6 +216,7 @@ export class SlotAction extends SingletonAction {
       actionId && slotAssignments.has(actionId) ? getSlotRank(actionId) : undefined;
     const snapshot: Record<string, unknown> = {
       type: "configSnapshot",
+      piProtocolVersion: PI_PROTOCOL_VERSION,
       macros: macros.map((m) => {
         const entry: Record<string, unknown> = {
           label: m.label,

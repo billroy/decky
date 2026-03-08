@@ -83,6 +83,8 @@ function solidRenderer(r, g, b) {
 
 // Ensure action icon directories exist
 for (const dir of [
+  "com.decky.controller.sdPlugin/imgs/plugin",
+  "com.decky.controller.sdPlugin/imgs/actions/status",
   "com.decky.controller.sdPlugin/imgs/actions/approve",
   "com.decky.controller.sdPlugin/imgs/actions/deny",
   "com.decky.controller.sdPlugin/imgs/actions/cancel",

@@ -8,6 +8,7 @@ export interface TestMacro {
 
 export interface ConfigSnapshot {
   type: "configSnapshot";
+  piProtocolVersion: number;
   macros: TestMacro[];
   theme: string;
   themeSeed: number;
@@ -20,6 +21,7 @@ export interface ConfigSnapshot {
 
 export const DEFAULT_TEST_CONFIG: ConfigSnapshot = {
   type: "configSnapshot",
+  piProtocolVersion: 2,
   macros: [
     { label: "Yes", text: "/yes", icon: "checkmark", targetApp: "claude" },
     { label: "No", text: "/no", icon: "x", targetApp: "" },
