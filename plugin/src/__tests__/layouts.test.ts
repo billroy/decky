@@ -13,7 +13,7 @@ describe("layouts", () => {
   afterEach(() => {
     setTheme("light");
     setThemeSeed(0);
-    setTargetBadgeOptions({ showTargetBadge: false });
+    setTargetBadgeOptions({ showTargetBadge: false, defaultTargetApp: "claude" });
   });
   describe("getLayoutStates", () => {
     it("returns all five states", () => {
@@ -283,6 +283,27 @@ describe("layouts", () => {
       const explicitDefault: MacroInput[] = [{ label: "B", text: "b", targetApp: "claude" }];
       expect(getSlotConfig("idle", 0, null, implicitDefault).svg).not.toContain("CLD");
       expect(getSlotConfig("idle", 0, null, explicitDefault).svg).not.toContain("CLD");
+    });
+
+    it("uses claude target app for action payload when macro target is unspecified", () => {
+      setTargetBadgeOptions({ showTargetBadge: false, defaultTargetApp: "codex" });
+      const macros: MacroInput[] = [{ label: "Ship", text: "ship it" }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.data).toEqual({ text: "ship it", targetApp: "claude" });
+    });
+
+    it("does not hide codex badge even if configured defaultTargetApp is codex", () => {
+      setTargetBadgeOptions({ showTargetBadge: true, defaultTargetApp: "codex" });
+      const macros: MacroInput[] = [{ label: "Ship", text: "ship it", targetApp: "codex" }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.svg).toContain("CDX");
+    });
+
+    it("shows badge when explicit target is non-claude", () => {
+      setTargetBadgeOptions({ showTargetBadge: true, defaultTargetApp: "claude" });
+      const macros: MacroInput[] = [{ label: "Ship", text: "ship it", targetApp: "codex" }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.svg).toContain("CDX");
     });
   });
 

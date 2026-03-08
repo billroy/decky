@@ -326,6 +326,7 @@ export class SlotAction extends SingletonAction {
     setDefaultColors(cfg?.colors ?? {});
     setTargetBadgeOptions({
       showTargetBadge: cfg?.showTargetBadge ?? false,
+      defaultTargetApp: cfg?.defaultTargetApp ?? "claude",
     });
     if (!cfg?.macros?.length) return undefined;
     return cfg.macros.map((m) => ({
