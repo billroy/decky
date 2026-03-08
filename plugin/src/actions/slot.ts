@@ -97,14 +97,22 @@ export class SlotAction extends SingletonAction {
   private unsubBridgeEvent?: () => void;
   private activePiActionId?: string;
   private widgetInterval?: ReturnType<typeof setInterval>;
+  private readonly activeActions = new Map<string, WillAppearEvent["action"]>();
+
+  private getRenderableActions(): Map<string, WillAppearEvent["action"]> {
+    const all = new Map<string, WillAppearEvent["action"]>(this.activeActions);
+    for (const action of this.actions as Array<WillAppearEvent["action"]>) {
+      if (!all.has(action.id)) all.set(action.id, action);
+    }
+    return all;
+  }
 
   private getRankOrder(): string[] {
     const assigned = [...slotAssignments.entries()]
       .sort((a, b) => a[1] - b[1])
       .map(([id]) => id);
     const assignedSet = new Set(assigned);
-    const unassigned = [...this.actions]
-      .map((a) => a.id)
+    const unassigned = [...this.getRenderableActions().keys()]
       .filter((id) => !assignedSet.has(id))
       .sort((a, b) => a.localeCompare(b));
     return [...assigned, ...unassigned];
@@ -115,6 +123,8 @@ export class SlotAction extends SingletonAction {
   }
 
   override async onWillAppear(ev: WillAppearEvent): Promise<void> {
+    this.activeActions.set(ev.action.id, ev.action);
+
     // Compute slot index from physical position on the deck
     let slotIndex: number | undefined;
     if (!ev.payload.isInMultiAction) {
@@ -184,10 +194,11 @@ export class SlotAction extends SingletonAction {
 
   override async onWillDisappear(ev: WillDisappearEvent): Promise<void> {
     pushDebug("willDisappear", ev.action.id, getSlotRank(ev.action.id), {});
+    this.activeActions.delete(ev.action.id);
     slotAssignments.delete(ev.action.id);
 
     // If no more instances, clean up listeners
-    if (slotAssignments.size === 0) {
+    if (this.activeActions.size === 0) {
       this.unsubConnection?.();
       this.unsubState?.();
       this.unsubConfig?.();
@@ -406,7 +417,7 @@ export class SlotAction extends SingletonAction {
     const toolName = snapshot?.tool;
     const macros = this.getMacros();
 
-    for (const instance of this.actions) {
+    for (const instance of this.getRenderableActions().values()) {
       const rank = getSlotRank(instance.id);
       const effectiveRank = rank >= 0 ? rank : this.getEffectiveRank(instance.id);
       if (effectiveRank === -1) continue;

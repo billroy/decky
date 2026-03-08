@@ -98,6 +98,12 @@ function decodeImageData(imageData: string): string {
   return decodeURIComponent(imageData.startsWith(prefix) ? imageData.slice(prefix.length) : imageData);
 }
 
+function latestSvg(action: ReturnType<typeof makeKeyAction>): string {
+  const calls = action.setImage.mock.calls;
+  expect(calls.length).toBeGreaterThan(0);
+  return decodeImageData(calls[calls.length - 1][0]);
+}
+
 function baseConfig(): any {
   return {
     macros: [{ label: "Yes", text: "Yes", targetApp: "codex" }],
@@ -130,13 +136,13 @@ describe("SlotAction render path", () => {
       payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
     } as any);
 
-    const beforeSvg = decodeImageData(action.setImage.mock.calls.at(-1)[0]);
+    const beforeSvg = latestSvg(action);
     expect(beforeSvg).not.toContain("CDX");
 
     bridge.triggerConfig({ ...bridge.config, showTargetBadge: true });
     await new Promise((r) => setTimeout(r, 0));
 
-    const afterSvg = decodeImageData(action.setImage.mock.calls.at(-1)[0]);
+    const afterSvg = latestSvg(action);
     expect(afterSvg).toContain("CDX");
   });
 
@@ -156,12 +162,12 @@ describe("SlotAction render path", () => {
       payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
     } as any);
 
-    const svgA = decodeImageData(action.setImage.mock.calls.at(-1)[0]);
+    const svgA = latestSvg(action);
 
     bridge.triggerConfig({ ...bridge.config, themeSeed: 11 });
     await new Promise((r) => setTimeout(r, 0));
 
-    const svgB = decodeImageData(action.setImage.mock.calls.at(-1)[0]);
+    const svgB = latestSvg(action);
     expect(svgB).not.toEqual(svgA);
   });
 
@@ -194,10 +200,10 @@ describe("SlotAction render path", () => {
       payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
     } as any);
 
-    const svgA = decodeImageData(action.setImage.mock.calls.at(-1)[0]);
+    const svgA = latestSvg(action);
     bridge.triggerConfig({ ...bridge.config, themeSeed: 201 });
     await new Promise((r) => setTimeout(r, 0));
-    const svgB = decodeImageData(action.setImage.mock.calls.at(-1)[0]);
+    const svgB = latestSvg(action);
 
     expect(svgB).not.toEqual(svgA);
   });
@@ -221,7 +227,7 @@ describe("SlotAction render path", () => {
       action,
       payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
     } as any);
-    const beforeSvg = decodeImageData(action.setImage.mock.calls.at(-1)[0]);
+    const beforeSvg = latestSvg(action);
     expect(beforeSvg).not.toContain("CDX");
 
     bridge.triggerConfig({
@@ -230,7 +236,7 @@ describe("SlotAction render path", () => {
     });
     await new Promise((r) => setTimeout(r, 0));
 
-    const afterSvg = decodeImageData(action.setImage.mock.calls.at(-1)[0]);
+    const afterSvg = latestSvg(action);
     expect(afterSvg).toContain("CDX");
   });
 
@@ -269,20 +275,12 @@ describe("SlotAction render path", () => {
       payload: { isInMultiAction: false, coordinates: { row: 0, column: 2 } },
     } as any);
 
-    const before = [
-      decodeImageData(action.setImage.mock.calls.at(-1)[0]),
-      decodeImageData(action2.setImage.mock.calls.at(-1)[0]),
-      decodeImageData(action3.setImage.mock.calls.at(-1)[0]),
-    ];
+    const before = [latestSvg(action), latestSvg(action2), latestSvg(action3)];
 
     bridge.triggerConfig({ ...bridge.config, themeSeed: 101 });
     await new Promise((r) => setTimeout(r, 0));
 
-    const after = [
-      decodeImageData(action.setImage.mock.calls.at(-1)[0]),
-      decodeImageData(action2.setImage.mock.calls.at(-1)[0]),
-      decodeImageData(action3.setImage.mock.calls.at(-1)[0]),
-    ];
+    const after = [latestSvg(action), latestSvg(action2), latestSvg(action3)];
     expect(after.some((svg, i) => svg !== before[i])).toBe(true);
   });
 
@@ -323,9 +321,9 @@ describe("SlotAction render path", () => {
     expect(action2.setImage.mock.calls.length).toBeGreaterThan(0);
     expect(action3.setImage.mock.calls.length).toBeGreaterThan(0);
 
-    const svg1 = decodeImageData(action.setImage.mock.calls.at(-1)[0]);
-    const svg2 = decodeImageData(action2.setImage.mock.calls.at(-1)[0]);
-    const svg3 = decodeImageData(action3.setImage.mock.calls.at(-1)[0]);
+    const svg1 = latestSvg(action);
+    const svg2 = latestSvg(action2);
+    const svg3 = latestSvg(action3);
 
     expect(svg1).toContain("One");
     expect(svg2).toContain("Two");
@@ -333,5 +331,38 @@ describe("SlotAction render path", () => {
     expect(svg1).toContain('fill="#ef4444"');
     expect(svg2).toContain('fill="#ef4444"');
     expect(svg3).toContain('fill="#ef4444"');
+  });
+
+  it("converges all active keys after rapid color updates", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge({
+      ...baseConfig(),
+      macros: Array.from({ length: 6 }, (_v, i) => ({ label: `M${i + 1}`, text: `m${i + 1}` })),
+      colors: { bg: "#ffffff", text: "#1e293b", icon: "#64748b" },
+    });
+    setSlotClient(bridge as any);
+
+    const actions = Array.from({ length: 6 }, (_v, i) => makeKeyAction(`action-${i + 1}`));
+    const slot = new SlotAction();
+    (slot as any).actions = actions;
+
+    for (const [i, action] of actions.entries()) {
+      await slot.onWillAppear({
+        action,
+        payload: { isInMultiAction: false, coordinates: { row: Math.floor(i / 5), column: i % 5 } },
+      } as any);
+    }
+
+    const sequence = ["#ef4444", "#22c55e", "#1e3a5f", "#f59e0b", "#8b5cf6"];
+    for (const color of sequence) {
+      bridge.triggerConfig({ ...bridge.config, colors: { bg: color, text: "#ffffff", icon: "#ffffff" } });
+    }
+    await new Promise((r) => setTimeout(r, 0));
+
+    for (const action of actions) {
+      expect(latestSvg(action)).toContain(`fill="${sequence[sequence.length - 1]}"`);
+    }
   });
 });
