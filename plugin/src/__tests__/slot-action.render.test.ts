@@ -290,7 +290,7 @@ describe("SlotAction render path", () => {
     expect(after.some((svg, i) => svg !== before[i])).toBe(true);
   });
 
-  it("applies page color updates to all keys even when only one slot assignment is known", async () => {
+  it("applies page color updates to assigned keys and defers unassigned keys", async () => {
     const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
     resetSlots();
 
@@ -324,19 +324,12 @@ describe("SlotAction render path", () => {
     await new Promise((r) => setTimeout(r, 0));
 
     expect(action.setImage.mock.calls.length).toBeGreaterThan(1);
-    expect(action2.setImage.mock.calls.length).toBeGreaterThan(0);
-    expect(action3.setImage.mock.calls.length).toBeGreaterThan(0);
+    expect(action2.setImage.mock.calls.length).toBe(0);
+    expect(action3.setImage.mock.calls.length).toBe(0);
 
     const svg1 = latestSvg(action);
-    const svg2 = latestSvg(action2);
-    const svg3 = latestSvg(action3);
-
     expect(svg1).toContain("One");
-    expect(svg2).toContain("Two");
-    expect(svg3).toContain("Three");
     expect(svg1).toContain('fill="#ef4444"');
-    expect(svg2).toContain('fill="#ef4444"');
-    expect(svg3).toContain('fill="#ef4444"');
   });
 
   it("converges all active keys after rapid color updates", async () => {
@@ -419,5 +412,66 @@ describe("SlotAction render path", () => {
     expect(latestSvg(action1)).toContain('fill="#ef4444"');
     expect(latestSvg(action2)).toContain('fill="#ef4444"');
     expect(latestSvg(action3)).toContain('fill="#ef4444"');
+  });
+
+  it("ignores keyDown on unassigned actions", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge({
+      ...baseConfig(),
+      macros: [
+        { label: "One", text: "one" },
+        { label: "Two", text: "two" },
+      ],
+    });
+    setSlotClient(bridge as any);
+
+    const assigned = makeKeyAction("assigned");
+    const unassigned = makeKeyAction("unassigned");
+    const slot = new SlotAction();
+    (slot as any).actions = [assigned, unassigned];
+
+    await slot.onWillAppear({
+      action: assigned,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+
+    await slot.onKeyDown({ action: unassigned } as any);
+    expect(bridge.sendAction).not.toHaveBeenCalled();
+  });
+
+  it("omits selectedMacroIndex in PI snapshot for unassigned actions", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    const sd = (await import("@elgato/streamdeck")).default as any;
+    resetSlots();
+    sd.ui.sendToPropertyInspector.mockClear();
+
+    const bridge = new FakeBridge({
+      ...baseConfig(),
+      macros: [
+        { label: "One", text: "one" },
+        { label: "Two", text: "two" },
+      ],
+    });
+    setSlotClient(bridge as any);
+
+    const assigned = makeKeyAction("assigned");
+    const unassigned = makeKeyAction("unassigned");
+    const slot = new SlotAction();
+    (slot as any).actions = [assigned, unassigned];
+
+    await slot.onWillAppear({
+      action: assigned,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+
+    await slot.onPropertyInspectorDidAppear({ action: { id: unassigned.id } } as any);
+
+    const calls = sd.ui.sendToPropertyInspector.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const payload = calls[calls.length - 1][0] as Record<string, unknown>;
+    expect(payload.type).toBe("configSnapshot");
+    expect(payload.selectedMacroIndex).toBeUndefined();
   });
 });
