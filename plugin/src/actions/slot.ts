@@ -98,13 +98,20 @@ export class SlotAction extends SingletonAction {
   private activePiActionId?: string;
   private widgetInterval?: ReturnType<typeof setInterval>;
 
-  private getEffectiveRank(actionId: string): number {
-    const assignedRank = getSlotRank(actionId);
-    if (assignedRank >= 0) return assignedRank;
-    const fallback = [...this.actions]
+  private getRankOrder(): string[] {
+    const assigned = [...slotAssignments.entries()]
+      .sort((a, b) => a[1] - b[1])
+      .map(([id]) => id);
+    const assignedSet = new Set(assigned);
+    const unassigned = [...this.actions]
       .map((a) => a.id)
+      .filter((id) => !assignedSet.has(id))
       .sort((a, b) => a.localeCompare(b));
-    return fallback.indexOf(actionId);
+    return [...assigned, ...unassigned];
+  }
+
+  private getEffectiveRank(actionId: string): number {
+    return this.getRankOrder().indexOf(actionId);
   }
 
   override async onWillAppear(ev: WillAppearEvent): Promise<void> {
