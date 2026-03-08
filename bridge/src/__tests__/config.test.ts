@@ -155,6 +155,27 @@ describe("config endpoints", () => {
     expect(data.config.macros[0].widget.intervalMinutes).toBe(5);
   });
 
+  it("PUT /config persists slot utility macro types", async () => {
+    const res = await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
+      body: JSON.stringify({
+        macros: [
+          {
+            label: "Approve Once",
+            text: "",
+            type: "approveOnceInClaude",
+            icon: "checkmark",
+          },
+        ],
+      }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.config.macros[0].type).toBe("approveOnceInClaude");
+    expect(data.config.macros[0].label).toBe("Approve Once");
+  });
+
   it("PUT /config persists macro submit flag", async () => {
     const res = await fetch(`${baseUrl}/config`, {
       method: "PUT",

@@ -44,7 +44,16 @@ export interface MacroDef {
   colors?: ColorOverrides;
   targetApp?: TargetApp;
   submit?: boolean;
-  type?: "macro" | "widget";
+  type?:
+    | "macro"
+    | "widget"
+    | "approve"
+    | "deny"
+    | "cancel"
+    | "restart"
+    | "openConfig"
+    | "approveOnceInClaude"
+    | "startDictationForClaude";
   widget?: WidgetDef;
 }
 
@@ -157,6 +166,17 @@ function normalizeMacro(value: unknown, fallbackTarget: TargetApp): MacroDef | n
   if (typeof macro.submit === "boolean") {
     normalized.submit = macro.submit;
   }
+  if (
+    macro.type === "approve" ||
+    macro.type === "deny" ||
+    macro.type === "cancel" ||
+    macro.type === "restart" ||
+    macro.type === "openConfig" ||
+    macro.type === "approveOnceInClaude" ||
+    macro.type === "startDictationForClaude"
+  ) {
+    normalized.type = macro.type;
+  }
   if (macro.type === "widget") {
     normalized.type = "widget";
     const widget = normalizeWidget(macro.widget);
@@ -211,11 +231,23 @@ function parseMacroStrict(value: unknown, fallbackTarget: TargetApp): MacroDef {
     out.submit = macro.submit;
   }
   if (macro.type !== undefined) {
-    if (macro.type !== "macro" && macro.type !== "widget") {
-      throw new ConfigValidationError("Macro type must be 'macro' or 'widget'");
+    if (
+      macro.type !== "macro" &&
+      macro.type !== "widget" &&
+      macro.type !== "approve" &&
+      macro.type !== "deny" &&
+      macro.type !== "cancel" &&
+      macro.type !== "restart" &&
+      macro.type !== "openConfig" &&
+      macro.type !== "approveOnceInClaude" &&
+      macro.type !== "startDictationForClaude"
+    ) {
+      throw new ConfigValidationError(
+        "Macro type must be one of: macro, widget, approve, deny, cancel, restart, openConfig, approveOnceInClaude, startDictationForClaude",
+      );
     }
+    if (macro.type !== "macro") out.type = macro.type;
     if (macro.type === "widget") {
-      out.type = "widget";
       const widget = normalizeWidget(macro.widget);
       if (!widget) throw new ConfigValidationError("Widget macro must include a valid widget definition");
       out.widget = widget;
