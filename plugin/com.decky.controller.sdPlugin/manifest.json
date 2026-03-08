@@ -15,46 +15,6 @@
   "Nodejs": { "Version": "20" },
   "Actions": [
     {
-      "UUID": "com.decky.controller.status",
-      "Name": "Bridge Status",
-      "Icon": "imgs/actions/status/icon",
-      "Controllers": ["Keypad"],
-      "PropertyInspectorPath": "ui/no-config.html",
-      "States": [
-        { "Image": "imgs/actions/status/key", "Title": "Decky" }
-      ]
-    },
-    {
-      "UUID": "com.decky.controller.approve",
-      "Name": "Approve",
-      "Icon": "imgs/actions/approve/icon",
-      "Controllers": ["Keypad"],
-      "PropertyInspectorPath": "ui/no-config.html",
-      "States": [
-        { "Image": "imgs/actions/approve/key", "Title": "Approve" }
-      ]
-    },
-    {
-      "UUID": "com.decky.controller.deny",
-      "Name": "Deny",
-      "Icon": "imgs/actions/deny/icon",
-      "Controllers": ["Keypad"],
-      "PropertyInspectorPath": "ui/no-config.html",
-      "States": [
-        { "Image": "imgs/actions/deny/key", "Title": "Deny" }
-      ]
-    },
-    {
-      "UUID": "com.decky.controller.cancel",
-      "Name": "Cancel",
-      "Icon": "imgs/actions/cancel/icon",
-      "Controllers": ["Keypad"],
-      "PropertyInspectorPath": "ui/no-config.html",
-      "States": [
-        { "Image": "imgs/actions/cancel/key", "Title": "Cancel" }
-      ]
-    },
-    {
       "UUID": "com.decky.controller.slot",
       "Name": "Decky Slot",
       "Tooltip": "Dynamic button that changes based on Claude Code state. Place multiple for full layout.",
@@ -63,28 +23,6 @@
       "PropertyInspectorPath": "ui/property-inspector-v2.html",
       "States": [
         { "Image": "imgs/actions/slot/key", "Title": "Slot" }
-      ]
-    },
-    {
-      "UUID": "com.decky.controller.approveOnceInClaude",
-      "Name": "Approve Once (Claude)",
-      "Tooltip": "Activate Claude and press Return once when awaiting approval.",
-      "Icon": "imgs/actions/approve/icon",
-      "Controllers": ["Keypad"],
-      "PropertyInspectorPath": "ui/no-config.html",
-      "States": [
-        { "Image": "imgs/actions/approve/key", "Title": "Approve Once" }
-      ]
-    },
-    {
-      "UUID": "com.decky.controller.startDictationForClaude",
-      "Name": "Talk to Claude",
-      "Tooltip": "Activate Claude and trigger Start Dictation from the Edit menu.",
-      "Icon": "imgs/actions/slot/icon",
-      "Controllers": ["Keypad"],
-      "PropertyInspectorPath": "ui/no-config.html",
-      "States": [
-        { "Image": "imgs/actions/slot/key", "Title": "Dictation" }
       ]
     }
   ]

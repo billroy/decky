@@ -207,25 +207,16 @@ export function createApp(): DeckyApp {
           socket.emit("error", { error: "Invalid macro payload" });
         }
       } else if (data.action === "approveOnceInClaude") {
-        if (getConfig().enableApproveOnce === false) {
-          socket.emit("error", { error: "approveOnceInClaude is disabled in config" });
-          return;
+        if (sm.getSnapshot().state === "awaiting-approval") {
+          writeGateFile("approve", pendingGateNonce ?? undefined);
+          pendingGateNonce = null;
+          sm.forceState("tool-executing", "approved via StreamDeck (approve once)");
         }
-        if (sm.getSnapshot().state !== "awaiting-approval") {
-          socket.emit("error", { error: "approveOnceInClaude ignored: not awaiting approval" });
-          return;
-        }
-        writeGateFile("approve", pendingGateNonce ?? undefined);
-        pendingGateNonce = null;
-        sm.forceState("tool-executing", "approved via StreamDeck (approve once)");
         approveOnceInClaude().catch((err) => {
           console.error("[io] approveOnceInClaude failed:", err);
+          socket.emit("error", { error: "Failed to activate Claude for approve once" });
         });
       } else if (data.action === "startDictationForClaude") {
-        if (getConfig().enableDictation === false) {
-          socket.emit("error", { error: "startDictationForClaude is disabled in config" });
-          return;
-        }
         startDictationForClaude().catch((err) => {
           console.error("[io] startDictationForClaude failed:", err);
           socket.emit("error", { error: "Failed to start dictation in Claude" });
