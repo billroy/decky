@@ -206,6 +206,10 @@ export function createApp(): DeckyApp {
           socket.emit("error", { error: "Invalid macro payload" });
         }
       } else if (data.action === "updateConfig") {
+        const requestId =
+          typeof data.requestId === "string" && data.requestId.trim().length > 0
+            ? data.requestId.trim()
+            : undefined;
         let macros = Array.isArray(data.macros) ? data.macros : undefined;
         const timeout = typeof data.approvalTimeout === "number" ? data.approvalTimeout : undefined;
         const theme = isTheme(data.theme) ? data.theme : undefined;
@@ -265,11 +269,26 @@ export function createApp(): DeckyApp {
           try {
             const config = saveConfig(update);
             io.emit("configUpdate", config);
+            socket.emit("updateConfigAck", {
+              requestId: requestId ?? null,
+              theme: config.theme,
+              macroCount: config.macros.length,
+              hasPageColors: !!config.colors,
+              timestamp: Date.now(),
+            });
           } catch (err) {
             if (err instanceof ConfigValidationError) {
+              socket.emit("updateConfigError", {
+                requestId: requestId ?? null,
+                error: err.message,
+              });
               socket.emit("error", { error: err.message });
               return;
             }
+            socket.emit("updateConfigError", {
+              requestId: requestId ?? null,
+              error: "Failed to save config",
+            });
             socket.emit("error", { error: "Failed to save config" });
           }
         }

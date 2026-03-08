@@ -1,0 +1,89 @@
+{
+  "version": 1,
+  "controls": [
+    {
+      "id": "theme.selector",
+      "tests": ["plugin/tests/pi/global-controls.spec.ts::theme apply keep mode sends theme + mode and updates selection"]
+    },
+    {
+      "id": "theme.applyMode.keep",
+      "tests": ["plugin/tests/pi/global-controls.spec.ts::theme apply keep mode sends theme + mode and updates selection"]
+    },
+    {
+      "id": "theme.cancel",
+      "tests": ["plugin/tests/pi/global-controls.spec.ts::theme cancel reverts selection and does not dispatch update"]
+    },
+    {
+      "id": "timeout.input",
+      "tests": ["plugin/tests/pi/save-flow.spec.ts::applies timeout update and reflects snapshot"]
+    },
+    {
+      "id": "targetBadge.checkbox",
+      "tests": ["plugin/tests/pi/global-controls.spec.ts::target badge checkbox toggles and persists"]
+    },
+    {
+      "id": "save.button",
+      "tests": ["plugin/tests/pi/save-flow.spec.ts::enables Apply on target app change and sends correlated updateConfig"]
+    },
+    {
+      "id": "macro.selected.target",
+      "tests": ["plugin/tests/pi/macro-editing.spec.ts::selected target app dropdown updates only selected macro"]
+    },
+    {
+      "id": "macro.field.label",
+      "tests": ["plugin/tests/pi/macro-editing.spec.ts::label, text, and icon edits are persisted"]
+    },
+    {
+      "id": "macro.field.text",
+      "tests": ["plugin/tests/pi/macro-editing.spec.ts::label, text, and icon edits are persisted"]
+    },
+    {
+      "id": "macro.field.icon",
+      "tests": ["plugin/tests/pi/macro-editing.spec.ts::label, text, and icon edits are persisted"]
+    },
+    {
+      "id": "macro.field.targetApp",
+      "tests": ["plugin/tests/pi/macro-editing.spec.ts::per-macro target app in list persists"]
+    },
+    {
+      "id": "macro.add",
+      "tests": ["plugin/tests/pi/macro-crud.spec.ts::add macro dispatches expanded macro list"]
+    },
+    {
+      "id": "macro.remove",
+      "tests": ["plugin/tests/pi/macro-crud.spec.ts::remove macro dispatches reduced list"]
+    },
+    {
+      "id": "macro.scope.toggle",
+      "tests": ["plugin/tests/pi/macro-crud.spec.ts::scope toggle switches between selected and all macros"]
+    },
+    {
+      "id": "colors.page.bg",
+      "tests": ["plugin/tests/pi/colors.spec.ts::page default bg color writes colors.bg"]
+    },
+    {
+      "id": "colors.page.text",
+      "tests": ["plugin/tests/pi/colors.spec.ts::reset all overrides clears page and macro colors"]
+    },
+    {
+      "id": "colors.page.icon",
+      "tests": ["plugin/tests/pi/colors.spec.ts::reset all overrides clears page and macro colors"]
+    },
+    {
+      "id": "colors.macro.icon",
+      "tests": ["plugin/tests/pi/colors.spec.ts::per-macro icon color writes macro override"]
+    },
+    {
+      "id": "colors.reset.page",
+      "tests": ["plugin/tests/pi/colors.spec.ts::reset page defaults clears colors"]
+    },
+    {
+      "id": "colors.reset.all",
+      "tests": ["plugin/tests/pi/colors.spec.ts::reset all overrides clears page and macro colors"]
+    },
+    {
+      "id": "save.error.updateConfigError",
+      "tests": ["plugin/tests/pi/save-flow.spec.ts::shows explicit bridge error and keeps Apply enabled"]
+    }
+  ]
+}

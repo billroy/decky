@@ -92,6 +92,7 @@ export class SlotAction extends SingletonAction {
   private unsubConnection?: () => void;
   private unsubState?: () => void;
   private unsubConfig?: () => void;
+  private unsubBridgeEvent?: () => void;
   private activePiActionId?: string;
 
   override async onWillAppear(ev: WillAppearEvent): Promise<void> {
@@ -149,6 +150,16 @@ export class SlotAction extends SingletonAction {
         this.sendConfigSnapshot(this.activePiActionId).catch(() => {});
       });
     }
+
+    if (!this.unsubBridgeEvent) {
+      this.unsubBridgeEvent = bridgeRef.onBridgeEvent((event, payload) => {
+        if (!this.activePiActionId) return;
+        streamDeck.ui.sendToPropertyInspector({
+          type: event,
+          ...(payload && typeof payload === "object" ? payload as Record<string, unknown> : { payload }),
+        } as JsonObject).catch(() => {});
+      });
+    }
   }
 
   override async onWillDisappear(ev: WillDisappearEvent): Promise<void> {
@@ -160,9 +171,11 @@ export class SlotAction extends SingletonAction {
       this.unsubConnection?.();
       this.unsubState?.();
       this.unsubConfig?.();
+      this.unsubBridgeEvent?.();
       this.unsubConnection = undefined;
       this.unsubState = undefined;
       this.unsubConfig = undefined;
+      this.unsubBridgeEvent = undefined;
     }
   }
 
@@ -275,6 +288,9 @@ export class SlotAction extends SingletonAction {
     }
     if (payload?.type === "updateConfig") {
       const update: Record<string, unknown> = {};
+      if (typeof payload.requestId === "string" && payload.requestId.trim().length > 0) {
+        update.requestId = payload.requestId.trim();
+      }
       if (Array.isArray(payload.macros)) update.macros = payload.macros;
       if (typeof payload.theme === "string") update.theme = payload.theme;
       if (typeof payload.themeSeed === "number" && Number.isFinite(payload.themeSeed)) {
