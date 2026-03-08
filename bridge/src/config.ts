@@ -312,10 +312,22 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
       throw new ConfigValidationError("colors must be an object");
     }
   }
+  const parsedMacros =
+    Array.isArray(update.macros)
+      ? update.macros
+          .map((macro, i) => {
+            try {
+              return parseMacroStrict(macro, currentConfig.defaultTargetApp);
+            } catch {
+              // Keep existing macro at this index when a single edited row is invalid,
+              // so other valid updates (for example targetApp changes) still persist.
+              return currentConfig.macros[i] ?? null;
+            }
+          })
+          .filter((macro): macro is MacroDef => macro !== null)
+      : undefined;
   const merged: DeckyConfig = {
-    macros: Array.isArray(update.macros)
-      ? update.macros.map((macro) => parseMacroStrict(macro, currentConfig.defaultTargetApp))
-      : currentConfig.macros,
+    macros: parsedMacros ?? currentConfig.macros,
     approvalTimeout:
       typeof update.approvalTimeout === "number"
         ? update.approvalTimeout
