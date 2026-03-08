@@ -134,6 +134,23 @@ describe("layouts", () => {
       const config = getSlotConfig("idle", 0, null, macros);
       expect(config.data).toEqual({ text: "/review", targetApp: "claude", submit: false });
     });
+
+    it("renders slot utility actions through the macro renderer", () => {
+      const macros: MacroInput[] = [{ label: "Approve Once", text: "", type: "approveOnceInClaude", icon: "checkmark" }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.action).toBe("approveOnceInClaude");
+      expect(config.title).toBe("Approve Once");
+      expect(config.svg).toContain("svg");
+      expect(config.svg).toContain("Approve O");
+    });
+
+    it("supports openConfig utility type in slot macros", () => {
+      const macros: MacroInput[] = [{ label: "Config", text: "", type: "openConfig", icon: "settings" }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.action).toBe("openConfig");
+      expect(config.title).toBe("Config");
+      expect(config.svg).toContain("svg");
+    });
   });
 
   describe("awaiting-approval layout", () => {

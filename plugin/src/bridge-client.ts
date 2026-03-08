@@ -53,7 +53,16 @@ export interface MacroDef {
   colors?: ColorOverrides;
   targetApp?: TargetApp;
   submit?: boolean;
-  type?: "macro" | "widget";
+  type?:
+    | "macro"
+    | "widget"
+    | "approve"
+    | "deny"
+    | "cancel"
+    | "restart"
+    | "openConfig"
+    | "approveOnceInClaude"
+    | "startDictationForClaude";
   widget?: WidgetDef;
 }
 

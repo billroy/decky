@@ -511,6 +511,12 @@ const RESTART: SlotConfig = {
   action: "restart",
 };
 
+const OPEN_CONFIG: SlotConfig = {
+  svg: roundedRect("#1e293b", "\u2699"),
+  title: "Config",
+  action: "openConfig",
+};
+
 const THINKING: SlotConfig = {
   svg: thinkingSVG(),
   title: "Thinking\u2026",
@@ -529,7 +535,16 @@ export interface MacroInput {
   colors?: ColorOverrides;
   targetApp?: TargetApp;
   submit?: boolean;
-  type?: "macro" | "widget";
+  type?:
+    | "macro"
+    | "widget"
+    | "approve"
+    | "deny"
+    | "cancel"
+    | "restart"
+    | "openConfig"
+    | "approveOnceInClaude"
+    | "startDictationForClaude";
   widget?: WidgetDef;
 }
 
@@ -551,6 +566,25 @@ function resolveColor(base: string, pageOverride?: string, macroOverride?: strin
 }
 
 function macroSlot(index: number, macro: MacroInput): SlotConfig {
+  if (macro.type === "approve") return { ...APPROVE, svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"), title: macro.label || APPROVE.title };
+  if (macro.type === "deny") return { ...DENY, svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"), title: macro.label || DENY.title };
+  if (macro.type === "cancel") return { ...CANCEL, svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"), title: macro.label || CANCEL.title };
+  if (macro.type === "restart") return { ...RESTART, svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"), title: macro.label || RESTART.title };
+  if (macro.type === "openConfig") return { ...OPEN_CONFIG, svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"), title: macro.label || OPEN_CONFIG.title };
+  if (macro.type === "approveOnceInClaude") {
+    return {
+      svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"),
+      title: macro.label || "Approve Once",
+      action: "approveOnceInClaude",
+    };
+  }
+  if (macro.type === "startDictationForClaude") {
+    return {
+      svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"),
+      title: macro.label || "Talk to Claude",
+      action: "startDictationForClaude",
+    };
+  }
   if (macro.type === "widget" && macro.widget?.kind === "bridge-status") {
     return widgetSlot(index, macro);
   }
