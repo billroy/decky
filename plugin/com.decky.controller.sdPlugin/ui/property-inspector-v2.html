@@ -608,12 +608,15 @@
     let savedThemeSeed = 0;
     let pendingThemeSeed = null;
     let awaitingConfigAck = false;
+    let pendingApplyRequestId = "";
+    let awaitingPostAckSnapshot = false;
     let configAckTimer = null;
     document.getElementById("pi-build").textContent = "PI build: " + PI_BUILD_ID;
 
-    function buildPayload() {
+    function buildPayload(requestId) {
       var payload = {
         type: "updateConfig",
+        requestId: requestId || "",
         macros: macros.map(function (m) {
           var o = { label: m.label, text: m.text };
           if (m.icon) o.icon = m.icon;
@@ -641,12 +644,13 @@
     }
 
     function hasChanges() {
-      return JSON.stringify(buildPayload()) !== baselinePayload;
+      return JSON.stringify(buildPayload("")) !== baselinePayload;
     }
 
     function applyConfig(showToast, forceSend, allowThemeCommit) {
       if (!configLoaded) return;
-      var payload = buildPayload();
+      var requestId = "pi-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 0x7fffffff).toString(36);
+      var payload = buildPayload(requestId);
       if (!allowThemeCommit && pendingThemeChange) {
         payload.theme = savedTheme;
       }
@@ -655,10 +659,14 @@
         return;
       }
       awaitingConfigAck = true;
+      pendingApplyRequestId = requestId;
+      awaitingPostAckSnapshot = false;
       if (configAckTimer) clearTimeout(configAckTimer);
       configAckTimer = setTimeout(function () {
         if (!awaitingConfigAck) return;
         awaitingConfigAck = false;
+        pendingApplyRequestId = "";
+        awaitingPostAckSnapshot = false;
         setSaveEnabled(true);
         showStatus("Apply failed: no bridge config acknowledgement", "error");
       }, 2000);
@@ -769,12 +777,41 @@
         document.getElementById("debug-log").textContent = (header + out).trim() || "No debug entries.";
         return;
       }
+      if (msg && msg.type === "updateConfigAck") {
+        if (pendingApplyRequestId && msg.requestId && msg.requestId !== pendingApplyRequestId) {
+          return;
+        }
+        awaitingConfigAck = false;
+        awaitingPostAckSnapshot = true;
+        pendingApplyRequestId = "";
+        if (configAckTimer) {
+          clearTimeout(configAckTimer);
+          configAckTimer = null;
+        }
+        return;
+      }
+      if (msg && msg.type === "updateConfigError") {
+        if (pendingApplyRequestId && msg.requestId && msg.requestId !== pendingApplyRequestId) {
+          return;
+        }
+        awaitingConfigAck = false;
+        awaitingPostAckSnapshot = false;
+        pendingApplyRequestId = "";
+        if (configAckTimer) {
+          clearTimeout(configAckTimer);
+          configAckTimer = null;
+        }
+        setSaveEnabled(true);
+        showStatus("Apply failed: " + (msg.error || "bridge rejected update"), "error");
+        return;
+      }
       if (msg && msg.type === "configSnapshot") {
+        var isApplySync = awaitingConfigAck || awaitingPostAckSnapshot;
         // Deterministic sync model:
         // - accept first snapshot at PI load
         // - accept snapshots only as acknowledgements for local Apply actions
         // - ignore background snapshots that can stomp in-progress edits
-        if (configLoaded && !awaitingConfigAck) {
+        if (configLoaded && !awaitingConfigAck && !awaitingPostAckSnapshot) {
           return;
         }
         if (Array.isArray(msg.macros)) {
@@ -818,7 +855,7 @@
         document.getElementById("theme").value = settings.theme;
         document.getElementById("timeout").value = settings.approvalTimeout;
         document.getElementById("show-target-badge").checked = settings.showTargetBadge;
-        baselinePayload = JSON.stringify(buildPayload());
+        baselinePayload = JSON.stringify(buildPayload(""));
         forceIncludeColorsField = false;
         pendingThemeApplyMode = "";
         if (pendingThemeSeed !== null) savedThemeSeed = pendingThemeSeed;
@@ -828,7 +865,10 @@
           configAckTimer = null;
         }
         awaitingConfigAck = false;
+        awaitingPostAckSnapshot = false;
+        pendingApplyRequestId = "";
         setSaveEnabled(false);
+        if (isApplySync) showStatus("Applied", "saved");
         var connEl = document.getElementById("conn-status");
         connEl.textContent = "Connected to bridge";
         connEl.className = "conn-status connected";

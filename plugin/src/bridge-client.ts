@@ -61,6 +61,7 @@ export type ConnectionStatus = "connected" | "disconnected" | "connecting";
 type StateChangeListener = (snapshot: StateSnapshot) => void;
 type ConnectionListener = (status: ConnectionStatus) => void;
 type ConfigListener = (config: DeckyConfig) => void;
+type BridgeEventListener = (event: string, payload: unknown) => void;
 
 export class BridgeClient {
   private socket: Socket | null = null;
@@ -69,6 +70,7 @@ export class BridgeClient {
   private stateListeners: StateChangeListener[] = [];
   private connectionListeners: ConnectionListener[] = [];
   private configListeners: ConfigListener[] = [];
+  private bridgeEventListeners: BridgeEventListener[] = [];
   private lastConfig: DeckyConfig | null = null;
   private authToken: string = "";
 
@@ -127,6 +129,18 @@ export class BridgeClient {
         try { listener(config); } catch { /* listener errors must not crash the client */ }
       }
     });
+
+    this.socket.on("updateConfigAck", (payload: unknown) => {
+      for (const listener of this.bridgeEventListeners) {
+        try { listener("updateConfigAck", payload); } catch { /* listener errors must not crash the client */ }
+      }
+    });
+
+    this.socket.on("updateConfigError", (payload: unknown) => {
+      for (const listener of this.bridgeEventListeners) {
+        try { listener("updateConfigError", payload); } catch { /* listener errors must not crash the client */ }
+      }
+    });
   }
 
   disconnect(): void {
@@ -166,6 +180,13 @@ export class BridgeClient {
     this.configListeners.push(listener);
     return () => {
       this.configListeners = this.configListeners.filter((l) => l !== listener);
+    };
+  }
+
+  onBridgeEvent(listener: BridgeEventListener): () => void {
+    this.bridgeEventListeners.push(listener);
+    return () => {
+      this.bridgeEventListeners = this.bridgeEventListeners.filter((l) => l !== listener);
     };
   }
 

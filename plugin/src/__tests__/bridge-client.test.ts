@@ -9,11 +9,13 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 // Import bridge app factory directly by path — vitest resolves this fine
 import { createApp } from "../../../bridge/src/app.js";
 import type { DeckyApp } from "../../../bridge/src/app.js";
+import { getBridgeToken } from "../../../bridge/src/security.js";
 import { BridgeClient, type ConnectionStatus, type StateSnapshot } from "../bridge-client.js";
 
 let decky: DeckyApp;
 let port: number;
 let bridgeUrl: string;
+const token = getBridgeToken();
 
 beforeAll(async () => {
   decky = createApp();
@@ -68,10 +70,27 @@ function waitForState(
   });
 }
 
+function waitForBridgeEvent(
+  client: BridgeClient,
+  eventName: string,
+  timeoutMs = 3000,
+): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => { unsub(); reject(new Error("waitForBridgeEvent timed out")); }, timeoutMs);
+    const unsub = client.onBridgeEvent((event, payload) => {
+      if (event === eventName) {
+        clearTimeout(timer);
+        unsub();
+        resolve(payload);
+      }
+    });
+  });
+}
+
 async function postHook(event: string, tool?: string) {
   await fetch(`${bridgeUrl}/hook`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-decky-token": token },
     body: JSON.stringify({ event, tool }),
   });
 }
@@ -153,6 +172,22 @@ describe("BridgeClient", () => {
     await new Promise((r) => setTimeout(r, 1500));
 
     expect(client.getConnectionStatus()).toBe("disconnected");
+    client.disconnect();
+  });
+
+  it("receives updateConfigAck bridge events", async () => {
+    const client = new BridgeClient(bridgeUrl);
+    client.connect();
+    await waitForConnection(client, (s) => s === "connected");
+
+    const eventPromise = waitForBridgeEvent(client, "updateConfigAck");
+    client.sendAction("updateConfig", {
+      requestId: "bridge-client-ack",
+      macros: [{ label: "A", text: "B" }],
+    });
+
+    const payload = await eventPromise as { requestId?: string };
+    expect(payload.requestId).toBe("bridge-client-ack");
     client.disconnect();
   });
 });
