@@ -30,6 +30,7 @@ import {
 import { PI_PROTOCOL_VERSION } from "../protocol.js";
 
 let bridgeRef: BridgeClient | null = null;
+const activeKeyActions = new Map<string, WillAppearEvent["action"]>();
 
 interface DebugEntry {
   ts: number;
@@ -97,10 +98,8 @@ export class SlotAction extends SingletonAction {
   private unsubBridgeEvent?: () => void;
   private activePiActionId?: string;
   private widgetInterval?: ReturnType<typeof setInterval>;
-  private readonly activeActions = new Map<string, WillAppearEvent["action"]>();
-
   private getRenderableActions(): Map<string, WillAppearEvent["action"]> {
-    const all = new Map<string, WillAppearEvent["action"]>(this.activeActions);
+    const all = new Map<string, WillAppearEvent["action"]>(activeKeyActions);
     for (const action of this.actions as Array<WillAppearEvent["action"]>) {
       if (!all.has(action.id)) all.set(action.id, action);
     }
@@ -123,7 +122,7 @@ export class SlotAction extends SingletonAction {
   }
 
   override async onWillAppear(ev: WillAppearEvent): Promise<void> {
-    this.activeActions.set(ev.action.id, ev.action);
+    activeKeyActions.set(ev.action.id, ev.action);
 
     // Compute slot index from physical position on the deck
     let slotIndex: number | undefined;
@@ -194,11 +193,11 @@ export class SlotAction extends SingletonAction {
 
   override async onWillDisappear(ev: WillDisappearEvent): Promise<void> {
     pushDebug("willDisappear", ev.action.id, getSlotRank(ev.action.id), {});
-    this.activeActions.delete(ev.action.id);
+    activeKeyActions.delete(ev.action.id);
     slotAssignments.delete(ev.action.id);
 
     // If no more instances, clean up listeners
-    if (this.activeActions.size === 0) {
+    if (activeKeyActions.size === 0) {
       this.unsubConnection?.();
       this.unsubState?.();
       this.unsubConfig?.();
