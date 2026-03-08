@@ -242,7 +242,7 @@ export function createApp(): DeckyApp {
         ) {
           // Guarantee a fresh distribution for each explicit theme apply,
           // even if the PI sent a stale/missing seed.
-          themeSeed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) >>> 0;
+          themeSeed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) & 0x7fffffff;
         }
         if (themeApplyMode === "clear-page" || themeApplyMode === "clear-all") {
           colors = {};
