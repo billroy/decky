@@ -306,8 +306,11 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
   }
   const normalizedUpdateColors = normalizeColorOverrides(update.colors);
   const hasColorsField = Object.prototype.hasOwnProperty.call(update_obj, "colors");
-  if (hasColorsField && update.colors !== undefined && !normalizedUpdateColors) {
-    throw new ConfigValidationError("colors must contain valid hex color values");
+  if (hasColorsField && update.colors !== undefined) {
+    // Allow empty object/empty strings to explicitly clear page defaults.
+    if (update.colors === null || typeof update.colors !== "object") {
+      throw new ConfigValidationError("colors must be an object");
+    }
   }
   const merged: DeckyConfig = {
     macros: Array.isArray(update.macros)
