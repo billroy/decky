@@ -2,10 +2,12 @@ import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { createApp, type DeckyApp } from "../app.js";
 import { CONFIG_PATH_VALUE } from "../config.js";
+import { getBridgeToken } from "../security.js";
 
 let decky: DeckyApp;
 let baseUrl: string;
 let savedConfig: string | null = null;
+const token = getBridgeToken();
 
 beforeAll(() => {
   savedConfig = existsSync(CONFIG_PATH_VALUE)
@@ -22,11 +24,11 @@ afterAll(() => {
 beforeEach(async () => {
   decky = createApp();
   await new Promise<void>((resolve) => {
-    decky.httpServer.listen(0, () => resolve());
+    decky.httpServer.listen(0, "127.0.0.1", () => resolve());
   });
   const addr = decky.httpServer.address();
   const port = typeof addr === "object" && addr ? addr.port : 0;
-  baseUrl = `http://localhost:${port}`;
+  baseUrl = `http://127.0.0.1:${port}`;
 });
 
 afterEach(async () => {
@@ -36,7 +38,7 @@ afterEach(async () => {
 
 describe("config endpoints", () => {
   it("GET /config returns config with macros array", async () => {
-    const res = await fetch(`${baseUrl}/config`);
+    const res = await fetch(`${baseUrl}/config`, { headers: { "x-decky-token": token } });
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data).toHaveProperty("macros");
@@ -48,7 +50,7 @@ describe("config endpoints", () => {
   });
 
   it("each macro has label and text fields", async () => {
-    const res = await fetch(`${baseUrl}/config`);
+    const res = await fetch(`${baseUrl}/config`, { headers: { "x-decky-token": token } });
     const data = await res.json();
     for (const macro of data.macros) {
       expect(macro).toHaveProperty("label");
@@ -59,7 +61,10 @@ describe("config endpoints", () => {
   });
 
   it("POST /config/reload returns updated config", async () => {
-    const res = await fetch(`${baseUrl}/config/reload`, { method: "POST" });
+    const res = await fetch(`${baseUrl}/config/reload`, {
+      method: "POST",
+      headers: { "x-decky-token": token },
+    });
     expect(res.status).toBe(200);
     const data = await res.json();
     expect(data.ok).toBe(true);
@@ -74,7 +79,7 @@ describe("config endpoints", () => {
 
     const res = await fetch(`${baseUrl}/config`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
       body: JSON.stringify({ macros: newMacros }),
     });
 
@@ -89,7 +94,7 @@ describe("config endpoints", () => {
   it("PUT /config preserves approvalTimeout when not provided", async () => {
     const res = await fetch(`${baseUrl}/config`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
       body: JSON.stringify({ macros: [{ label: "A", text: "B" }] }),
     });
 
@@ -100,7 +105,7 @@ describe("config endpoints", () => {
   it("PUT /config saves multi-provider settings", async () => {
     const res = await fetch(`${baseUrl}/config`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
       body: JSON.stringify({
         defaultTargetApp: "codex",
         showTargetBadge: true,
@@ -116,7 +121,7 @@ describe("config endpoints", () => {
   it("PUT /config saves extended theme values", async () => {
     const res = await fetch(`${baseUrl}/config`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
       body: JSON.stringify({ theme: "rainbow", themeSeed: 12345 }),
     });
     const data = await res.json();
@@ -127,12 +132,31 @@ describe("config endpoints", () => {
   it("GET /config reflects saved changes", async () => {
     await fetch(`${baseUrl}/config`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
       body: JSON.stringify({ macros: [{ label: "Saved", text: "saved text" }] }),
     });
 
-    const res = await fetch(`${baseUrl}/config`);
+    const res = await fetch(`${baseUrl}/config`, { headers: { "x-decky-token": token } });
     const data = await res.json();
     expect(data.macros[0].label).toBe("Saved");
+  });
+
+  it("rejects oversized macro arrays", async () => {
+    const macros = Array.from({ length: 37 }, (_v, i) => ({ label: `M${i}`, text: "x" }));
+    const res = await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
+      body: JSON.stringify({ macros }),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects invalid timeout values", async () => {
+    const res = await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
+      body: JSON.stringify({ approvalTimeout: 0 }),
+    });
+    expect(res.status).toBe(400);
   });
 });

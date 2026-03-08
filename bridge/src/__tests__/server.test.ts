@@ -1,17 +1,19 @@
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createApp, type DeckyApp } from "../app.js";
+import { getBridgeToken } from "../security.js";
 
 let decky: DeckyApp;
 let baseUrl: string;
+const token = getBridgeToken();
 
 beforeAll(async () => {
   decky = createApp();
   await new Promise<void>((resolve) => {
-    decky.httpServer.listen(0, () => resolve()); // random port
+    decky.httpServer.listen(0, "127.0.0.1", () => resolve()); // random port
   });
   const addr = decky.httpServer.address();
   const port = typeof addr === "object" && addr ? addr.port : 0;
-  baseUrl = `http://localhost:${port}`;
+  baseUrl = `http://127.0.0.1:${port}`;
 });
 
 afterAll(async () => {
@@ -22,14 +24,14 @@ afterAll(async () => {
 async function postHook(body: Record<string, unknown>) {
   const res = await fetch(`${baseUrl}/hook`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-decky-token": token },
     body: JSON.stringify(body),
   });
   return { status: res.status, data: await res.json() };
 }
 
 async function getStatus() {
-  const res = await fetch(`${baseUrl}/status`);
+  const res = await fetch(`${baseUrl}/status`, { headers: { "x-decky-token": token } });
   return { status: res.status, data: await res.json() };
 }
 
@@ -89,5 +91,14 @@ describe("POST /hook", () => {
     const { status, data } = await postHook({ event: "PreToolUse" });
     expect(status).toBe(200);
     expect(data.state.state).toBe("awaiting-approval");
+  });
+
+  it("rejects unauthorized requests", async () => {
+    const res = await fetch(`${baseUrl}/hook`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ event: "PreToolUse" }),
+    });
+    expect(res.status).toBe(401);
   });
 });

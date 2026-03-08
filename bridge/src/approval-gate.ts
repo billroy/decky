@@ -7,24 +7,27 @@
  *   3. Hook script reads the result, deletes the file, and exits with the appropriate code.
  */
 
-import { mkdirSync, writeFileSync, unlinkSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
+import { mkdirSync, writeFileSync, unlinkSync, existsSync, renameSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
 
-export type ApprovalResult = 'approve' | 'deny' | 'cancel';
+export type ApprovalResult = "approve" | "deny" | "cancel";
 
-const DECKY_DIR = join(homedir(), '.decky');
-const GATE_FILE = join(DECKY_DIR, 'approval-gate');
+const DECKY_DIR = process.env.DECKY_HOME || join(homedir(), ".decky");
+const GATE_FILE = join(DECKY_DIR, "approval-gate");
 
 /** Ensure ~/.decky/ directory exists. */
 function ensureDir(): void {
-  mkdirSync(DECKY_DIR, { recursive: true });
+  mkdirSync(DECKY_DIR, { recursive: true, mode: 0o700 });
 }
 
 /** Write the approval result so the polling hook script can read it. */
-export function writeGateFile(result: ApprovalResult): void {
+export function writeGateFile(result: ApprovalResult, nonce?: string): void {
   ensureDir();
-  writeFileSync(GATE_FILE, result, 'utf-8');
+  const payload = nonce ? `${nonce}:${result}` : result;
+  const tmp = `${GATE_FILE}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(tmp, payload, { encoding: "utf-8", mode: 0o600 });
+  renameSync(tmp, GATE_FILE);
 }
 
 /** Remove the gate file (idempotent). */
