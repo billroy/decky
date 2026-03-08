@@ -16,19 +16,21 @@ import {
   GATE_FILE_PATH,
 } from "../approval-gate.js";
 import { readFileSync } from "node:fs";
+import { getBridgeToken } from "../security.js";
 
 let decky: DeckyApp;
 let baseUrl: string;
 let client: ClientSocket;
+const token = getBridgeToken();
 
 beforeAll(async () => {
   decky = createApp();
   await new Promise<void>((resolve) => {
-    decky.httpServer.listen(0, () => resolve());
+    decky.httpServer.listen(0, "127.0.0.1", () => resolve());
   });
   const addr = decky.httpServer.address();
   const port = typeof addr === "object" && addr ? addr.port : 0;
-  baseUrl = `http://localhost:${port}`;
+  baseUrl = `http://127.0.0.1:${port}`;
 });
 
 afterAll(async () => {
@@ -45,7 +47,7 @@ afterEach(() => {
 async function postHook(body: Record<string, unknown>) {
   const res = await fetch(`${baseUrl}/hook`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "x-decky-token": token },
     body: JSON.stringify(body),
   });
   return { status: res.status, data: await res.json() };
@@ -53,7 +55,7 @@ async function postHook(body: Record<string, unknown>) {
 
 function connectClient(): Promise<ClientSocket> {
   return new Promise((resolve) => {
-    client = ioClient(baseUrl, { forceNew: true });
+    client = ioClient(baseUrl, { forceNew: true, auth: { token } });
     client.on("connect", () => resolve(client));
   });
 }

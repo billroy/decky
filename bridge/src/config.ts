@@ -47,7 +47,14 @@ export interface DeckyConfig {
   showTargetBadge: boolean;
 }
 
-const DECKY_DIR = join(homedir(), ".decky");
+export class ConfigValidationError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ConfigValidationError";
+  }
+}
+
+const DECKY_DIR = process.env.DECKY_HOME || join(homedir(), ".decky");
 const CONFIG_PATH = join(DECKY_DIR, "config.json");
 
 const DEFAULT_CONFIG: DeckyConfig = {
@@ -70,6 +77,14 @@ const DEFAULT_CONFIG: DeckyConfig = {
   defaultTargetApp: "claude",
   showTargetBadge: false,
 };
+
+export const MAX_MACROS = 36;
+export const MAX_LABEL_LENGTH = 20;
+export const MAX_TEXT_LENGTH = 2000;
+export const MAX_ICON_LENGTH = 64;
+export const MAX_EDITOR_LENGTH = 128;
+export const MIN_APPROVAL_TIMEOUT = 5;
+export const MAX_APPROVAL_TIMEOUT = 300;
 
 let currentConfig: DeckyConfig = { ...DEFAULT_CONFIG };
 
@@ -111,6 +126,37 @@ function normalizeMacro(value: unknown, fallbackTarget: TargetApp): MacroDef | n
     normalized.targetApp = normalizeTargetApp(macro.targetApp, fallbackTarget);
   }
   return normalized;
+}
+
+function parseMacroStrict(value: unknown, fallbackTarget: TargetApp): MacroDef {
+  if (!value || typeof value !== "object") throw new ConfigValidationError("Macro must be an object");
+  const macro = value as Record<string, unknown>;
+  if (typeof macro.label !== "string") throw new ConfigValidationError("Macro label must be a string");
+  if (typeof macro.text !== "string") throw new ConfigValidationError("Macro text must be a string");
+  const label = macro.label.trim();
+  const text = macro.text;
+  if (label.length === 0) throw new ConfigValidationError("Macro label must not be empty");
+  if (label.length > MAX_LABEL_LENGTH) {
+    throw new ConfigValidationError(`Macro label exceeds ${MAX_LABEL_LENGTH} characters`);
+  }
+  if (text.length > MAX_TEXT_LENGTH) {
+    throw new ConfigValidationError(`Macro text exceeds ${MAX_TEXT_LENGTH} characters`);
+  }
+  const out: MacroDef = { label, text };
+  if (macro.icon !== undefined) {
+    if (typeof macro.icon !== "string") throw new ConfigValidationError("Macro icon must be a string");
+    if (macro.icon.length > MAX_ICON_LENGTH) {
+      throw new ConfigValidationError(`Macro icon exceeds ${MAX_ICON_LENGTH} characters`);
+    }
+    if (macro.icon.length > 0) out.icon = macro.icon;
+  }
+  if (macro.targetApp !== undefined) out.targetApp = normalizeTargetApp(macro.targetApp, fallbackTarget);
+  if (macro.colors !== undefined) {
+    const colors = normalizeColorOverrides(macro.colors);
+    if (!colors) throw new ConfigValidationError("Macro colors must contain valid hex color values");
+    out.colors = colors;
+  }
+  return out;
 }
 
 function normalizeHex(value: unknown): string | undefined {
@@ -205,13 +251,53 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
   ensureDir();
 
   const update_obj = update as Record<string, unknown>;
+  if (update.macros !== undefined) {
+    if (!Array.isArray(update.macros)) throw new ConfigValidationError("macros must be an array");
+    if (update.macros.length > MAX_MACROS) {
+      throw new ConfigValidationError(`macros must not exceed ${MAX_MACROS} entries`);
+    }
+  }
+  if (update.approvalTimeout !== undefined) {
+    if (!Number.isInteger(update.approvalTimeout)) {
+      throw new ConfigValidationError("approvalTimeout must be an integer");
+    }
+    if (update.approvalTimeout < MIN_APPROVAL_TIMEOUT || update.approvalTimeout > MAX_APPROVAL_TIMEOUT) {
+      throw new ConfigValidationError(
+        `approvalTimeout must be between ${MIN_APPROVAL_TIMEOUT} and ${MAX_APPROVAL_TIMEOUT}`
+      );
+    }
+  }
+  if (update_obj.editor !== undefined) {
+    if (typeof update_obj.editor !== "string") throw new ConfigValidationError("editor must be a string");
+    if (update_obj.editor.length > MAX_EDITOR_LENGTH) {
+      throw new ConfigValidationError(`editor must not exceed ${MAX_EDITOR_LENGTH} characters`);
+    }
+  }
+  if (update_obj.themeSeed !== undefined) {
+    if (typeof update_obj.themeSeed !== "number" || !Number.isFinite(update_obj.themeSeed)) {
+      throw new ConfigValidationError("themeSeed must be a finite number");
+    }
+    if (Math.floor(update_obj.themeSeed) < 0 || Math.floor(update_obj.themeSeed) > 0x7fffffff) {
+      throw new ConfigValidationError("themeSeed must be between 0 and 2147483647");
+    }
+  }
+  if (update_obj.showTargetBadge !== undefined && typeof update_obj.showTargetBadge !== "boolean") {
+    throw new ConfigValidationError("showTargetBadge must be a boolean");
+  }
+  if (update_obj.defaultTargetApp !== undefined) {
+    const v = update_obj.defaultTargetApp;
+    if (v !== "claude" && v !== "codex" && v !== "chatgpt" && v !== "cursor" && v !== "windsurf") {
+      throw new ConfigValidationError("defaultTargetApp is invalid");
+    }
+  }
   const normalizedUpdateColors = normalizeColorOverrides(update.colors);
   const hasColorsField = Object.prototype.hasOwnProperty.call(update_obj, "colors");
+  if (hasColorsField && update.colors !== undefined && !normalizedUpdateColors) {
+    throw new ConfigValidationError("colors must contain valid hex color values");
+  }
   const merged: DeckyConfig = {
     macros: Array.isArray(update.macros)
-      ? update.macros
-          .map((macro) => normalizeMacro(macro, currentConfig.defaultTargetApp))
-          .filter((macro): macro is MacroDef => macro !== null)
+      ? update.macros.map((macro) => parseMacroStrict(macro, currentConfig.defaultTargetApp))
       : currentConfig.macros,
     approvalTimeout:
       typeof update.approvalTimeout === "number"

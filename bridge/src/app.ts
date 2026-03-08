@@ -11,8 +11,11 @@ import { createServer, type Server as HttpServer } from "node:http";
 import { Server as SocketIOServer } from "socket.io";
 import { StateMachine, type HookPayload, type HookEvent } from "./state-machine.js";
 import { writeGateFile, clearGateFile, type ApprovalResult } from "./approval-gate.js";
-import { loadConfig, getConfig, reloadConfig, saveConfig, type Theme } from "./config.js";
+import { loadConfig, getConfig, reloadConfig, saveConfig, type Theme, ConfigValidationError } from "./config.js";
 import { executeMacro } from "./macro-exec.js";
+import { getBridgeToken, readRequestToken, redactActionForLog } from "./security.js";
+
+const MAX_MACRO_ACTION_TEXT = 2000;
 
 const VALID_EVENTS: Set<string> = new Set([
   "PreToolUse",
@@ -45,9 +48,18 @@ export interface DeckyApp {
 export function createApp(): DeckyApp {
   const app = express();
   const httpServer = createServer(app);
+  const bridgeToken = getBridgeToken();
+  let pendingGateNonce: string | null = null;
 
   const io = new SocketIOServer(httpServer, {
-    cors: { origin: "*" },
+    cors: {
+      origin: (origin, cb) => {
+        if (!origin) return cb(null, true);
+        if (/^https?:\/\/localhost(?::\d+)?$/i.test(origin)) return cb(null, true);
+        if (/^https?:\/\/127\.0\.0\.1(?::\d+)?$/i.test(origin)) return cb(null, true);
+        return cb(new Error("CORS blocked"));
+      },
+    },
   });
 
   const sm = new StateMachine();
@@ -63,6 +75,13 @@ export function createApp(): DeckyApp {
   // --- Middleware ---
 
   app.use(express.json());
+  app.use((req, res, next) => {
+    if (readRequestToken(req) !== bridgeToken) {
+      res.status(401).json({ error: "Unauthorized" });
+      return;
+    }
+    next();
+  });
 
   // --- Routes ---
 
@@ -91,6 +110,10 @@ export function createApp(): DeckyApp {
     // Clear any stale gate file when a new tool-approval cycle starts
     if (payload.event === "PreToolUse") {
       clearGateFile();
+      const nonceHeader = req.header("x-decky-nonce");
+      pendingGateNonce = typeof nonceHeader === "string" && nonceHeader.trim().length > 0
+        ? nonceHeader.trim()
+        : null;
     }
 
     const snapshot = sm.processEvent(payload);
@@ -107,9 +130,17 @@ export function createApp(): DeckyApp {
 
   app.put("/config", (req, res) => {
     const body = req.body as Record<string, unknown>;
-    const config = saveConfig(body);
-    io.emit("configUpdate", config);
-    res.json({ ok: true, config });
+    try {
+      const config = saveConfig(body);
+      io.emit("configUpdate", config);
+      res.json({ ok: true, config });
+    } catch (err) {
+      if (err instanceof ConfigValidationError) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
+      res.status(500).json({ error: "Failed to save config" });
+    }
   });
 
   app.post("/config/reload", (_req, res) => {
@@ -121,13 +152,23 @@ export function createApp(): DeckyApp {
   // --- Socket.io connections ---
 
   io.on("connection", (socket) => {
+    const token =
+      (typeof socket.handshake.auth?.token === "string" ? socket.handshake.auth.token.trim() : "") ||
+      (typeof socket.handshake.headers["x-decky-token"] === "string"
+        ? socket.handshake.headers["x-decky-token"].trim()
+        : "");
+    if (token !== bridgeToken) {
+      socket.emit("error", { error: "Unauthorized" });
+      socket.disconnect(true);
+      return;
+    }
     console.log(`[io] client connected: ${socket.id}`);
 
     socket.emit("stateChange", sm.getSnapshot());
     socket.emit("configUpdate", getConfig());
 
     socket.on("action", (data: { action: string; [key: string]: unknown }) => {
-      console.log(`[io] action received: ${JSON.stringify(data)}`);
+      console.log(`[io] action received: ${JSON.stringify(redactActionForLog(data as Record<string, unknown>))}`);
 
       const validActions: Record<string, { result: ApprovalResult; state: string; reason: string }> = {
         approve: { result: "approve", state: "tool-executing", reason: "approved via StreamDeck" },
@@ -137,13 +178,18 @@ export function createApp(): DeckyApp {
 
       const entry = validActions[data.action];
       if (entry) {
-        writeGateFile(entry.result);
+        if (sm.getSnapshot().state !== "awaiting-approval") {
+          socket.emit("error", { error: "Approval action ignored: not awaiting approval" });
+          return;
+        }
+        writeGateFile(entry.result, pendingGateNonce ?? undefined);
+        pendingGateNonce = null;
         sm.forceState(entry.state as Parameters<typeof sm.forceState>[0], entry.reason);
       } else if (data.action === "restart") {
         sm.forceState("idle", "restarted via StreamDeck");
       } else if (data.action === "macro") {
         const macroText = typeof data.text === "string" ? data.text : null;
-        if (macroText) {
+        if (macroText && macroText.length <= MAX_MACRO_ACTION_TEXT) {
           const cfg = getConfig();
           const targetApp =
             data.targetApp === "claude" ||
@@ -157,7 +203,7 @@ export function createApp(): DeckyApp {
             console.error("[io] macro execution failed:", err);
           });
         } else {
-          console.log(`[io] macro pressed with no text: ${JSON.stringify(data)}`);
+          socket.emit("error", { error: "Invalid macro payload" });
         }
       } else if (data.action === "updateConfig") {
         let macros = Array.isArray(data.macros) ? data.macros : undefined;
@@ -216,8 +262,16 @@ export function createApp(): DeckyApp {
         if (defaultTargetApp) update.defaultTargetApp = defaultTargetApp;
         if (showTargetBadge !== undefined) update.showTargetBadge = showTargetBadge;
         if (Object.keys(update).length > 0) {
-          const config = saveConfig(update);
-          io.emit("configUpdate", config);
+          try {
+            const config = saveConfig(update);
+            io.emit("configUpdate", config);
+          } catch (err) {
+            if (err instanceof ConfigValidationError) {
+              socket.emit("error", { error: err.message });
+              return;
+            }
+            socket.emit("error", { error: "Failed to save config" });
+          }
         }
       } else {
         console.log(`[io] unknown action: ${data.action}`);

@@ -6,6 +6,9 @@
  */
 
 import { io, type Socket } from "socket.io-client";
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+import { homedir } from "node:os";
 
 export interface StateSnapshot {
   state: string;
@@ -67,8 +70,19 @@ export class BridgeClient {
   private connectionListeners: ConnectionListener[] = [];
   private configListeners: ConfigListener[] = [];
   private lastConfig: DeckyConfig | null = null;
+  private authToken: string = "";
 
-  constructor(private url: string = "http://localhost:9130") {}
+  constructor(private url: string = "http://localhost:9130") {
+    this.authToken = this.loadAuthToken();
+  }
+
+  private loadAuthToken(): string {
+    const envToken = process.env.DECKY_AUTH_TOKEN;
+    if (typeof envToken === "string" && envToken.trim().length >= 16) return envToken.trim();
+    const tokenPath = join(homedir(), ".decky", "bridge-token");
+    if (!existsSync(tokenPath)) return "";
+    return readFileSync(tokenPath, "utf-8").trim();
+  }
 
   connect(): void {
     if (this.socket) return;
@@ -80,6 +94,8 @@ export class BridgeClient {
       reconnectionDelay: 2000,
       reconnectionDelayMax: 10000,
       timeout: 5000,
+      auth: { token: this.authToken },
+      extraHeaders: this.authToken ? { "x-decky-token": this.authToken } : {},
     });
 
     this.socket.on("connect", () => {
