@@ -43,6 +43,7 @@ export interface MacroDef {
   icon?: string;
   colors?: ColorOverrides;
   targetApp?: TargetApp;
+  submit?: boolean;
   type?: "macro" | "widget";
   widget?: WidgetDef;
 }
@@ -149,6 +150,9 @@ function normalizeMacro(value: unknown, fallbackTarget: TargetApp): MacroDef | n
   if (macro.targetApp !== undefined) {
     normalized.targetApp = normalizeTargetApp(macro.targetApp, fallbackTarget);
   }
+  if (typeof macro.submit === "boolean") {
+    normalized.submit = macro.submit;
+  }
   if (macro.type === "widget") {
     normalized.type = "widget";
     const widget = normalizeWidget(macro.widget);
@@ -198,6 +202,10 @@ function parseMacroStrict(value: unknown, fallbackTarget: TargetApp): MacroDef {
     if (macro.icon.length > 0) out.icon = macro.icon;
   }
   if (macro.targetApp !== undefined) out.targetApp = normalizeTargetApp(macro.targetApp, fallbackTarget);
+  if (macro.submit !== undefined) {
+    if (typeof macro.submit !== "boolean") throw new ConfigValidationError("Macro submit must be a boolean");
+    out.submit = macro.submit;
+  }
   if (macro.type !== undefined) {
     if (macro.type !== "macro" && macro.type !== "widget") {
       throw new ConfigValidationError("Macro type must be 'macro' or 'widget'");

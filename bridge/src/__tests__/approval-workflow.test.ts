@@ -42,6 +42,7 @@ afterAll(async () => {
 
 afterEach(() => {
   clearGateFile();
+  decky.sm.forceState("idle", "test cleanup");
 });
 
 async function postHook(body: Record<string, unknown>) {
@@ -126,6 +127,19 @@ describe("approval workflow — gate file", () => {
 
     expect(gateFileExists()).toBe(true);
     expect(readFileSync(GATE_FILE_PATH, "utf-8")).toBe("cancel");
+    sock.disconnect();
+  });
+
+  it("approveOnceInClaude writes 'approve' and transitions to tool-executing", async () => {
+    await postHook({ event: "PreToolUse", tool: "Bash" });
+
+    const sock = await connectClient();
+    const statePromise = waitForState(sock, "tool-executing");
+    sock.emit("action", { action: "approveOnceInClaude" });
+    await statePromise;
+
+    expect(gateFileExists()).toBe(true);
+    expect(readFileSync(GATE_FILE_PATH, "utf-8")).toBe("approve");
     sock.disconnect();
   });
 });

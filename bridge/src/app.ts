@@ -12,7 +12,7 @@ import { Server as SocketIOServer } from "socket.io";
 import { StateMachine, type HookPayload, type HookEvent } from "./state-machine.js";
 import { writeGateFile, clearGateFile, type ApprovalResult } from "./approval-gate.js";
 import { loadConfig, getConfig, reloadConfig, saveConfig, type Theme, ConfigValidationError } from "./config.js";
-import { executeMacro } from "./macro-exec.js";
+import { executeMacro, approveOnceInClaude, startDictationForClaude } from "./macro-exec.js";
 import { getBridgeToken, readRequestToken, redactActionForLog } from "./security.js";
 
 const MAX_MACRO_ACTION_TEXT = 2000;
@@ -199,12 +199,29 @@ export function createApp(): DeckyApp {
             data.targetApp === "windsurf"
               ? data.targetApp
               : cfg.defaultTargetApp;
-          executeMacro(macroText, { targetApp }).catch((err) => {
+          const submit = typeof data.submit === "boolean" ? data.submit : true;
+          executeMacro(macroText, { targetApp, submit }).catch((err) => {
             console.error("[io] macro execution failed:", err);
           });
         } else {
           socket.emit("error", { error: "Invalid macro payload" });
         }
+      } else if (data.action === "approveOnceInClaude") {
+        if (sm.getSnapshot().state !== "awaiting-approval") {
+          socket.emit("error", { error: "approveOnceInClaude ignored: not awaiting approval" });
+          return;
+        }
+        writeGateFile("approve", pendingGateNonce ?? undefined);
+        pendingGateNonce = null;
+        sm.forceState("tool-executing", "approved via StreamDeck (approve once)");
+        approveOnceInClaude().catch((err) => {
+          console.error("[io] approveOnceInClaude failed:", err);
+        });
+      } else if (data.action === "startDictationForClaude") {
+        startDictationForClaude().catch((err) => {
+          console.error("[io] startDictationForClaude failed:", err);
+          socket.emit("error", { error: "Failed to start dictation in Claude" });
+        });
       } else if (data.action === "updateConfig") {
         const requestId =
           typeof data.requestId === "string" && data.requestId.trim().length > 0

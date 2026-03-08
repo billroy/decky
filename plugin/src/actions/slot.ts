@@ -234,6 +234,7 @@ export class SlotAction extends SingletonAction {
           text: m.text,
           icon: m.icon,
           targetApp: m.targetApp,
+          submit: m.submit,
           type: m.type,
           widget: m.widget,
         };
@@ -354,6 +355,7 @@ export class SlotAction extends SingletonAction {
       icon: m.icon,
       colors: m.colors,
       targetApp: m.targetApp,
+      submit: m.submit,
       type: m.type,
       widget: m.widget,
     }));

@@ -528,6 +528,7 @@ export interface MacroInput {
   icon?: string;
   colors?: ColorOverrides;
   targetApp?: TargetApp;
+  submit?: boolean;
   type?: "macro" | "widget";
   widget?: WidgetDef;
 }
@@ -554,11 +555,12 @@ function macroSlot(index: number, macro: MacroInput): SlotConfig {
     return widgetSlot(index, macro);
   }
   const targetApp = macro.targetApp ?? "claude";
+  const submit = macro.submit !== false;
   return {
     svg: macroSVG(index, macro.label, macro.icon, macro.colors, targetApp),
     title: macro.label,
     action: "macro",
-    data: { text: macro.text, targetApp },
+    data: { text: macro.text, targetApp, submit },
   };
 }
 

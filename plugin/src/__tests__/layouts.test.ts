@@ -46,7 +46,7 @@ describe("layouts", () => {
         const config = getSlotConfig("idle", i);
         expect(config.title).toBe(`Macro ${i + 1}`);
         expect(config.action).toBe("macro");
-        expect(config.data).toEqual({ text: "", targetApp: "claude" });
+        expect(config.data).toEqual({ text: "", targetApp: "claude", submit: true });
         expect(config.svg).toContain("svg");
       }
     });
@@ -69,14 +69,14 @@ describe("layouts", () => {
       const config = getSlotConfig("idle", 0, null, macros);
       expect(config.title).toBe("Continue");
       expect(config.action).toBe("macro");
-      expect(config.data).toEqual({ text: "Continue", targetApp: "claude" });
+      expect(config.data).toEqual({ text: "Continue", targetApp: "claude", submit: true });
     });
 
     it("renders all provided macros", () => {
       for (let i = 0; i < macros.length; i++) {
         const config = getSlotConfig("idle", i, null, macros);
         expect(config.title).toBe(macros[i].label);
-        expect(config.data).toEqual({ text: macros[i].text, targetApp: "claude" });
+        expect(config.data).toEqual({ text: macros[i].text, targetApp: "claude", submit: true });
       }
     });
 
@@ -126,7 +126,13 @@ describe("layouts", () => {
     it("uses per-macro targetApp in action payload", () => {
       const macros: MacroInput[] = [{ label: "Ship", text: "Ship it", targetApp: "codex" }];
       const config = getSlotConfig("idle", 0, null, macros);
-      expect(config.data).toEqual({ text: "Ship it", targetApp: "codex" });
+      expect(config.data).toEqual({ text: "Ship it", targetApp: "codex", submit: true });
+    });
+
+    it("uses submit=false in macro action payload when configured", () => {
+      const macros: MacroInput[] = [{ label: "Slash", text: "/review", submit: false }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.data).toEqual({ text: "/review", targetApp: "claude", submit: false });
     });
   });
 
@@ -290,7 +296,7 @@ describe("layouts", () => {
       setTargetBadgeOptions({ showTargetBadge: false, defaultTargetApp: "codex" });
       const macros: MacroInput[] = [{ label: "Ship", text: "ship it" }];
       const config = getSlotConfig("idle", 0, null, macros);
-      expect(config.data).toEqual({ text: "ship it", targetApp: "claude" });
+      expect(config.data).toEqual({ text: "ship it", targetApp: "claude", submit: true });
     });
 
     it("does not hide codex badge even if configured defaultTargetApp is codex", () => {

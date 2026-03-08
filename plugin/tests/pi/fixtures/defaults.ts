@@ -3,6 +3,7 @@ export interface TestMacro {
   text: string;
   icon?: string;
   targetApp?: string;
+  submit?: boolean;
   type?: "macro" | "widget";
   widget?: {
     kind?: "bridge-status";

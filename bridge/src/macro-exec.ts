@@ -11,6 +11,7 @@ import type { TargetApp } from "./config.js";
 
 interface MacroExecutionOptions {
   targetApp?: TargetApp;
+  submit?: boolean;
 }
 
 interface TargetAppSpec {
@@ -46,6 +47,7 @@ function activationScriptFor(targetApp: TargetApp): string {
  */
 export function executeMacro(text: string, options: MacroExecutionOptions = {}): Promise<void> {
   const targetApp = options.targetApp ?? "claude";
+  const submit = options.submit !== false;
   const activation = activationScriptFor(targetApp);
 
   // Use pbcopy + AppleScript for reliable injection:
@@ -58,8 +60,8 @@ export function executeMacro(text: string, options: MacroExecutionOptions = {}):
     delay 0.2
     tell application "System Events"
       keystroke "v" using command down
-      delay 0.1
-      keystroke return
+      ${submit ? `delay 0.1
+      keystroke return` : ""}
     end tell
   `;
 
@@ -88,5 +90,51 @@ export function executeMacro(text: string, options: MacroExecutionOptions = {}):
 
     pbcopy.stdin?.write(text);
     pbcopy.stdin?.end();
+  });
+}
+
+export function approveOnceInClaude(): Promise<void> {
+  const script = `
+    try
+      tell application id "com.anthropic.claudefordesktop" to activate
+    on error
+      tell application "Claude" to activate
+    end try
+    delay 0.15
+    tell application "System Events"
+      keystroke return
+    end tell
+  `;
+  return new Promise((resolve, reject) => {
+    execFile("osascript", ["-e", script], (asErr) => {
+      if (asErr) return reject(asErr);
+      resolve();
+    });
+  });
+}
+
+export function startDictationForClaude(): Promise<void> {
+  const script = `
+    try
+      tell application id "com.anthropic.claudefordesktop" to activate
+    on error
+      tell application "Claude" to activate
+    end try
+    delay 0.2
+    tell application "System Events"
+      tell process "Claude"
+        try
+          click menu item "Start Dictation…" of menu 1 of menu bar item "Edit" of menu bar 1
+        on error
+          click menu item "Start Dictation..." of menu 1 of menu bar item "Edit" of menu bar 1
+        end try
+      end tell
+    end tell
+  `;
+  return new Promise((resolve, reject) => {
+    execFile("osascript", ["-e", script], (asErr) => {
+      if (asErr) return reject(asErr);
+      resolve();
+    });
   });
 }

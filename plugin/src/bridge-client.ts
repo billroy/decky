@@ -52,6 +52,7 @@ export interface MacroDef {
   icon?: string;
   colors?: ColorOverrides;
   targetApp?: TargetApp;
+  submit?: boolean;
   type?: "macro" | "widget";
   widget?: WidgetDef;
 }

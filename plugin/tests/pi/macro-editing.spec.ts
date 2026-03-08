@@ -97,4 +97,17 @@ test.describe("PI macro editing", () => {
     expect(macro0.widget).toBeUndefined();
     expect(macro0.text).toBe("run this");
   });
+
+  test("submit checkbox persists false for slash-style macros", async ({ piHarness }) => {
+    const { page } = piHarness;
+
+    await page.uncheck('#macro-list input[data-field="submit"][data-index="0"]');
+    await page.fill('#macro-list textarea[data-field="text"][data-index="0"]', "/help");
+    await page.click("#btn-save");
+
+    const update = await piHarness.waitForUpdateConfig();
+    const macro0 = findMacro(update, 0);
+    expect(macro0.submit).toBe(false);
+    expect(macro0.text).toBe("/help");
+  });
 });
