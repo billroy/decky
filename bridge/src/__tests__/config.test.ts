@@ -109,12 +109,16 @@ describe("config endpoints", () => {
       body: JSON.stringify({
         defaultTargetApp: "codex",
         showTargetBadge: true,
+        enableApproveOnce: false,
+        enableDictation: false,
         macros: [{ label: "Ship", text: "Ship it", targetApp: "chatgpt" }],
       }),
     });
     const data = await res.json();
     expect(data.config.defaultTargetApp).toBe("codex");
     expect(data.config.showTargetBadge).toBe(true);
+    expect(data.config.enableApproveOnce).toBe(false);
+    expect(data.config.enableDictation).toBe(false);
     expect(data.config.macros[0].targetApp).toBe("chatgpt");
   });
 
@@ -127,6 +131,41 @@ describe("config endpoints", () => {
     const data = await res.json();
     expect(data.config.theme).toBe("rainbow");
     expect(data.config.themeSeed).toBe(12345);
+  });
+
+  it("PUT /config persists widget macros", async () => {
+    const res = await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
+      body: JSON.stringify({
+        macros: [
+          {
+            label: "Bridge",
+            text: "",
+            type: "widget",
+            widget: { kind: "bridge-status", refreshMode: "interval", intervalMinutes: 5 },
+          },
+        ],
+      }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.config.macros[0].type).toBe("widget");
+    expect(data.config.macros[0].widget.kind).toBe("bridge-status");
+    expect(data.config.macros[0].widget.intervalMinutes).toBe(5);
+  });
+
+  it("PUT /config persists macro submit flag", async () => {
+    const res = await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
+      body: JSON.stringify({
+        macros: [{ label: "Slash", text: "/review", submit: false }],
+      }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.config.macros[0].submit).toBe(false);
   });
 
   it("GET /config reflects saved changes", async () => {

@@ -15,6 +15,15 @@ export interface ColorOverrides {
   icon?: string;
 }
 
+export type WidgetKind = "bridge-status";
+export type WidgetRefreshMode = "onClick" | "interval";
+
+export interface WidgetDef {
+  kind: WidgetKind;
+  refreshMode?: WidgetRefreshMode;
+  intervalMinutes?: number;
+}
+
 export type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";
 export type Theme =
   | "light"
@@ -34,6 +43,9 @@ export interface MacroDef {
   icon?: string;
   colors?: ColorOverrides;
   targetApp?: TargetApp;
+  submit?: boolean;
+  type?: "macro" | "widget";
+  widget?: WidgetDef;
 }
 
 export interface DeckyConfig {
@@ -45,6 +57,8 @@ export interface DeckyConfig {
   colors?: ColorOverrides;
   defaultTargetApp: TargetApp;
   showTargetBadge: boolean;
+  enableApproveOnce: boolean;
+  enableDictation: boolean;
 }
 
 export type EditorName = "bbedit" | "code" | "cursor" | "windsurf" | "textedit";
@@ -80,12 +94,16 @@ const DEFAULT_CONFIG: DeckyConfig = {
   editor: DEFAULT_EDITOR,
   defaultTargetApp: "claude",
   showTargetBadge: false,
+  enableApproveOnce: true,
+  enableDictation: true,
 };
 
 export const MAX_MACROS = 36;
 export const MAX_LABEL_LENGTH = 20;
 export const MAX_TEXT_LENGTH = 2000;
 export const MAX_ICON_LENGTH = 64;
+export const MIN_WIDGET_INTERVAL_MINUTES = 1;
+export const MAX_WIDGET_INTERVAL_MINUTES = 60;
 export const MAX_EDITOR_LENGTH = 128;
 export const MIN_APPROVAL_TIMEOUT = 5;
 export const MAX_APPROVAL_TIMEOUT = 300;
@@ -136,7 +154,33 @@ function normalizeMacro(value: unknown, fallbackTarget: TargetApp): MacroDef | n
   if (macro.targetApp !== undefined) {
     normalized.targetApp = normalizeTargetApp(macro.targetApp, fallbackTarget);
   }
+  if (typeof macro.submit === "boolean") {
+    normalized.submit = macro.submit;
+  }
+  if (macro.type === "widget") {
+    normalized.type = "widget";
+    const widget = normalizeWidget(macro.widget);
+    if (widget) normalized.widget = widget;
+  }
   return normalized;
+}
+
+function normalizeWidget(value: unknown): WidgetDef | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const obj = value as Record<string, unknown>;
+  const kind = obj.kind === "bridge-status" ? "bridge-status" : undefined;
+  if (!kind) return undefined;
+  const out: WidgetDef = { kind };
+  if (obj.refreshMode === "onClick" || obj.refreshMode === "interval") {
+    out.refreshMode = obj.refreshMode;
+  }
+  if (typeof obj.intervalMinutes === "number" && Number.isFinite(obj.intervalMinutes)) {
+    const n = Math.floor(obj.intervalMinutes);
+    if (n >= MIN_WIDGET_INTERVAL_MINUTES && n <= MAX_WIDGET_INTERVAL_MINUTES) {
+      out.intervalMinutes = n;
+    }
+  }
+  return out;
 }
 
 function parseMacroStrict(value: unknown, fallbackTarget: TargetApp): MacroDef {
@@ -162,6 +206,21 @@ function parseMacroStrict(value: unknown, fallbackTarget: TargetApp): MacroDef {
     if (macro.icon.length > 0) out.icon = macro.icon;
   }
   if (macro.targetApp !== undefined) out.targetApp = normalizeTargetApp(macro.targetApp, fallbackTarget);
+  if (macro.submit !== undefined) {
+    if (typeof macro.submit !== "boolean") throw new ConfigValidationError("Macro submit must be a boolean");
+    out.submit = macro.submit;
+  }
+  if (macro.type !== undefined) {
+    if (macro.type !== "macro" && macro.type !== "widget") {
+      throw new ConfigValidationError("Macro type must be 'macro' or 'widget'");
+    }
+    if (macro.type === "widget") {
+      out.type = "widget";
+      const widget = normalizeWidget(macro.widget);
+      if (!widget) throw new ConfigValidationError("Widget macro must include a valid widget definition");
+      out.widget = widget;
+    }
+  }
   if (macro.colors !== undefined) {
     const colors = normalizeColorOverrides(macro.colors);
     if (!colors) throw new ConfigValidationError("Macro colors must contain valid hex color values");
@@ -235,6 +294,14 @@ export function loadConfig(): DeckyConfig {
         typeof raw_obj.showTargetBadge === "boolean"
           ? raw_obj.showTargetBadge
           : DEFAULT_CONFIG.showTargetBadge,
+      enableApproveOnce:
+        typeof raw_obj.enableApproveOnce === "boolean"
+          ? raw_obj.enableApproveOnce
+          : DEFAULT_CONFIG.enableApproveOnce,
+      enableDictation:
+        typeof raw_obj.enableDictation === "boolean"
+          ? raw_obj.enableDictation
+          : DEFAULT_CONFIG.enableDictation,
       ...(colors ? { colors } : {}),
     };
 
@@ -298,6 +365,12 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
   if (update_obj.showTargetBadge !== undefined && typeof update_obj.showTargetBadge !== "boolean") {
     throw new ConfigValidationError("showTargetBadge must be a boolean");
   }
+  if (update_obj.enableApproveOnce !== undefined && typeof update_obj.enableApproveOnce !== "boolean") {
+    throw new ConfigValidationError("enableApproveOnce must be a boolean");
+  }
+  if (update_obj.enableDictation !== undefined && typeof update_obj.enableDictation !== "boolean") {
+    throw new ConfigValidationError("enableDictation must be a boolean");
+  }
   if (update_obj.defaultTargetApp !== undefined) {
     const v = update_obj.defaultTargetApp;
     if (v !== "claude" && v !== "codex" && v !== "chatgpt" && v !== "cursor" && v !== "windsurf") {
@@ -346,6 +419,14 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
       typeof update_obj.showTargetBadge === "boolean"
         ? update_obj.showTargetBadge
         : currentConfig.showTargetBadge,
+    enableApproveOnce:
+      typeof update_obj.enableApproveOnce === "boolean"
+        ? update_obj.enableApproveOnce
+        : currentConfig.enableApproveOnce,
+    enableDictation:
+      typeof update_obj.enableDictation === "boolean"
+        ? update_obj.enableDictation
+        : currentConfig.enableDictation,
     ...(hasColorsField
       ? (normalizedUpdateColors ? { colors: normalizedUpdateColors } : {})
       : (currentConfig.colors ? { colors: currentConfig.colors } : {})),

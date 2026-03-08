@@ -60,6 +60,26 @@
       "States": [
         { "Image": "imgs/actions/slot/key", "Title": "Slot" }
       ]
+    },
+    {
+      "UUID": "com.decky.controller.approveOnceInClaude",
+      "Name": "Approve Once (Claude)",
+      "Tooltip": "Activate Claude and press Return once when awaiting approval.",
+      "Icon": "imgs/actions/approve/icon",
+      "Controllers": ["Keypad"],
+      "States": [
+        { "Image": "imgs/actions/approve/key", "Title": "Approve Once" }
+      ]
+    },
+    {
+      "UUID": "com.decky.controller.startDictationForClaude",
+      "Name": "Talk to Claude",
+      "Tooltip": "Activate Claude and trigger Start Dictation from the Edit menu.",
+      "Icon": "imgs/actions/slot/icon",
+      "Controllers": ["Keypad"],
+      "States": [
+        { "Image": "imgs/actions/slot/key", "Title": "Dictation" }
+      ]
     }
   ]
 }

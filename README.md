@@ -1,6 +1,6 @@
 # Decky
 
-StreamDeck MK.2 controller for Claude Code on macOS. Approve tool use, deny, cancel, and send text macros with physical buttons instead of clicking through the GUI.
+StreamDeck MK.2 controller for Claude Code on macOS. Approve tool use, deny, cancel, run utility actions, and send text macros with physical buttons instead of clicking through the GUI.
 
 ## Install
 
@@ -38,7 +38,7 @@ Decky has two parts: a **bridge server** and a **StreamDeck plugin**.
 
 | State | Deck shows | Available actions |
 |---|---|---|
-| **idle** | Macro buttons (up to 36) | Press to inject text into selected app |
+| **idle** | Macro buttons/widgets (up to 36) | Press to inject text into selected app or refresh widget |
 | **thinking** | Thinking indicator + Stop | Stop |
 | **awaiting-approval** | Approve, Deny, Cancel, tool name | Approve / Deny / Cancel |
 | **tool-executing** | Stop + tool name | Stop |
@@ -50,7 +50,16 @@ When Claude Code wants to run a tool, the `PreToolUse` hook fires and the bridge
 
 ### Macros
 
-In the idle state, the deck shows up to 36 configurable text macros. Press one and the text is typed into the selected target app via the clipboard (pbcopy + Cmd+V). Supported targets are Claude, Codex, ChatGPT, Cursor, and Windsurf.
+In the idle state, the deck shows up to 36 configurable macro slots. Each slot can be a **Command** macro or a **Widget**.
+
+Command macro behavior:
+- Press one and the text is typed into the selected target app via the clipboard (`pbcopy` + Cmd+V).
+- Optional per-macro `submit` controls whether Return is pressed automatically after paste (default `true`).
+- Supported targets are Claude, Codex, ChatGPT, Cursor, and Windsurf.
+
+Widget behavior:
+- Current built-in widget type is `bridge-status`.
+- Refresh mode can be `onClick` or `interval` (`intervalMinutes` 1..60).
 
 Edit macros in the Stream Deck app by selecting a Decky Slot button and using the Property Inspector.
 
@@ -61,20 +70,27 @@ Config lives at `~/.decky/config.json` (created with defaults on first run):
 ```json
 {
   "macros": [
-    { "label": "Continue", "text": "Continue", "targetApp": "claude" },
-    { "label": "Ship", "text": "Ship it", "targetApp": "codex" }
+    { "label": "Continue", "text": "Continue", "targetApp": "claude", "submit": true },
+    { "label": "Bridge", "text": "", "type": "widget", "widget": { "kind": "bridge-status", "refreshMode": "interval", "intervalMinutes": 5 } }
   ],
   "approvalTimeout": 30,
   "defaultTargetApp": "claude",
-  "showTargetBadge": false
+  "showTargetBadge": false,
+  "enableApproveOnce": true,
+  "enableDictation": true
 }
 ```
 
 - **macros**: Up to 36 entries. `label` shows on the button, `text` is sent to the selected app.
 - **macro.targetApp**: Optional per-macro target override (`claude`, `codex`, `chatgpt`, `cursor`, `windsurf`).
+- **macro.submit**: Optional per-macro boolean. When `false`, macro text is pasted only (no Return key).
+- **macro.type**: Optional macro type (`macro` or `widget`).
+- **macro.widget**: Required when `type` is `widget`. Currently supports `{ "kind": "bridge-status" }`.
 - **approvalTimeout**: Seconds the hook waits for a button press before auto-blocking (default 30).
 - **defaultTargetApp**: Global default target used when a macro has no explicit `targetApp`.
 - **showTargetBadge**: Toggle compact 3-letter target badges on macro icons (for example `CLD`, `CDX`).
+- **enableApproveOnce**: Enables/disables the dedicated `Approve Once (Claude)` action.
+- **enableDictation**: Enables/disables the dedicated `Talk to Claude` action.
 
 ### Property Inspector controls
 
@@ -83,8 +99,13 @@ Config lives at `~/.decky/config.json` (created with defaults on first run):
 - **Approval timeout**: Seconds before a tool-approval request is auto-blocked.
 - **Target app (selected slot)**: Per-macro provider override.
 - **Target badge**: Show/hide compact provider badge on icons.
+- **Approve once action**: Enable/disable dedicated `Approve Once (Claude)` key behavior.
+- **Talk to Claude action**: Enable/disable dedicated dictation key behavior.
 - **Page default colors**: Background/text/icon defaults for all macros.
 - **Macro colors**: Per-macro background/text/icon overrides.
+- **Macro Type**: Switch each slot between `Command` and `Widget`.
+- **Command Submit**: For command macros, choose paste-only vs paste-and-submit.
+- **Widget settings**: For widgets, set refresh mode and interval.
 
 Unconfigured slots are intentionally no-op.
 
@@ -120,7 +141,7 @@ plugin/                StreamDeck plugin
   src/plugin.ts          Entry point
   src/bridge-client.ts   Socket.io client
   src/layouts.ts         State-driven button layouts
-  src/actions/           Action handlers (slot, status, approve, deny, cancel)
+  src/actions/           Action handlers (slot, status, approve, approve-once, deny, cancel, dictation)
   com.decky.controller.sdPlugin/
     manifest.json        Plugin manifest
     ui/                  Property Inspector

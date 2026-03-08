@@ -24,6 +24,7 @@ import {
   setThemeSeed,
   setDefaultColors,
   setTargetBadgeOptions,
+  setWidgetRenderContext,
   type MacroInput,
 } from "../layouts.js";
 import { PI_PROTOCOL_VERSION } from "../protocol.js";
@@ -95,6 +96,7 @@ export class SlotAction extends SingletonAction {
   private unsubConfig?: () => void;
   private unsubBridgeEvent?: () => void;
   private activePiActionId?: string;
+  private widgetInterval?: ReturnType<typeof setInterval>;
 
   override async onWillAppear(ev: WillAppearEvent): Promise<void> {
     // Compute slot index from physical position on the deck
@@ -177,6 +179,10 @@ export class SlotAction extends SingletonAction {
       this.unsubState = undefined;
       this.unsubConfig = undefined;
       this.unsubBridgeEvent = undefined;
+      if (this.widgetInterval) {
+        clearInterval(this.widgetInterval);
+        this.widgetInterval = undefined;
+      }
     }
   }
 
@@ -190,6 +196,11 @@ export class SlotAction extends SingletonAction {
     const state = snapshot?.state ?? "idle";
     const macros = this.getMacros();
     const config = getSlotConfig(state, rank, snapshot?.tool, macros);
+
+    if (config.action === "widget-refresh") {
+      await this.renderAll(bridgeRef.getConnectionStatus(), snapshot);
+      return;
+    }
 
     if (config.action && bridgeRef.getConnectionStatus() === "connected") {
       bridgeRef.sendAction(config.action, config.data);
@@ -223,6 +234,9 @@ export class SlotAction extends SingletonAction {
           text: m.text,
           icon: m.icon,
           targetApp: m.targetApp,
+          submit: m.submit,
+          type: m.type,
+          widget: m.widget,
         };
         if (m.colors) entry.colors = m.colors;
         return entry;
@@ -232,6 +246,8 @@ export class SlotAction extends SingletonAction {
       approvalTimeout: cfg?.approvalTimeout ?? 30,
       defaultTargetApp: cfg?.defaultTargetApp ?? "claude",
       showTargetBadge: cfg?.showTargetBadge ?? false,
+      enableApproveOnce: cfg?.enableApproveOnce ?? true,
+      enableDictation: cfg?.enableDictation ?? true,
     };
     if (typeof selectedMacroIndex === "number" && selectedMacroIndex >= 0) {
       snapshot.selectedMacroIndex = selectedMacroIndex;
@@ -301,6 +317,8 @@ export class SlotAction extends SingletonAction {
       if (typeof payload.approvalTimeout === "number") update.approvalTimeout = payload.approvalTimeout;
       if (typeof payload.defaultTargetApp === "string") update.defaultTargetApp = payload.defaultTargetApp;
       if (typeof payload.showTargetBadge === "boolean") update.showTargetBadge = payload.showTargetBadge;
+      if (typeof payload.enableApproveOnce === "boolean") update.enableApproveOnce = payload.enableApproveOnce;
+      if (typeof payload.enableDictation === "boolean") update.enableDictation = payload.enableDictation;
       if (payload.colors && typeof payload.colors === "object") update.colors = payload.colors;
       if (
         payload.themeApplyMode === "keep" ||
@@ -324,10 +342,16 @@ export class SlotAction extends SingletonAction {
     if (cfg?.theme) setTheme(cfg.theme);
     setThemeSeed(cfg?.themeSeed ?? 0);
     setDefaultColors(cfg?.colors ?? {});
+    setWidgetRenderContext({
+      connectionStatus: bridgeRef?.getConnectionStatus() ?? "disconnected",
+      state: bridgeRef?.getLastSnapshot()?.state,
+      timestamp: bridgeRef?.getLastSnapshot()?.timestamp,
+    });
     setTargetBadgeOptions({
       showTargetBadge: cfg?.showTargetBadge ?? false,
       defaultTargetApp: cfg?.defaultTargetApp ?? "claude",
     });
+    this.syncWidgetInterval(cfg?.macros ?? []);
     if (!cfg?.macros?.length) return undefined;
     return cfg.macros.map((m) => ({
       label: m.label,
@@ -335,7 +359,29 @@ export class SlotAction extends SingletonAction {
       icon: m.icon,
       colors: m.colors,
       targetApp: m.targetApp,
+      submit: m.submit,
+      type: m.type,
+      widget: m.widget,
     }));
+  }
+
+  private syncWidgetInterval(macros: Array<{ type?: string; widget?: { refreshMode?: string; intervalMinutes?: number } }>): void {
+    const minutes = macros
+      .filter((m) => m.type === "widget" && m.widget?.refreshMode === "interval")
+      .map((m) => {
+        const n = Number(m.widget?.intervalMinutes ?? 1);
+        return Number.isFinite(n) && n >= 1 && n <= 60 ? Math.floor(n) : 1;
+      });
+    const minMinutes = minutes.length ? Math.min(...minutes) : 0;
+    if (this.widgetInterval) {
+      clearInterval(this.widgetInterval);
+      this.widgetInterval = undefined;
+    }
+    if (minMinutes > 0) {
+      this.widgetInterval = setInterval(() => {
+        this.renderAll(bridgeRef?.getConnectionStatus() ?? "disconnected", bridgeRef?.getLastSnapshot() ?? null).catch(() => {});
+      }, minMinutes * 60_000);
+    }
   }
 
   private async renderAll(connStatus: ConnectionStatus, snapshot: StateSnapshot | null): Promise<void> {

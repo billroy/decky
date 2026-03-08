@@ -24,6 +24,15 @@ export interface ColorOverrides {
   icon?: string;
 }
 
+export type WidgetKind = "bridge-status";
+export type WidgetRefreshMode = "onClick" | "interval";
+
+export interface WidgetDef {
+  kind: WidgetKind;
+  refreshMode?: WidgetRefreshMode;
+  intervalMinutes?: number;
+}
+
 export type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";
 export type Theme =
   | "light"
@@ -43,6 +52,9 @@ export interface MacroDef {
   icon?: string;
   colors?: ColorOverrides;
   targetApp?: TargetApp;
+  submit?: boolean;
+  type?: "macro" | "widget";
+  widget?: WidgetDef;
 }
 
 export interface DeckyConfig {
@@ -54,6 +66,8 @@ export interface DeckyConfig {
   colors?: ColorOverrides;
   defaultTargetApp: TargetApp;
   showTargetBadge: boolean;
+  enableApproveOnce?: boolean;
+  enableDictation?: boolean;
 }
 
 export type ConnectionStatus = "connected" | "disconnected" | "connecting";
