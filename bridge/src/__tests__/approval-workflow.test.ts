@@ -75,12 +75,6 @@ function waitForState(sock: ClientSocket, targetState: string): Promise<void> {
   });
 }
 
-function waitForSocketError(sock: ClientSocket): Promise<string> {
-  return new Promise((resolve) => {
-    sock.once("error", (payload: { error?: string }) => resolve(payload?.error ?? ""));
-  });
-}
-
 describe("approval workflow — gate file", () => {
   it("PreToolUse clears any stale gate file", async () => {
     // Create a stale gate file
@@ -151,20 +145,11 @@ describe("approval workflow — gate file", () => {
     sock.disconnect();
   });
 
-  it("approveOnceInClaude is blocked when feature is disabled", async () => {
-    await fetch(`${baseUrl}/config`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", "x-decky-token": token },
-      body: JSON.stringify({ enableApproveOnce: false }),
-    });
-    await postHook({ event: "PreToolUse", tool: "Bash" });
-
+  it("approveOnceInClaude outside awaiting-approval does not write gate file", async () => {
+    decky.sm.forceState("idle", "test reset");
     const sock = await connectClient();
-    const errPromise = waitForSocketError(sock);
     sock.emit("action", { action: "approveOnceInClaude" });
-    const err = await errPromise;
-
-    expect(err).toContain("disabled");
+    await new Promise((r) => setTimeout(r, 150));
     expect(gateFileExists()).toBe(false);
     sock.disconnect();
   });
