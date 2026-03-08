@@ -197,8 +197,12 @@ describe("BridgeClient", () => {
       macros: [{ label: "A", text: "B" }],
     });
 
-    const payload = await eventPromise as { requestId?: string };
+    const payload = await eventPromise as {
+      requestId?: string;
+      config?: { macros?: Array<{ label?: string }> };
+    };
     expect(payload.requestId).toBe("bridge-client-ack");
+    expect(payload.config?.macros?.[0]?.label).toBe("A");
     expect(client.getLastConfig()?.macros[0]?.label).toBe("A");
     expect(onConfig).toHaveBeenCalled();
     client.disconnect();

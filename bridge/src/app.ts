@@ -293,6 +293,7 @@ export function createApp(): DeckyApp {
             io.emit("configUpdate", config);
             socket.emit("updateConfigAck", {
               requestId: requestId ?? null,
+              config,
               theme: config.theme,
               macroCount: config.macros.length,
               hasPageColors: !!config.colors,
