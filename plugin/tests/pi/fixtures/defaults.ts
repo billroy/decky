@@ -3,6 +3,12 @@ export interface TestMacro {
   text: string;
   icon?: string;
   targetApp?: string;
+  type?: "macro" | "widget";
+  widget?: {
+    kind?: "bridge-status";
+    refreshMode?: "onClick" | "interval";
+    intervalMinutes?: number;
+  } | null;
   colors?: { bg?: string; text?: string; icon?: string };
 }
 

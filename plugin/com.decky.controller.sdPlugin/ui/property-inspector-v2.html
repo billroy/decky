@@ -583,6 +583,17 @@
       { value: "cursor", label: "Cursor (CSR)" },
       { value: "windsurf", label: "Windsurf (WDF)" },
     ];
+    const MACRO_TYPES = [
+      { value: "macro", label: "Command" },
+      { value: "widget", label: "Widget" },
+    ];
+    const WIDGET_KINDS = [
+      { value: "bridge-status", label: "Bridge status" },
+    ];
+    const WIDGET_REFRESH_MODES = [
+      { value: "onClick", label: "On click" },
+      { value: "interval", label: "Interval" },
+    ];
     const COLOR_PALETTE = [
       { value: "", label: "None" },
       { value: "#0f172a", label: "Dark Navy" },
@@ -635,8 +646,21 @@
         requestId: requestId || "",
         macros: macros.map(function (m) {
           var o = { label: m.label, text: m.text };
-          if (m.type) o.type = m.type;
-          if (m.widget) o.widget = m.widget;
+          var macroType = m.type === "widget" ? "widget" : "macro";
+          if (macroType === "widget") {
+            o.type = "widget";
+            var refreshMode = m.widget && m.widget.refreshMode === "interval" ? "interval" : "onClick";
+            var intervalMinutes = 1;
+            if (m.widget && Number.isFinite(m.widget.intervalMinutes)) {
+              var n = Math.floor(Number(m.widget.intervalMinutes));
+              if (n >= 1 && n <= 60) intervalMinutes = n;
+            }
+            o.widget = {
+              kind: "bridge-status",
+              refreshMode: refreshMode,
+              intervalMinutes: intervalMinutes,
+            };
+          }
           if (m.icon) o.icon = m.icon;
           var macroTarget = (m.targetApp || "").trim();
           if (macroTarget) o.targetApp = macroTarget;
@@ -853,7 +877,7 @@
             text: m.text || "",
             icon: m.icon || "",
             targetApp: m.targetApp || "",
-            type: m.type || "",
+            type: m.type === "widget" ? "widget" : "macro",
             widget: m.widget || null,
             colors: { bg: (m.colors && m.colors.bg) || "", text: (m.colors && m.colors.text) || "", icon: (m.colors && m.colors.icon) || "" },
           }));
@@ -1037,11 +1061,20 @@
 
       visibleIndexes.forEach((i) => {
         const macro = macros[i];
+        const macroType = macro.type === "widget" ? "widget" : "macro";
+        const widgetKind = macro.widget && macro.widget.kind === "bridge-status" ? "bridge-status" : "bridge-status";
+        const widgetRefreshMode = macro.widget && macro.widget.refreshMode === "interval" ? "interval" : "onClick";
+        const widgetInterval = macro.widget && Number.isFinite(macro.widget.intervalMinutes)
+          ? Math.min(60, Math.max(1, Math.floor(Number(macro.widget.intervalMinutes))))
+          : 1;
         const item = document.createElement("div");
         item.className = "macro-item";
         item.draggable = showAllMacros;
         item.dataset.index = i;
 
+        const macroTypeOptions = MACRO_TYPES.map(
+          (opt) => '<option value="' + esc(opt.value) + '"' + (macroType === opt.value ? " selected" : "") + ">" + esc(opt.label) + "</option>"
+        ).join("");
         const iconOptions = ICONS.map(
           (ic) => '<option value="' + esc(ic.value) + '"' + (macro.icon === ic.value ? " selected" : "") + ">" + esc(ic.label) + "</option>"
         ).join("");
@@ -1054,6 +1087,12 @@
             ">" +
             esc(target.label) +
             "</option>"
+        ).join("");
+        const widgetKindOptions = WIDGET_KINDS.map(
+          (opt) => '<option value="' + esc(opt.value) + '"' + (widgetKind === opt.value ? " selected" : "") + ">" + esc(opt.label) + "</option>"
+        ).join("");
+        const widgetRefreshOptions = WIDGET_REFRESH_MODES.map(
+          (opt) => '<option value="' + esc(opt.value) + '"' + (widgetRefreshMode === opt.value ? " selected" : "") + ">" + esc(opt.label) + "</option>"
         ).join("");
 
         item.innerHTML =
@@ -1069,21 +1108,42 @@
               "<label>Label</label>" +
               '<input type="text" data-field="label" data-index="' + i + '" value="' + esc(macro.label) + '" placeholder="Button label" maxlength="20" />' +
             "</div>" +
+            '<div class="field-group">' +
+              "<label>Type</label>" +
+              '<select data-widget-type="' + i + '">' + macroTypeOptions + "</select>" +
+            "</div>" +
           "</div>" +
-          '<div class="field-row">' +
+          (macroType === "macro" ? '<div class="field-row">' +
             '<div class="field-group icon-group">' +
               "<label>Icon</label>" +
               '<select data-field="icon" data-index="' + i + '">' + iconOptions + "</select>" +
             "</div>" +
-          "</div>" +
-          '<div class="field-row">' +
+          "</div>" : "") +
+          (macroType === "macro" ? '<div class="field-row">' +
             '<div class="field-group target-group">' +
               "<label>Target app</label>" +
               '<select data-field="targetApp" data-index="' + i + '">' + targetOptions + "</select>" +
             "</div>" +
-          "</div>" +
-          "<label>Text to send</label>" +
-          '<textarea data-field="text" data-index="' + i + '" placeholder="Text injected into Claude">' + esc(macro.text) + "</textarea>" +
+          "</div>" : "") +
+          (macroType === "widget"
+            ? '<div class="field-row">' +
+                '<div class="field-group">' +
+                  "<label>Widget</label>" +
+                  '<select data-widget-kind="' + i + '">' + widgetKindOptions + "</select>" +
+                "</div>" +
+                '<div class="field-group">' +
+                  "<label>Refresh</label>" +
+                  '<select data-widget-refresh="' + i + '">' + widgetRefreshOptions + "</select>" +
+                "</div>" +
+                (widgetRefreshMode === "interval"
+                  ? '<div class="field-group">' +
+                      "<label>Interval (m)</label>" +
+                      '<input type="number" min="1" max="60" data-widget-interval="' + i + '" value="' + widgetInterval + '" />' +
+                    "</div>"
+                  : "") +
+              "</div>"
+            : "<label>Text to send</label>" +
+              '<textarea data-field="text" data-index="' + i + '" placeholder="Text injected into Claude">' + esc(macro.text) + "</textarea>") +
           '<div class="macro-colors-toggle" data-colorindex="' + i + '">Per-macro colors \u25B6</div>' +
           '<div class="btn-row" style="margin-top:4px"><button data-reset-macro-colors="' + i + '">Reset this macro colors</button></div>';
 
@@ -1112,6 +1172,61 @@
       });
 
       // Bind remove buttons
+      list.querySelectorAll("[data-widget-type]").forEach(function (el) {
+        el.addEventListener("change", function (e) {
+          var idx = parseInt(e.target.dataset.widgetType, 10);
+          if (!Number.isFinite(idx) || !macros[idx]) return;
+          var nextType = e.target.value === "widget" ? "widget" : "macro";
+          macros[idx].type = nextType;
+          if (nextType === "widget") {
+            macros[idx].widget = {
+              kind: "bridge-status",
+              refreshMode: "onClick",
+              intervalMinutes: 1,
+            };
+            macros[idx].text = "";
+          } else {
+            macros[idx].widget = null;
+          }
+          renderMacros();
+          markDirty();
+        });
+      });
+      list.querySelectorAll("[data-widget-kind]").forEach(function (el) {
+        el.addEventListener("change", function (e) {
+          var idx = parseInt(e.target.dataset.widgetKind, 10);
+          if (!Number.isFinite(idx) || !macros[idx]) return;
+          if (!macros[idx].widget) macros[idx].widget = {};
+          macros[idx].widget.kind = "bridge-status";
+          markDirty();
+        });
+      });
+      list.querySelectorAll("[data-widget-refresh]").forEach(function (el) {
+        el.addEventListener("change", function (e) {
+          var idx = parseInt(e.target.dataset.widgetRefresh, 10);
+          if (!Number.isFinite(idx) || !macros[idx]) return;
+          if (!macros[idx].widget) macros[idx].widget = {};
+          macros[idx].widget.refreshMode = e.target.value === "interval" ? "interval" : "onClick";
+          if (macros[idx].widget.refreshMode !== "interval") {
+            macros[idx].widget.intervalMinutes = 1;
+          }
+          renderMacros();
+          markDirty();
+        });
+      });
+      list.querySelectorAll("[data-widget-interval]").forEach(function (el) {
+        el.addEventListener("input", function (e) {
+          var idx = parseInt(e.target.dataset.widgetInterval, 10);
+          if (!Number.isFinite(idx) || !macros[idx]) return;
+          if (!macros[idx].widget) macros[idx].widget = {};
+          var n = Math.floor(Number(e.target.value));
+          if (!Number.isFinite(n)) n = 1;
+          n = Math.min(60, Math.max(1, n));
+          macros[idx].widget.intervalMinutes = n;
+          e.target.value = String(n);
+          markDirty();
+        });
+      });
       list.querySelectorAll("[data-remove]").forEach(function (btn) {
         btn.addEventListener("click", function (e) {
           var idx = parseInt(e.target.dataset.remove);
