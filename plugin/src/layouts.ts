@@ -471,8 +471,8 @@ function thinkingSVG(): string {
 
 function emptySVG(slotIndex = 0): string {
   const p = resolveThemePaletteForSlot(currentTheme, slotIndex) ?? PALETTES.light;
-  const emptyBg = p.emptyBg ?? PALETTES.light.emptyBg;
-  const emptyText = p.emptyText ?? PALETTES.light.emptyText;
+  const emptyBg = resolveColor(p.emptyBg ?? PALETTES.light.emptyBg, defaultColors.bg, undefined);
+  const emptyText = resolveColor(p.emptyText ?? PALETTES.light.emptyText, defaultColors.text, undefined);
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
   <rect width="144" height="144" rx="16" fill="${emptyBg}" />
   <text x="72" y="70" font-size="36" font-family="sans-serif" text-anchor="middle" fill="${emptyText}">\u2022\u2022\u2022</text>
@@ -566,6 +566,16 @@ function resolveColor(base: string, pageOverride?: string, macroOverride?: strin
 }
 
 function macroSlot(index: number, macro: MacroInput): SlotConfig {
+  const isPlaceholder =
+    (macro.type === undefined || macro.type === "macro") &&
+    macro.label.trim().length === 0 &&
+    macro.text.trim().length === 0 &&
+    !macro.icon &&
+    !macro.targetApp &&
+    macro.submit !== false &&
+    !(macro.colors?.bg || macro.colors?.text || macro.colors?.icon);
+  if (isPlaceholder) return emptySlot(index);
+
   if (macro.type === "approve") return { ...APPROVE, svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"), title: macro.label || APPROVE.title };
   if (macro.type === "deny") return { ...DENY, svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"), title: macro.label || DENY.title };
   if (macro.type === "cancel") return { ...CANCEL, svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"), title: macro.label || CANCEL.title };

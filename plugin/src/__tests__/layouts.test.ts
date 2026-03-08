@@ -307,6 +307,23 @@ describe("layouts", () => {
       expect(config.svg).toContain('fill="#0f172a"');
       expect(config.svg).not.toContain('fill="#ef4444"');
     });
+
+    it("applies page default colors to empty slots", () => {
+      setTheme("light");
+      setDefaultColors({ bg: "#ef4444", text: "#ffffff", icon: "#ffffff" });
+      const config = getSlotConfig("idle", 99);
+      expect(config.svg).toContain('fill="#ef4444"');
+      expect(config.svg).toContain('fill="#ffffff"');
+    });
+
+    it("treats empty label+text macro as unconfigured placeholder", () => {
+      setTheme("light");
+      const macros: MacroInput[] = [{ label: "", text: "" }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.title).toBe("");
+      expect(config.action).toBeUndefined();
+      expect(config.svg).toContain("•••");
+    });
   });
 
   describe("empty slot action", () => {

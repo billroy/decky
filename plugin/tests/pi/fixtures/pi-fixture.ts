@@ -16,13 +16,19 @@ interface PiHarness {
   sendUpdateError: (updatePayload: Record<string, unknown>, error?: string) => void;
 }
 
+interface PiFixtures {
+  piHarness: PiHarness;
+  piInitialConfig: ConfigSnapshot;
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-export const test = base.extend<{ piHarness: PiHarness }>({
-  piHarness: async ({ page }, use) => {
+export const test = base.extend<PiFixtures>({
+  piInitialConfig: [cloneConfig(DEFAULT_TEST_CONFIG), { option: true }],
+  piHarness: async ({ page, piInitialConfig }, use) => {
     const server = await MockStreamDeckServer.start();
-    const config = cloneConfig(DEFAULT_TEST_CONFIG);
+    const config = cloneConfig(piInitialConfig);
 
     const piPath = path.resolve(
       __dirname,
