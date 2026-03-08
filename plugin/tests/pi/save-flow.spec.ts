@@ -47,7 +47,7 @@ test.describe("PI save flow", () => {
     await expect(page.locator("#timeout")).toHaveValue("45");
   });
 
-  test("target app change with badge enabled persists both fields", async ({ piHarness }) => {
+  test("target app change with badge enabled does not resend badge field", async ({ piHarness }) => {
     const { page } = piHarness;
 
     await page.check("#show-target-badge");
@@ -57,7 +57,7 @@ test.describe("PI save flow", () => {
     await page.click("#btn-save");
     const update = await piHarness.waitForUpdateConfig();
     const macros = update.macros as Array<Record<string, unknown>>;
-    expect(update.showTargetBadge).toBe(true);
+    expect(update.showTargetBadge).toBeUndefined();
     expect(macros[0].targetApp).toBe("codex");
 
     await piHarness.ackWithSnapshot(update);
