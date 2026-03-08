@@ -31,7 +31,10 @@ export class ApproveOnceAction extends SingletonAction {
   private unsubConfig?: () => void;
 
   override async onWillAppear(_ev: WillAppearEvent): Promise<void> {
-    if (!bridgeRef) return;
+    if (!bridgeRef) {
+      await this.render("disconnected", null);
+      return;
+    }
     await this.render(bridgeRef.getConnectionStatus(), bridgeRef.getLastSnapshot());
     this.unsubConnection = bridgeRef.onConnectionChange((status) => {
       this.render(status, bridgeRef!.getLastSnapshot()).catch(() => {});
@@ -69,7 +72,7 @@ export class ApproveOnceAction extends SingletonAction {
     for (const instance of this.actions) {
       try {
         await instance.setImage(image);
-        await instance.setTitle(active ? "Approve Once" : "");
+        await instance.setTitle("");
       } catch {
         // ignore action disposal races
       }

@@ -23,14 +23,6 @@ const COLORS: Record<ConnectionStatus, string> = {
   connecting: "#f59e0b",   // amber
 };
 
-const STATE_LABELS: Record<string, string> = {
-  idle: "Idle",
-  thinking: "Thinking",
-  "awaiting-approval": "Approve?",
-  "tool-executing": "Running",
-  stopped: "Stopped",
-};
-
 function statusSVG(color: string): string {
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <circle cx="72" cy="72" r="50" fill="${color}" />
@@ -50,7 +42,10 @@ export class StatusAction extends SingletonAction {
   private unsubState?: () => void;
 
   override async onWillAppear(_ev: WillAppearEvent): Promise<void> {
-    if (!bridgeClientRef) return;
+    if (!bridgeClientRef) {
+      await this.updateAll("disconnected", null);
+      return;
+    }
 
     // Render current status immediately
     await this.updateAll(bridgeClientRef.getConnectionStatus(), bridgeClientRef.getLastSnapshot());
@@ -80,18 +75,11 @@ export class StatusAction extends SingletonAction {
     const svg = statusSVG(color);
     const imageData = `data:image/svg+xml,${encodeURIComponent(svg)}`;
 
-    let title: string;
-    if (connStatus !== "connected") {
-      title = connStatus === "connecting" ? "..." : "Offline";
-    } else {
-      title = snapshot ? (STATE_LABELS[snapshot.state] ?? snapshot.state) : "Connected";
-    }
-
     // Update all visible instances of this action
     for (const instance of this.actions) {
       try {
         await instance.setImage(imageData);
-        await instance.setTitle(title);
+        await instance.setTitle("");
       } catch {
         // SDK may throw if the action disappeared mid-render; safe to ignore.
       }

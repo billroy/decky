@@ -19,6 +19,7 @@
       "Name": "Bridge Status",
       "Icon": "imgs/actions/status/icon",
       "Controllers": ["Keypad"],
+      "PropertyInspectorPath": "ui/no-config.html",
       "States": [
         { "Image": "imgs/actions/status/key", "Title": "Decky" }
       ]
@@ -28,6 +29,7 @@
       "Name": "Approve",
       "Icon": "imgs/actions/approve/icon",
       "Controllers": ["Keypad"],
+      "PropertyInspectorPath": "ui/no-config.html",
       "States": [
         { "Image": "imgs/actions/approve/key", "Title": "Approve" }
       ]
@@ -37,6 +39,7 @@
       "Name": "Deny",
       "Icon": "imgs/actions/deny/icon",
       "Controllers": ["Keypad"],
+      "PropertyInspectorPath": "ui/no-config.html",
       "States": [
         { "Image": "imgs/actions/deny/key", "Title": "Deny" }
       ]
@@ -46,6 +49,7 @@
       "Name": "Cancel",
       "Icon": "imgs/actions/cancel/icon",
       "Controllers": ["Keypad"],
+      "PropertyInspectorPath": "ui/no-config.html",
       "States": [
         { "Image": "imgs/actions/cancel/key", "Title": "Cancel" }
       ]
@@ -67,6 +71,7 @@
       "Tooltip": "Activate Claude and press Return once when awaiting approval.",
       "Icon": "imgs/actions/approve/icon",
       "Controllers": ["Keypad"],
+      "PropertyInspectorPath": "ui/no-config.html",
       "States": [
         { "Image": "imgs/actions/approve/key", "Title": "Approve Once" }
       ]
@@ -77,6 +82,7 @@
       "Tooltip": "Activate Claude and trigger Start Dictation from the Edit menu.",
       "Icon": "imgs/actions/slot/icon",
       "Controllers": ["Keypad"],
+      "PropertyInspectorPath": "ui/no-config.html",
       "States": [
         { "Image": "imgs/actions/slot/key", "Title": "Dictation" }
       ]

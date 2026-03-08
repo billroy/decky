@@ -36,7 +36,10 @@ export class ApproveAction extends SingletonAction {
   private unsubState?: () => void;
 
   override async onWillAppear(_ev: WillAppearEvent): Promise<void> {
-    if (!bridgeRef) return;
+    if (!bridgeRef) {
+      await this.render("disconnected", null);
+      return;
+    }
 
     await this.render(bridgeRef.getConnectionStatus(), bridgeRef.getLastSnapshot());
 
@@ -71,7 +74,7 @@ export class ApproveAction extends SingletonAction {
     for (const instance of this.actions) {
       try {
         await instance.setImage(imageData);
-        await instance.setTitle(active ? "Approve" : "");
+        await instance.setTitle("");
       } catch {
         // SDK may throw if the action disappeared mid-render; safe to ignore.
       }
