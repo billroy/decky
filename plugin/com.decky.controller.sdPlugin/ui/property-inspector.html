@@ -445,13 +445,14 @@
       <input type="checkbox" id="show-target-badge" />
     </div>
     <div class="setting-row">
-      <label>Approve once action</label>
+      <label>Approve once key</label>
       <input type="checkbox" id="enable-approve-once" checked />
     </div>
     <div class="setting-row">
-      <label>Talk to Claude action</label>
+      <label>Talk to Claude key</label>
       <input type="checkbox" id="enable-dictation" checked />
     </div>
+    <div class="setting-hint">These toggles control dedicated Stream Deck actions, not Decky Slot macros.</div>
     <div class="debug-panel">
       <div class="btn-row" style="margin-top:0">
         <button id="btn-debug-probe">Test selected key render</button>
@@ -480,7 +481,7 @@
   <!-- Macros -->
   <div class="section">
     <h3>Macro Buttons <span id="macro-count" style="color:#666; font-weight:normal"></span></h3>
-    <div class="macro-help">Configure buttons shown on the deck during idle state. Label is the button text; Text to send is the prompt injected into Claude when pressed. Each macro has Icon and optional per-macro colors. <span id="pi-diag" style="color:#8aa3d9"></span></div>
+    <div class="macro-help">Configure buttons shown on the deck during idle state. Label is the button text; Text to send is the prompt injected into Claude when pressed. Command macros require non-empty Text to send. Each macro has Icon and optional per-macro colors. <span id="pi-diag" style="color:#8aa3d9"></span></div>
     <div id="macro-list" class="macro-list"></div>
     <div class="btn-row">
       <button class="primary" id="btn-save">Apply now</button>
