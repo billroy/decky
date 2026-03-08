@@ -43,7 +43,11 @@ describe("socket updateConfig acknowledgements", () => {
   it("emits updateConfigAck with matching requestId", async () => {
     const sock = await connectClient();
     const requestId = "req-ack-1";
-    const ackPromise = waitForEvent<{ requestId: string; macroCount: number }>(sock, "updateConfigAck");
+    const ackPromise = waitForEvent<{
+      requestId: string;
+      macroCount: number;
+      config?: { macros?: Array<{ label?: string; text?: string }> };
+    }>(sock, "updateConfigAck");
 
     sock.emit("action", {
       action: "updateConfig",
@@ -54,6 +58,8 @@ describe("socket updateConfig acknowledgements", () => {
     const ack = await ackPromise;
     expect(ack.requestId).toBe(requestId);
     expect(ack.macroCount).toBe(1);
+    expect(ack.config?.macros?.[0]?.label).toBe("Ack Test");
+    expect(ack.config?.macros?.[0]?.text).toBe("ok");
     sock.disconnect();
   });
 
