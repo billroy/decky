@@ -35,6 +35,7 @@ test.describe("PI macro editing", () => {
     const macro1 = findMacro(update, 1);
     expect(macro0.targetApp).toBe("cursor");
     expect(macro1.targetApp).toBeUndefined();
+    expect(update.showTargetBadge).toBeUndefined();
 
     await piHarness.ackWithSnapshot(update);
     await expect(page.locator("#selected-target-app")).toHaveValue("cursor");
@@ -50,6 +51,7 @@ test.describe("PI macro editing", () => {
     const update = await piHarness.waitForUpdateConfig();
     const macro0 = findMacro(update, 0);
     expect(macro0.targetApp).toBe("chatgpt");
+    expect(update.showTargetBadge).toBeUndefined();
 
     await piHarness.ackWithSnapshot(update);
     await expect(page.locator('#macro-list select[data-field="targetApp"][data-index="0"]')).toHaveValue("chatgpt");

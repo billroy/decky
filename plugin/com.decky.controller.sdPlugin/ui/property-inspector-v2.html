@@ -673,13 +673,6 @@
       if (!allowThemeCommit && pendingThemeChange) {
         payload.theme = savedTheme;
       }
-      if (
-        showToast &&
-        !allowThemeCommit &&
-        (payload.theme === "random" || payload.theme === "rainbow")
-      ) {
-        payload.themeSeed = Math.floor(Math.random() * 0x7fffffff);
-      }
       var next = JSON.stringify(payload);
       if (!forceSend && next === baselinePayload) {
         return;
