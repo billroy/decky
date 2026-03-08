@@ -559,7 +559,7 @@ const DEFAULT_MACROS: MacroInput[] = [
 ];
 
 function emptySlot(slotIndex = 0): SlotConfig {
-  return { svg: emptySVG(slotIndex), title: "", action: "openConfig" };
+  return { svg: emptySVG(slotIndex), title: "" };
 }
 
 // --- Layout definitions per state ---

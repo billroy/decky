@@ -16,6 +16,8 @@ This installs dependencies, builds the plugin, copies hook scripts to `~/.decky/
 
 Restart the Stream Deck app after install. Then add **Decky Slot** buttons to your deck (place 6 for the full layout).
 
+Configure macros, target routing, theme, and colors from the Property Inspector in the Stream Deck app.
+
 ## Start
 
 ```bash
@@ -50,7 +52,7 @@ When Claude Code wants to run a tool, the `PreToolUse` hook fires and the bridge
 
 In the idle state, the deck shows up to 36 configurable text macros. Press one and the text is typed into the selected target app via the clipboard (pbcopy + Cmd+V). Supported targets are Claude, Codex, ChatGPT, Cursor, and Windsurf.
 
-Edit macros in the Stream Deck app by selecting a Decky Slot button and using the Property Inspector, or edit `~/.decky/config.json` directly.
+Edit macros in the Stream Deck app by selecting a Decky Slot button and using the Property Inspector.
 
 ## Configuration
 
@@ -70,9 +72,21 @@ Config lives at `~/.decky/config.json` (created with defaults on first run):
 
 - **macros**: Up to 36 entries. `label` shows on the button, `text` is sent to the selected app.
 - **macro.targetApp**: Optional per-macro target override (`claude`, `codex`, `chatgpt`, `cursor`, `windsurf`).
-- **approvalTimeout**: Seconds the hook waits for a button press before auto-approving (default 30).
+- **approvalTimeout**: Seconds the hook waits for a button press before auto-blocking (default 30).
 - **defaultTargetApp**: Global default target used when a macro has no explicit `targetApp`.
 - **showTargetBadge**: Toggle compact 3-letter target badges on macro icons (for example `CLD`, `CDX`).
+
+### Property Inspector controls
+
+- **Theme**: Select one of the built-in themes.
+- **Theme apply**: Choose whether theme changes keep overrides, clear page defaults, or clear all overrides.
+- **Approval timeout**: Seconds before a tool-approval request is auto-blocked.
+- **Target app (selected slot)**: Per-macro provider override.
+- **Target badge**: Show/hide compact provider badge on icons.
+- **Page default colors**: Background/text/icon defaults for all macros.
+- **Macro colors**: Per-macro background/text/icon overrides.
+
+Unconfigured slots are intentionally no-op.
 
 ## Development
 

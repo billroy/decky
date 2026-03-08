@@ -53,7 +53,7 @@ describe("layouts", () => {
     it("returns empty config for slots beyond 5", () => {
       const config = getSlotConfig("idle", 6);
       expect(config.title).toBe("");
-      expect(config.action).toBe("openConfig");
+      expect(config.action).toBeUndefined();
     });
   });
 
@@ -82,7 +82,7 @@ describe("layouts", () => {
     it("returns empty for slots beyond provided macros", () => {
       const config = getSlotConfig("idle", 3, null, macros);
       expect(config.title).toBe("");
-      expect(config.action).toBe("openConfig");
+      expect(config.action).toBeUndefined();
     });
 
     it("caps macros at 36 slots", () => {
@@ -261,9 +261,9 @@ describe("layouts", () => {
   });
 
   describe("empty slot action", () => {
-    it("has openConfig action", () => {
+    it("is a no-op", () => {
       const config = getSlotConfig("idle", 99);
-      expect(config.action).toBe("openConfig");
+      expect(config.action).toBeUndefined();
     });
   });
 

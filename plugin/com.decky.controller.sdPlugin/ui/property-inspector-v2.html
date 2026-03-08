@@ -424,11 +424,6 @@
       </div>
     </div>
     <div class="setting-row">
-      <label>Editor</label>
-      <input type="text" id="editor" placeholder="e.g. bbedit, code, open" />
-    </div>
-    <div class="setting-hint">Command to open config file (used by empty slots)</div>
-    <div class="setting-row">
       <label>Approval timeout</label>
       <input type="number" id="timeout" min="5" max="300" step="5" />
     </div>
@@ -597,7 +592,6 @@
     let macros = [];
     let settings = {
       theme: "light",
-      editor: "",
       approvalTimeout: 30,
       showTargetBadge: false,
     };
@@ -628,7 +622,6 @@
           return o;
         }),
         theme: document.getElementById("theme").value,
-        editor: document.getElementById("editor").value,
         approvalTimeout: parseInt(document.getElementById("timeout").value) || 30,
         showTargetBadge: document.getElementById("show-target-badge").checked,
       };
@@ -801,7 +794,6 @@
             ? Math.floor(msg.themeSeed)
             : 0;
         pendingThemeSeed = null;
-        if (msg.editor !== undefined) settings.editor = msg.editor || "";
         if (msg.approvalTimeout !== undefined) settings.approvalTimeout = msg.approvalTimeout;
         if (msg.showTargetBadge !== undefined) settings.showTargetBadge = !!msg.showTargetBadge;
         if (msg.colors) {
@@ -824,7 +816,6 @@
 
         configLoaded = true;
         document.getElementById("theme").value = settings.theme;
-        document.getElementById("editor").value = settings.editor;
         document.getElementById("timeout").value = settings.approvalTimeout;
         document.getElementById("show-target-badge").checked = settings.showTargetBadge;
         baselinePayload = JSON.stringify(buildPayload());
@@ -858,6 +849,22 @@
       row.appendChild(lbl);
       var group = document.createElement("div");
       group.className = "swatch-group";
+      function bindSwatchActivate(el, handler) {
+        var fired = false;
+        el.addEventListener("pointerdown", function (ev) {
+          fired = true;
+          ev.preventDefault();
+          handler();
+        });
+        el.addEventListener("click", function (ev) {
+          if (fired) {
+            fired = false;
+            return;
+          }
+          ev.preventDefault();
+          handler();
+        });
+      }
       var paletteValues = COLOR_PALETTE.map(function (c) { return c.value; });
       COLOR_PALETTE.forEach(function (c) {
         var sw = document.createElement("div");
@@ -865,11 +872,12 @@
         sw.textContent = "";
         if (c.value) sw.style.background = c.value;
         sw.title = c.label;
-        sw.addEventListener("click", function () {
+        bindSwatchActivate(sw, function () {
           group.querySelectorAll(".swatch").forEach(function (s) { s.classList.remove("selected"); });
           sw.classList.add("selected");
           onSelect(c.value);
           markDirty();
+          applyConfig(false, true, false);
         });
         group.appendChild(sw);
       });
@@ -882,9 +890,10 @@
         custom.style.background = selectedValue;
         custom.title = "Custom " + selectedValue;
         custom.textContent = "";
-        custom.addEventListener("click", function () {
+        bindSwatchActivate(custom, function () {
           onSelect(selectedValue);
           markDirty();
+          applyConfig(false, true, false);
         });
         group.appendChild(custom);
 
@@ -1145,7 +1154,7 @@
 
     // --- Save ---
     document.getElementById("btn-save").disabled = true;
-    ["editor", "timeout", "show-target-badge"].forEach(function (id) {
+    ["timeout", "show-target-badge"].forEach(function (id) {
       var el = document.getElementById(id);
       el.addEventListener("input", markDirty);
       el.addEventListener("change", markDirty);
@@ -1154,6 +1163,7 @@
       if (selectedMacroIndex < 0 || selectedMacroIndex >= macros.length) return;
       macros[selectedMacroIndex].targetApp = e.target.value || "";
       markDirty();
+      applyConfig(false, true, false);
     });
     document.getElementById("theme").addEventListener("change", function () {
       pendingThemeChange = document.getElementById("theme").value !== savedTheme;
