@@ -212,6 +212,26 @@ describe("config endpoints", () => {
     expect(data.config.macros[1].colors).toBeUndefined();
   });
 
+  it("PUT /config preserves sparse placeholder slots for unconfigured keys", async () => {
+    const res = await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
+      body: JSON.stringify({
+        macros: [
+          { label: "One", text: "one" },
+          { label: "", text: "" },
+          { label: "Three", text: "three" },
+        ],
+      }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.config.macros).toHaveLength(3);
+    expect(data.config.macros[0]).toMatchObject({ label: "One", text: "one" });
+    expect(data.config.macros[1]).toMatchObject({ label: "", text: "" });
+    expect(data.config.macros[2]).toMatchObject({ label: "Three", text: "three" });
+  });
+
   it("PUT /config clears page defaults when colors is empty object", async () => {
     await fetch(`${baseUrl}/config`, {
       method: "PUT",

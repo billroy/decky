@@ -210,20 +210,52 @@ function parseMacroStrict(value: unknown, fallbackTarget: TargetApp): MacroDef {
   if (typeof macro.text !== "string") throw new ConfigValidationError("Macro text must be a string");
   const label = macro.label.trim();
   const text = macro.text;
-  if (label.length === 0) throw new ConfigValidationError("Macro label must not be empty");
-  if (label.length > MAX_LABEL_LENGTH) {
-    throw new ConfigValidationError(`Macro label exceeds ${MAX_LABEL_LENGTH} characters`);
-  }
   if (text.length > MAX_TEXT_LENGTH) {
     throw new ConfigValidationError(`Macro text exceeds ${MAX_TEXT_LENGTH} characters`);
   }
+  if (macro.icon !== undefined && typeof macro.icon !== "string") {
+    throw new ConfigValidationError("Macro icon must be a string");
+  }
+
+  // Empty label+text is a reserved sparse-slot placeholder used to preserve
+  // physical slot index mapping for unconfigured Decky keys.
+  if (label.length === 0) {
+    if (text.trim().length !== 0) {
+      throw new ConfigValidationError("Unconfigured placeholder text must be empty");
+    }
+    if (typeof macro.icon === "string" && macro.icon.length > 0) {
+      throw new ConfigValidationError("Unconfigured placeholder icon must be empty");
+    }
+    if (macro.submit === false) {
+      throw new ConfigValidationError("Unconfigured placeholder cannot disable submit");
+    }
+    if (macro.targetApp !== undefined) {
+      const rawTarget = String(macro.targetApp).trim();
+      if (rawTarget.length > 0) {
+        throw new ConfigValidationError("Unconfigured placeholder targetApp must be empty");
+      }
+    }
+    if (macro.type !== undefined && macro.type !== "macro") {
+      throw new ConfigValidationError("Unconfigured placeholder type must be macro");
+    }
+    const placeholderColors = normalizeColorOverrides(macro.colors);
+    if (placeholderColors) {
+      throw new ConfigValidationError("Unconfigured placeholder cannot define colors");
+    }
+    return { label: "", text: "" };
+  }
+
+  if (label.length > MAX_LABEL_LENGTH) {
+    throw new ConfigValidationError(`Macro label exceeds ${MAX_LABEL_LENGTH} characters`);
+  }
   const out: MacroDef = { label, text };
   if (macro.icon !== undefined) {
-    if (typeof macro.icon !== "string") throw new ConfigValidationError("Macro icon must be a string");
-    if (macro.icon.length > MAX_ICON_LENGTH) {
+    const macroIcon = macro.icon;
+    if (typeof macroIcon !== "string") throw new ConfigValidationError("Macro icon must be a string");
+    if (macroIcon.length > MAX_ICON_LENGTH) {
       throw new ConfigValidationError(`Macro icon exceeds ${MAX_ICON_LENGTH} characters`);
     }
-    if (macro.icon.length > 0) out.icon = macro.icon;
+    if (macroIcon.length > 0) out.icon = macroIcon;
   }
   if (macro.targetApp !== undefined) out.targetApp = normalizeTargetApp(macro.targetApp, fallbackTarget);
   if (macro.submit !== undefined) {
@@ -425,11 +457,10 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
               return parseMacroStrict(macro, currentConfig.defaultTargetApp);
             } catch {
               // Keep existing macro at this index when a single edited row is invalid,
-              // so other valid updates (for example targetApp changes) still persist.
-              return currentConfig.macros[i] ?? null;
+              // and preserve slot index alignment for sparse/unconfigured slots.
+              return currentConfig.macros[i] ?? { label: "", text: "" };
             }
           })
-          .filter((macro): macro is MacroDef => macro !== null)
       : undefined;
   const merged: DeckyConfig = {
     macros: parsedMacros ?? currentConfig.macros,

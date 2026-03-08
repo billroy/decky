@@ -942,6 +942,21 @@
         }
         if (typeof msg.selectedMacroIndex === "number" && Number.isFinite(msg.selectedMacroIndex) && msg.selectedMacroIndex >= 0) {
           selectedMacroIndex = Math.floor(msg.selectedMacroIndex);
+          if (selectedMacroIndex > MAX_MACROS - 1) selectedMacroIndex = MAX_MACROS - 1;
+          // Preserve clicked slot targeting even when the slot is currently unconfigured.
+          // Expand local PI model with sparse placeholders up to selected slot index.
+          while (macros.length <= selectedMacroIndex && macros.length < MAX_MACROS) {
+            macros.push({
+              label: "",
+              text: "",
+              icon: "",
+              targetApp: "",
+              submit: true,
+              type: "macro",
+              widget: null,
+              colors: { bg: "", text: "", icon: "" },
+            });
+          }
           showAllMacros = false;
         }
         if (selectedMacroIndex >= macros.length) selectedMacroIndex = macros.length - 1;

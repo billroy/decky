@@ -1,4 +1,5 @@
 import { test, expect } from "./fixtures/pi-fixture";
+import { cloneConfig, DEFAULT_TEST_CONFIG } from "./fixtures/defaults";
 
 function findMacro(update: Record<string, unknown>, index: number): Record<string, unknown> {
   const macros = update.macros as Array<Record<string, unknown>>;
@@ -109,5 +110,35 @@ test.describe("PI macro editing", () => {
     const macro0 = findMacro(update, 0);
     expect(macro0.submit).toBe(false);
     expect(macro0.text).toBe("/help");
+  });
+});
+
+test.describe("PI unconfigured slot promotion", () => {
+  test.use({
+    piInitialConfig: (() => {
+      const cfg = cloneConfig(DEFAULT_TEST_CONFIG);
+      cfg.selectedMacroIndex = 5;
+      return cfg;
+    })(),
+  });
+
+  test("targets clicked unconfigured slot and promotes it on Apply", async ({ piHarness }) => {
+    const { page } = piHarness;
+
+    await expect(page.locator("#macro-count")).toContainText("slot 6 of 6");
+    await expect(page.locator('#macro-list input[data-field="label"][data-index="5"]')).toHaveValue("");
+
+    await page.fill('#macro-list input[data-field="label"][data-index="5"]', "T6");
+    await page.fill('#macro-list textarea[data-field="text"][data-index="5"]', "slot six");
+    await page.click("#btn-save");
+
+    const update = await piHarness.waitForUpdateConfig();
+    const macros = update.macros as Array<Record<string, unknown>>;
+    expect(macros).toHaveLength(6);
+    expect(macros[2].label).toBe("Build");
+    expect(macros[3].label).toBe("");
+    expect(macros[4].label).toBe("");
+    expect(macros[5].label).toBe("T6");
+    expect(macros[5].text).toBe("slot six");
   });
 });
