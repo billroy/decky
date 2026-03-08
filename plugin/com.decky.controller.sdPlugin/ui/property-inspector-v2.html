@@ -608,6 +608,7 @@
     let savedThemeSeed = 0;
     let pendingThemeSeed = null;
     let awaitingConfigAck = false;
+    let configAckTimer = null;
     document.getElementById("pi-build").textContent = "PI build: " + PI_BUILD_ID;
 
     function buildPayload() {
@@ -651,19 +652,18 @@
       }
       var next = JSON.stringify(payload);
       if (!forceSend && next === baselinePayload) {
-        forceIncludeColorsField = false;
-        pendingThemeApplyMode = "";
         return;
       }
       awaitingConfigAck = true;
+      if (configAckTimer) clearTimeout(configAckTimer);
+      configAckTimer = setTimeout(function () {
+        if (!awaitingConfigAck) return;
+        awaitingConfigAck = false;
+        setSaveEnabled(true);
+        showStatus("Apply failed: no bridge config acknowledgement", "error");
+      }, 2000);
       sendToPlugin(payload);
-      baselinePayload = next;
-      forceIncludeColorsField = false;
-      pendingThemeApplyMode = "";
-      if (pendingThemeSeed !== null) savedThemeSeed = pendingThemeSeed;
-      pendingThemeSeed = null;
-      setSaveEnabled(false);
-      if (showToast) showStatus("Applied", "saved");
+      if (showToast) showStatus("Applying...", "");
     }
 
     function scheduleAutoApply() {
@@ -812,13 +812,21 @@
           showAllMacros = false;
         }
         if (selectedMacroIndex >= macros.length) selectedMacroIndex = macros.length - 1;
-        if (selectedMacroIndex < 0 && macros.length > 0) selectedMacroIndex = 0;
+        if (selectedMacroIndex < 0 && macros.length > 0 && !configLoaded) selectedMacroIndex = 0;
 
         configLoaded = true;
         document.getElementById("theme").value = settings.theme;
         document.getElementById("timeout").value = settings.approvalTimeout;
         document.getElementById("show-target-badge").checked = settings.showTargetBadge;
         baselinePayload = JSON.stringify(buildPayload());
+        forceIncludeColorsField = false;
+        pendingThemeApplyMode = "";
+        if (pendingThemeSeed !== null) savedThemeSeed = pendingThemeSeed;
+        pendingThemeSeed = null;
+        if (configAckTimer) {
+          clearTimeout(configAckTimer);
+          configAckTimer = null;
+        }
         awaitingConfigAck = false;
         setSaveEnabled(false);
         var connEl = document.getElementById("conn-status");
@@ -1162,7 +1170,17 @@
     document.getElementById("selected-target-app").addEventListener("change", function (e) {
       if (!macros.length) return;
       if (selectedMacroIndex < 0 || selectedMacroIndex >= macros.length) {
-        selectedMacroIndex = 0;
+        var firstVisible = document.querySelector("#macro-list .macro-item");
+        if (firstVisible && firstVisible.dataset && firstVisible.dataset.index !== undefined) {
+          var inferred = parseInt(firstVisible.dataset.index, 10);
+          if (Number.isFinite(inferred) && inferred >= 0 && inferred < macros.length) {
+            selectedMacroIndex = inferred;
+          }
+        }
+      }
+      if (selectedMacroIndex < 0 || selectedMacroIndex >= macros.length) {
+        showStatus("No selected slot to update", "error");
+        return;
       }
       macros[selectedMacroIndex].targetApp = e.target.value || "";
       markDirty();
