@@ -46,4 +46,54 @@ test.describe("PI save flow", () => {
     expect(snapshot.approvalTimeout).toBe(45);
     await expect(page.locator("#timeout")).toHaveValue("45");
   });
+
+  test("target app change with badge enabled persists both fields", async ({ piHarness }) => {
+    const { page } = piHarness;
+
+    await page.check("#show-target-badge");
+    await page.selectOption("#selected-target-app", "codex");
+    await expect(page.locator("#btn-save")).toBeEnabled();
+
+    await page.click("#btn-save");
+    const update = await piHarness.waitForUpdateConfig();
+    const macros = update.macros as Array<Record<string, unknown>>;
+    expect(update.showTargetBadge).toBe(true);
+    expect(macros[0].targetApp).toBe("codex");
+
+    await piHarness.ackWithSnapshot(update);
+    await expect(page.locator("#show-target-badge")).toBeChecked();
+    await expect(page.locator("#selected-target-app")).toHaveValue("codex");
+  });
+
+  test("Apply now reseeds random theme", async ({ piHarness }) => {
+    const { page } = piHarness;
+
+    await page.selectOption("#theme", "random");
+    await page.check('input[name="theme-apply-mode"][value="keep"]');
+    await page.click("#btn-theme-apply-confirm");
+    const first = await piHarness.waitForUpdateConfig();
+    await piHarness.ackWithSnapshot(first);
+
+    await page.fill("#timeout", "35");
+    await page.click("#btn-save");
+    const second = await piHarness.waitForUpdateConfig();
+    expect(second.theme).toBe("random");
+    expect(second.themeSeed).not.toBe(first.themeSeed);
+  });
+
+  test("Apply now reseeds rainbow theme", async ({ piHarness }) => {
+    const { page } = piHarness;
+
+    await page.selectOption("#theme", "rainbow");
+    await page.check('input[name="theme-apply-mode"][value="keep"]');
+    await page.click("#btn-theme-apply-confirm");
+    const first = await piHarness.waitForUpdateConfig();
+    await piHarness.ackWithSnapshot(first);
+
+    await page.fill("#timeout", "40");
+    await page.click("#btn-save");
+    const second = await piHarness.waitForUpdateConfig();
+    expect(second.theme).toBe("rainbow");
+    expect(second.themeSeed).not.toBe(first.themeSeed);
+  });
 });

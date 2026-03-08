@@ -14,6 +14,20 @@
       "tests": ["plugin/tests/pi/global-controls.spec.ts::theme cancel reverts selection and does not dispatch update"]
     },
     {
+      "id": "theme.random.reseed",
+      "tests": [
+        "plugin/tests/pi/global-controls.spec.ts::random theme re-apply emits a new seed each apply",
+        "plugin/tests/pi/save-flow.spec.ts::Apply now reseeds random theme"
+      ]
+    },
+    {
+      "id": "theme.rainbow.reseed",
+      "tests": [
+        "plugin/tests/pi/global-controls.spec.ts::rainbow theme re-apply emits a new seed each apply",
+        "plugin/tests/pi/save-flow.spec.ts::Apply now reseeds rainbow theme"
+      ]
+    },
+    {
       "id": "timeout.input",
       "tests": ["plugin/tests/pi/save-flow.spec.ts::applies timeout update and reflects snapshot"]
     },
@@ -28,6 +42,10 @@
     {
       "id": "macro.selected.target",
       "tests": ["plugin/tests/pi/macro-editing.spec.ts::selected target app dropdown updates only selected macro"]
+    },
+    {
+      "id": "macro.selected.target.withBadge",
+      "tests": ["plugin/tests/pi/save-flow.spec.ts::target app change with badge enabled persists both fields"]
     },
     {
       "id": "macro.field.label",
@@ -59,7 +77,10 @@
     },
     {
       "id": "colors.page.bg",
-      "tests": ["plugin/tests/pi/colors.spec.ts::page default bg color writes colors.bg"]
+      "tests": [
+        "plugin/tests/pi/colors.spec.ts::page default bg color writes colors.bg",
+        "plugin/tests/pi/colors.spec.ts::color click auto-saves without Apply now click"
+      ]
     },
     {
       "id": "colors.page.text",

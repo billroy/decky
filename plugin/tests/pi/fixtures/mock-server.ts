@@ -90,6 +90,27 @@ export class MockStreamDeckServer {
     return (evt.payload ?? {}) as Record<string, unknown>;
   }
 
+  async waitForPayloadTypeAfter(
+    type: string,
+    afterIndex: number,
+    timeoutMs = 4000,
+  ): Promise<{ payload: Record<string, unknown>; index: number }> {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+      for (let i = Math.max(0, afterIndex); i < this.messages.length; i++) {
+        const msg = this.messages[i];
+        if (msg.event === "sendToPlugin" && msg.payload?.type === type) {
+          return {
+            payload: (msg.payload ?? {}) as Record<string, unknown>,
+            index: i,
+          };
+        }
+      }
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    throw new Error(`Timeout waiting for payload type ${type} after index ${afterIndex}`);
+  }
+
   sendToPI(payload: Record<string, unknown>): void {
     const envelope = JSON.stringify({
       event: "sendToPropertyInspector",

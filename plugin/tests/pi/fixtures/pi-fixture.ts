@@ -10,6 +10,8 @@ interface PiHarness {
   config: ConfigSnapshot;
   sendSnapshot: (snapshot?: ConfigSnapshot) => void;
   waitForUpdateConfig: () => Promise<Record<string, unknown>>;
+  markMessageCursor: () => number;
+  waitForUpdateConfigAfter: (cursor: number) => Promise<Record<string, unknown>>;
   ackWithSnapshot: (updatePayload: Record<string, unknown>) => Promise<ConfigSnapshot>;
   sendUpdateError: (updatePayload: Record<string, unknown>, error?: string) => void;
 }
@@ -53,8 +55,20 @@ export const test = base.extend<{ piHarness: PiHarness }>({
 
     await expect(page.locator("#conn-status")).toContainText("Connected to bridge");
 
+    let updateCursor = server.getMessages().length;
+
     const waitForUpdateConfig = async (): Promise<Record<string, unknown>> => {
-      return await server.waitForPayloadType("updateConfig");
+      const next = await server.waitForPayloadTypeAfter("updateConfig", updateCursor);
+      updateCursor = next.index + 1;
+      return next.payload;
+    };
+
+    const markMessageCursor = (): number => server.getMessages().length;
+
+    const waitForUpdateConfigAfter = async (cursor: number): Promise<Record<string, unknown>> => {
+      const next = await server.waitForPayloadTypeAfter("updateConfig", cursor);
+      updateCursor = Math.max(updateCursor, next.index + 1);
+      return next.payload;
     };
 
     const ackWithSnapshot = async (updatePayload: Record<string, unknown>): Promise<ConfigSnapshot> => {
@@ -87,6 +101,8 @@ export const test = base.extend<{ piHarness: PiHarness }>({
       config,
       sendSnapshot,
       waitForUpdateConfig,
+      markMessageCursor,
+      waitForUpdateConfigAfter,
       ackWithSnapshot,
       sendUpdateError,
     });
