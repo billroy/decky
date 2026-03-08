@@ -5,6 +5,7 @@ import {
   getLayoutStates,
   setTheme,
   setThemeSeed,
+  setDefaultColors,
   setTargetBadgeOptions,
   setWidgetRenderContext,
   type MacroInput,
@@ -14,6 +15,7 @@ describe("layouts", () => {
   afterEach(() => {
     setTheme("light");
     setThemeSeed(0);
+    setDefaultColors({});
     setTargetBadgeOptions({ showTargetBadge: false, defaultTargetApp: "claude" });
   });
   describe("getLayoutStates", () => {
@@ -281,6 +283,29 @@ describe("layouts", () => {
       const config = getSlotConfig("idle", 99);
       expect(config.svg).toContain('fill="#ffffff"');
       expect(config.svg).toContain('fill="#64748b"');
+    });
+
+    it("applies page default colors when macro has no overrides", () => {
+      setTheme("light");
+      setDefaultColors({ bg: "#ef4444", text: "#ffffff", icon: "#ffffff" });
+      const macros: MacroInput[] = [{ label: "Summarize", text: "summarize" }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.svg).toContain('fill="#ef4444"');
+      expect(config.svg).toContain('fill="#ffffff"');
+    });
+
+    it("applies macro overrides over page defaults", () => {
+      setTheme("light");
+      setDefaultColors({ bg: "#ef4444", text: "#ffffff", icon: "#ffffff" });
+      const macros: MacroInput[] = [{
+        label: "Summarize",
+        text: "summarize",
+        colors: { bg: "#22c55e", text: "#0f172a", icon: "#0f172a" },
+      }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.svg).toContain('fill="#22c55e"');
+      expect(config.svg).toContain('fill="#0f172a"');
+      expect(config.svg).not.toContain('fill="#ef4444"');
     });
   });
 

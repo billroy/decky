@@ -189,6 +189,45 @@ describe("config endpoints", () => {
     expect(data.config.macros[0].submit).toBe(false);
   });
 
+  it("PUT /config persists page defaults and per-macro colors", async () => {
+    const res = await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
+      body: JSON.stringify({
+        colors: { bg: "#ef4444", text: "#ffffff", icon: "#ffffff" },
+        macros: [
+          {
+            label: "One",
+            text: "one",
+            colors: { bg: "#22c55e", text: "#0f172a", icon: "#0f172a" },
+          },
+          { label: "Two", text: "two" },
+        ],
+      }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.config.colors).toEqual({ bg: "#ef4444", text: "#ffffff", icon: "#ffffff" });
+    expect(data.config.macros[0].colors).toEqual({ bg: "#22c55e", text: "#0f172a", icon: "#0f172a" });
+    expect(data.config.macros[1].colors).toBeUndefined();
+  });
+
+  it("PUT /config clears page defaults when colors is empty object", async () => {
+    await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
+      body: JSON.stringify({ colors: { bg: "#ef4444", text: "#ffffff", icon: "#ffffff" } }),
+    });
+    const res = await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
+      body: JSON.stringify({ colors: {} }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.config.colors).toBeUndefined();
+  });
+
   it("GET /config reflects saved changes", async () => {
     await fetch(`${baseUrl}/config`, {
       method: "PUT",
