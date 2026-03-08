@@ -315,6 +315,7 @@ function resolveThemePaletteForSlot(theme: Theme, slotIndex: number): ThemePalet
 
 export function setTargetBadgeOptions(options: {
   showTargetBadge: boolean;
+  defaultTargetApp?: TargetApp;
 }): void {
   showTargetBadge = options.showTargetBadge;
 }
@@ -541,7 +542,7 @@ function resolveColor(base: string, pageOverride?: string, macroOverride?: strin
 function macroSlot(index: number, macro: MacroInput): SlotConfig {
   const targetApp = macro.targetApp ?? "claude";
   return {
-    svg: macroSVG(index, macro.label, macro.icon, macro.colors, macro.targetApp),
+    svg: macroSVG(index, macro.label, macro.icon, macro.colors, targetApp),
     title: macro.label,
     action: "macro",
     data: { text: macro.text, targetApp },
