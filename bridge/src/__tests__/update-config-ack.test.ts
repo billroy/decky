@@ -73,4 +73,35 @@ describe("socket updateConfig acknowledgements", () => {
     expect(err.error).toMatch(/approvalTimeout/i);
     sock.disconnect();
   });
+
+  it("keeps generated themeSeed in range for random/rainbow apply", async () => {
+    const sock = await connectClient();
+    const requestId = "req-theme-seed-range";
+    const ackPromise = waitForEvent<{ requestId: string }>(sock, "updateConfigAck");
+    const cfgPromise = waitForEvent<{ themeSeed?: number; theme?: string }>(sock, "configUpdate");
+
+    const originalNow = Date.now;
+    const originalRandom = Math.random;
+    Date.now = () => 0xffffffff;
+    Math.random = () => 0;
+    try {
+      sock.emit("action", {
+        action: "updateConfig",
+        requestId,
+        theme: "random",
+        themeApplyMode: "keep",
+      });
+      const ack = await ackPromise;
+      const cfg = await cfgPromise;
+      expect(ack.requestId).toBe(requestId);
+      expect(cfg.theme).toBe("random");
+      expect(typeof cfg.themeSeed).toBe("number");
+      expect(cfg.themeSeed!).toBeGreaterThanOrEqual(0);
+      expect(cfg.themeSeed!).toBeLessThanOrEqual(0x7fffffff);
+    } finally {
+      Date.now = originalNow;
+      Math.random = originalRandom;
+      sock.disconnect();
+    }
+  });
 });
