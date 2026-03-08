@@ -670,8 +670,23 @@
         type: "updateConfig",
         requestId: requestId || "",
         macros: macros.map(function (m) {
-          var o = { label: m.label, text: m.text };
+          var label = typeof m.label === "string" ? m.label : "";
+          var text = typeof m.text === "string" ? m.text : "";
+          var icon = typeof m.icon === "string" ? m.icon : "";
           var macroType = m.type === "widget" || SLOT_ACTION_TYPES[m.type] ? m.type : "macro";
+          var macroTarget = (m.targetApp || "").trim();
+          var isPlaceholder =
+            macroType === "macro" &&
+            label.trim().length === 0 &&
+            text.trim().length === 0 &&
+            icon.trim().length === 0;
+          var o = { label: label, text: text };
+          // Canonicalize sparse/unconfigured slots so stale metadata does not
+          // block color-only updates from being persisted.
+          if (isPlaceholder) {
+            if (m.colors && (m.colors.bg || m.colors.text || m.colors.icon)) o.colors = m.colors;
+            return o;
+          }
           if (macroType === "widget") {
             o.type = "widget";
             var refreshMode = m.widget && m.widget.refreshMode === "interval" ? "interval" : "onClick";
@@ -689,8 +704,7 @@
             o.type = macroType;
             o.text = "";
           }
-          if (m.icon) o.icon = m.icon;
-          var macroTarget = (m.targetApp || "").trim();
+          if (icon) o.icon = icon;
           if (macroTarget) o.targetApp = macroTarget;
           if (m.submit === false) o.submit = false;
           if (m.colors && (m.colors.bg || m.colors.text || m.colors.icon)) o.colors = m.colors;

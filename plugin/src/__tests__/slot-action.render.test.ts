@@ -421,6 +421,41 @@ describe("SlotAction render path", () => {
     expect(svgEmpty).toContain('fill="#ffffff"');
   });
 
+  it("applies per-slot placeholder colors to rendered unconfigured slots", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge({
+      ...baseConfig(),
+      macros: [
+        { label: "One", text: "one" },
+        { label: "", text: "", colors: { bg: "#22c55e", text: "#052e16", icon: "#052e16" } },
+      ],
+      colors: { bg: "#ef4444", text: "#ffffff", icon: "#ffffff" },
+    });
+    setSlotClient(bridge as any);
+
+    const action1 = makeKeyAction("action-1");
+    const action2 = makeKeyAction("action-2");
+    const slot = new SlotAction();
+    (slot as any).actions = [action1, action2];
+
+    await slot.onWillAppear({
+      action: action1,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+    await slot.onWillAppear({
+      action: action2,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 1 } },
+    } as any);
+
+    const svgEmpty = latestSvg(action2);
+    expect(svgEmpty).toContain("•••");
+    expect(svgEmpty).toContain('fill="#22c55e"');
+    expect(svgEmpty).toContain('fill="#052e16"');
+    expect(svgEmpty).not.toContain('fill="#ef4444"');
+  });
+
   it("converges all active keys after rapid color updates", async () => {
     const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
     resetSlots();

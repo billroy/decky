@@ -232,6 +232,56 @@ describe("config endpoints", () => {
     expect(data.config.macros[2]).toMatchObject({ label: "Three", text: "three" });
   });
 
+  it("PUT /config allows color overrides on sparse placeholder slots", async () => {
+    const res = await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
+      body: JSON.stringify({
+        macros: [
+          { label: "One", text: "one" },
+          { label: "", text: "", colors: { bg: "#22c55e", text: "#052e16", icon: "#052e16" } },
+          { label: "Three", text: "three" },
+        ],
+      }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.config.macros).toHaveLength(3);
+    expect(data.config.macros[1]).toMatchObject({
+      label: "",
+      text: "",
+      colors: { bg: "#22c55e", text: "#052e16", icon: "#052e16" },
+    });
+  });
+
+  it("PUT /config canonicalizes stale placeholder metadata instead of rejecting color-only updates", async () => {
+    const res = await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
+      body: JSON.stringify({
+        macros: [
+          { label: "One", text: "one" },
+          {
+            label: "",
+            text: "",
+            icon: "",
+            targetApp: "codex",
+            submit: false,
+            colors: { bg: "#22c55e", text: "#052e16", icon: "#052e16" },
+          },
+        ],
+      }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.config.macros).toHaveLength(2);
+    expect(data.config.macros[1]).toEqual({
+      label: "",
+      text: "",
+      colors: { bg: "#22c55e", text: "#052e16", icon: "#052e16" },
+    });
+  });
+
   it("PUT /config clears page defaults when colors is empty object", async () => {
     await fetch(`${baseUrl}/config`, {
       method: "PUT",

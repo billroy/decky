@@ -324,6 +324,27 @@ describe("layouts", () => {
       expect(config.action).toBeUndefined();
       expect(config.svg).toContain("•••");
     });
+
+    it("applies per-slot colors to unconfigured placeholder slots", () => {
+      setTheme("light");
+      setDefaultColors({ bg: "#ef4444", text: "#ffffff", icon: "#ffffff" });
+      const macros: MacroInput[] = [{ label: "", text: "", colors: { bg: "#22c55e", text: "#052e16" } }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.title).toBe("");
+      expect(config.action).toBeUndefined();
+      expect(config.svg).toContain("•••");
+      expect(config.svg).toContain('fill="#22c55e"');
+      expect(config.svg).toContain('fill="#052e16"');
+    });
+
+    it("treats blank macro with stale target metadata as placeholder", () => {
+      setTheme("light");
+      const macros: MacroInput[] = [{ label: "", text: "", targetApp: "codex", submit: false }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.title).toBe("");
+      expect(config.action).toBeUndefined();
+      expect(config.svg).toContain("•••");
+    });
   });
 
   describe("empty slot action", () => {
