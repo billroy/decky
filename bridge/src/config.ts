@@ -47,6 +47,8 @@ export interface DeckyConfig {
   showTargetBadge: boolean;
 }
 
+export type EditorName = "bbedit" | "code" | "cursor" | "windsurf" | "textedit";
+
 export class ConfigValidationError extends Error {
   constructor(message: string) {
     super(message);
@@ -56,6 +58,8 @@ export class ConfigValidationError extends Error {
 
 const DECKY_DIR = process.env.DECKY_HOME || join(homedir(), ".decky");
 const CONFIG_PATH = join(DECKY_DIR, "config.json");
+
+const DEFAULT_EDITOR: EditorName = "bbedit";
 
 const DEFAULT_CONFIG: DeckyConfig = {
   macros: [
@@ -73,7 +77,7 @@ const DEFAULT_CONFIG: DeckyConfig = {
   approvalTimeout: 30,
   theme: "light",
   themeSeed: 0,
-  editor: "bbedit",
+  editor: DEFAULT_EDITOR,
   defaultTargetApp: "claude",
   showTargetBadge: false,
 };
@@ -85,6 +89,7 @@ export const MAX_ICON_LENGTH = 64;
 export const MAX_EDITOR_LENGTH = 128;
 export const MIN_APPROVAL_TIMEOUT = 5;
 export const MAX_APPROVAL_TIMEOUT = 300;
+const ALLOWED_EDITORS: readonly EditorName[] = ["bbedit", "code", "cursor", "windsurf", "textedit"];
 
 let currentConfig: DeckyConfig = { ...DEFAULT_CONFIG };
 
@@ -111,6 +116,12 @@ function normalizeTargetApp(value: unknown, fallback: TargetApp): TargetApp {
     value === "windsurf"
     ? value
     : fallback;
+}
+
+function normalizeEditor(value: unknown, fallback: EditorName): EditorName {
+  if (typeof value !== "string") return fallback;
+  const v = value.trim().toLowerCase();
+  return (ALLOWED_EDITORS as readonly string[]).includes(v) ? (v as EditorName) : fallback;
 }
 
 function normalizeMacro(value: unknown, fallbackTarget: TargetApp): MacroDef | null {
@@ -218,7 +229,7 @@ export function loadConfig(): DeckyConfig {
         typeof raw_obj.themeSeed === "number" && Number.isFinite(raw_obj.themeSeed)
           ? Math.floor(raw_obj.themeSeed)
           : DEFAULT_CONFIG.themeSeed,
-      editor: typeof raw_obj.editor === "string" ? raw_obj.editor : DEFAULT_CONFIG.editor,
+      editor: normalizeEditor(raw_obj.editor, DEFAULT_EDITOR),
       defaultTargetApp,
       showTargetBadge:
         typeof raw_obj.showTargetBadge === "boolean"
@@ -272,6 +283,9 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
     if (update_obj.editor.length > MAX_EDITOR_LENGTH) {
       throw new ConfigValidationError(`editor must not exceed ${MAX_EDITOR_LENGTH} characters`);
     }
+    if (!ALLOWED_EDITORS.includes(update_obj.editor.trim().toLowerCase() as EditorName)) {
+      throw new ConfigValidationError(`editor must be one of: ${ALLOWED_EDITORS.join(", ")}`);
+    }
   }
   if (update_obj.themeSeed !== undefined) {
     if (typeof update_obj.themeSeed !== "number" || !Number.isFinite(update_obj.themeSeed)) {
@@ -308,7 +322,10 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
       typeof update_obj.themeSeed === "number" && Number.isFinite(update_obj.themeSeed)
         ? Math.floor(update_obj.themeSeed)
         : currentConfig.themeSeed,
-    editor: typeof update_obj.editor === "string" ? update_obj.editor : currentConfig.editor,
+    editor:
+      typeof update_obj.editor === "string"
+        ? normalizeEditor(update_obj.editor, normalizeEditor(currentConfig.editor, DEFAULT_EDITOR))
+        : currentConfig.editor,
     defaultTargetApp: normalizeTargetApp(update_obj.defaultTargetApp, currentConfig.defaultTargetApp),
     showTargetBadge:
       typeof update_obj.showTargetBadge === "boolean"
