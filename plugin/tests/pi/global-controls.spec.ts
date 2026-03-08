@@ -32,6 +32,18 @@ test.describe("PI global controls", () => {
     await expect(page.locator("#show-target-badge")).not.toBeChecked();
   });
 
+  test("non-badge applies do not overwrite showTargetBadge", async ({ piHarness }) => {
+    const { page } = piHarness;
+
+    await page.selectOption("#selected-target-app", "codex");
+    await page.click("#btn-save");
+
+    const update = await piHarness.waitForUpdateConfig();
+    expect(update.showTargetBadge).toBeUndefined();
+    await piHarness.ackWithSnapshot(update);
+    await expect(page.locator("#show-target-badge")).toBeChecked();
+  });
+
   test("theme cancel reverts selection and does not dispatch update", async ({ piHarness }) => {
     const { page, server } = piHarness;
 
