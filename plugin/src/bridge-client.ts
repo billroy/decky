@@ -86,6 +86,12 @@ type ConnectionListener = (status: ConnectionStatus) => void;
 type ConfigListener = (config: DeckyConfig) => void;
 type BridgeEventListener = (event: string, payload: unknown) => void;
 
+function createActionId(prefix = "sd"): string {
+  const stamp = Date.now().toString(36);
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `${prefix}-${stamp}-${rand}`;
+}
+
 export class BridgeClient {
   private socket: Socket | null = null;
   private connectionStatus: ConnectionStatus = "disconnected";
@@ -188,10 +194,18 @@ export class BridgeClient {
     }
   }
 
-  sendAction(action: string, data?: Record<string, unknown>): void {
+  sendAction(action: string, data?: Record<string, unknown>): string | null {
+    const providedActionId =
+      typeof data?.actionId === "string" && data.actionId.trim().length > 0
+        ? data.actionId.trim()
+        : null;
+    const actionId = providedActionId ?? createActionId();
     if (this.socket?.connected) {
-      this.socket.emit("action", { action, ...data });
+      console.log(`[bridge] sendAction action=${action} actionId=${actionId}`);
+      this.socket.emit("action", { action, actionId, ...data });
+      return actionId;
     }
+    return null;
   }
 
   getConnectionStatus(): ConnectionStatus {

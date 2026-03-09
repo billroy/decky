@@ -214,7 +214,11 @@ export class SlotAction extends SingletonAction {
     }
 
     if (config.action && bridgeRef.getConnectionStatus() === "connected") {
-      bridgeRef.sendAction(config.action, config.data);
+      const actionId = bridgeRef.sendAction(config.action, config.data);
+      pushDebug("slotActionDispatched", ev.action.id, slotIndex, {
+        action: config.action,
+        actionId,
+      });
     }
   }
 
