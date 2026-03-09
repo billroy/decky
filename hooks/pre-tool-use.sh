@@ -40,12 +40,15 @@ elif [ -f "$TOKEN_FILE" ]; then
 fi
 
 # POST the event to the bridge. If bridge is unavailable or unauthorized, fail closed.
-if ! curl -s -o /dev/null -X POST "$BRIDGE_URL/hook" \
-  -H "Content-Type: application/json" \
-  -H "x-decky-nonce: $NONCE" \
-  "${AUTH_ARGS[@]}" \
-  -d "$PAYLOAD"; then
-  echo '{"decision":"block","reason":"Decky bridge unavailable or unauthorized"}'
+HTTP_CODE="$(
+  curl -sS -o /dev/null -w '%{http_code}' -X POST "$BRIDGE_URL/hook" \
+    -H "Content-Type: application/json" \
+    -H "x-decky-nonce: $NONCE" \
+    "${AUTH_ARGS[@]}" \
+    -d "$PAYLOAD" || echo "000"
+)"
+if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+  echo "{\"decision\":\"block\",\"reason\":\"Decky bridge unavailable or unauthorized (HTTP $HTTP_CODE)\"}"
   exit 2
 fi
 
