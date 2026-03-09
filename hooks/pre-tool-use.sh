@@ -12,6 +12,11 @@
 set -euo pipefail
 
 BRIDGE_URL="${DECKY_BRIDGE_URL:-http://localhost:9130}"
+APPROVAL_FLOW_RAW="${DECKY_APPROVAL_FLOW:-mirror}"
+APPROVAL_FLOW="$(printf '%s' "$APPROVAL_FLOW_RAW" | tr '[:upper:]' '[:lower:]')"
+if [ "$APPROVAL_FLOW" != "gate" ]; then
+  APPROVAL_FLOW="mirror"
+fi
 GATE_FILE="$HOME/.decky/approval-gate"
 TOKEN_FILE="$HOME/.decky/bridge-token"
 TIMEOUT="${DECKY_TIMEOUT:-30}"
@@ -47,6 +52,7 @@ HTTP_CODE="$(
   curl -sS -o /dev/null -w '%{http_code}' -X POST "$BRIDGE_URL/hook" \
     -H "Content-Type: application/json" \
     -H "x-decky-event: PreToolUse" \
+    -H "x-decky-approval-flow: $APPROVAL_FLOW" \
     -H "x-decky-nonce: $NONCE" \
     "${AUTH_ARGS[@]}" \
     -d "$PAYLOAD" || echo "000"
@@ -54,6 +60,11 @@ HTTP_CODE="$(
 if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
   echo "{\"decision\":\"block\",\"reason\":\"Decky bridge unavailable or unauthorized (HTTP $HTTP_CODE)\"}"
   exit 2
+fi
+
+# Mirror mode: do not block native Claude approval flow.
+if [ "$APPROVAL_FLOW" = "mirror" ]; then
+  exit 0
 fi
 
 # Poll for the gate file

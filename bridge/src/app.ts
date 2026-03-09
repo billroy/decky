@@ -21,7 +21,7 @@ import {
   type Theme,
   ConfigValidationError,
 } from "./config.js";
-import { executeMacro, approveOnceInClaude, startDictationForClaude } from "./macro-exec.js";
+import { executeMacro, approveOnceInClaude, dismissClaudeApproval, startDictationForClaude } from "./macro-exec.js";
 import { getBridgeToken, readRequestToken, redactActionForLog } from "./security.js";
 
 const MAX_MACRO_ACTION_TEXT = 2000;
@@ -82,11 +82,14 @@ export interface DeckyApp {
   sm: StateMachine;
 }
 
+type ApprovalFlow = "gate" | "mirror";
+
 export function createApp(): DeckyApp {
   const app = express();
   const httpServer = createServer(app);
   const bridgeToken = getBridgeToken();
   let pendingGateNonce: string | null = null;
+  let pendingApprovalFlow: ApprovalFlow = "gate";
 
   const io = new SocketIOServer(httpServer, {
     cors: {
@@ -149,6 +152,11 @@ export function createApp(): DeckyApp {
     // Clear any stale gate file when a new tool-approval cycle starts
     if (payload.event === "PreToolUse") {
       clearGateFile();
+      const flowHeader = req.header("x-decky-approval-flow");
+      pendingApprovalFlow =
+        typeof flowHeader === "string" && flowHeader.trim().toLowerCase() === "mirror"
+          ? "mirror"
+          : "gate";
       const nonceHeader = req.header("x-decky-nonce");
       pendingGateNonce = typeof nonceHeader === "string" && nonceHeader.trim().length > 0
         ? nonceHeader.trim()
@@ -240,6 +248,21 @@ export function createApp(): DeckyApp {
       if (entry) {
         if (sm.getSnapshot().state !== "awaiting-approval") {
           socket.emit("error", { error: "Approval action ignored: not awaiting approval" });
+          return;
+        }
+        if (pendingApprovalFlow === "mirror") {
+          pendingGateNonce = null;
+          if (entry.result === "approve") {
+            approveOnceInClaude().catch((err) => {
+              console.error("[io] approve action failed in mirror flow:", err);
+              socket.emit("error", { error: "Failed to approve in Claude" });
+            });
+          } else {
+            dismissClaudeApproval().catch((err) => {
+              console.error("[io] deny/cancel action failed in mirror flow:", err);
+              socket.emit("error", { error: "Failed to dismiss Claude approval" });
+            });
+          }
           return;
         }
         writeGateFile(entry.result, pendingGateNonce ?? undefined);
