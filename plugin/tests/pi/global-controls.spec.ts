@@ -10,12 +10,18 @@ test.describe("PI global controls", () => {
     const selectedSection = page.locator(".section").filter({
       has: page.locator("h3").filter({ hasText: "Selected Slot Settings" }),
     });
+    const diagnosticsSection = page.locator(".section").filter({
+      has: page.locator("h3").filter({ hasText: "Diagnostics" }),
+    });
 
     await expect(globalSection.locator('select[data-field="targetApp"]')).toHaveCount(0);
     await expect(globalSection.locator("#show-target-badge")).toHaveCount(1);
+    await expect(globalSection).toHaveClass(/global-panel/);
     await expect(selectedSection.locator('select[data-field="targetApp"]')).toHaveCount(1);
+    await expect(selectedSection).toHaveClass(/global-panel/);
     await expect(selectedSection).not.toContainText("Configure the selected slot");
     await expect(selectedSection.locator("#pi-diag")).toHaveCount(0);
+    await expect(diagnosticsSection).toHaveClass(/global-panel/);
   });
 
   test("diagnostics are compact and collapsed by default", async ({ piHarness }) => {
