@@ -34,6 +34,31 @@ const VALID_EVENTS: Set<string> = new Set([
   "SubagentStop",
 ]);
 
+function normalizeHookEvent(value: unknown): HookEvent | undefined {
+  if (typeof value !== "string") return undefined;
+  const raw = value.trim();
+  if (VALID_EVENTS.has(raw)) return raw as HookEvent;
+
+  const key = raw.toLowerCase();
+  if (key === "pretooluse" || key === "pre_tool_use" || key === "pre-tool-use") return "PreToolUse";
+  if (key === "posttooluse" || key === "post_tool_use" || key === "post-tool-use") return "PostToolUse";
+  if (key === "notification") return "Notification";
+  if (key === "stop") return "Stop";
+  if (key === "subagentstop" || key === "subagent_stop" || key === "subagent-stop") return "SubagentStop";
+  return undefined;
+}
+
+function extractToolName(body: Record<string, unknown>): string | undefined {
+  if (typeof body.tool === "string") return body.tool;
+  if (typeof body.tool_name === "string") return body.tool_name;
+  if (typeof body.toolName === "string") return body.toolName;
+  if (body.tool && typeof body.tool === "object") {
+    const toolObj = body.tool as Record<string, unknown>;
+    if (typeof toolObj.name === "string") return toolObj.name;
+  }
+  return undefined;
+}
+
 function isTheme(value: unknown): value is Theme {
   return value === "light" ||
     value === "dark" ||
@@ -99,9 +124,11 @@ export function createApp(): DeckyApp {
 
   app.post("/hook", (req, res) => {
     const body = req.body as Record<string, unknown>;
-
-    const event = body?.event as string | undefined;
-    if (!event || !VALID_EVENTS.has(event)) {
+    const event =
+      normalizeHookEvent(body?.event) ??
+      normalizeHookEvent(body?.hook_event_name) ??
+      normalizeHookEvent(req.header("x-decky-event"));
+    if (!event) {
       res.status(400).json({
         error: "Invalid or missing 'event' field",
         validEvents: [...VALID_EVENTS],
@@ -110,8 +137,8 @@ export function createApp(): DeckyApp {
     }
 
     const payload: HookPayload = {
-      event: event as HookEvent,
-      tool: typeof body.tool === "string" ? body.tool : undefined,
+      event,
+      tool: extractToolName(body),
       input: body.input,
     };
 

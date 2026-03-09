@@ -4,6 +4,9 @@
 
 BRIDGE_URL="${DECKY_BRIDGE_URL:-http://localhost:9130}"
 PAYLOAD="$(cat)"
+if [ -z "$(printf '%s' "$PAYLOAD" | tr -d '[:space:]')" ]; then
+  PAYLOAD="{}"
+fi
 TOKEN_FILE="$HOME/.decky/bridge-token"
 
 AUTH_ARGS=()
@@ -18,5 +21,6 @@ fi
 
 curl -s -o /dev/null -X POST "$BRIDGE_URL/hook" \
   -H "Content-Type: application/json" \
+  -H "x-decky-event: PostToolUse" \
   "${AUTH_ARGS[@]}" \
   -d "$PAYLOAD" 2>/dev/null || true
