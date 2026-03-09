@@ -30,6 +30,7 @@ import {
   startDictationForClaude,
 } from "./macro-exec.js";
 import { getBridgeToken, readRequestToken, redactActionForLog } from "./security.js";
+import { CodexMonitor } from "./codex-monitor.js";
 
 const MAX_MACRO_ACTION_TEXT = 2000;
 
@@ -102,6 +103,7 @@ export function createApp(): DeckyApp {
   const bridgeToken = getBridgeToken();
   let pendingGateNonce: string | null = null;
   let pendingApprovalFlow: ApprovalFlow = "gate";
+  let pendingApprovalTargetApp: ApprovalTargetApp = "claude";
 
   const io = new SocketIOServer(httpServer, {
     cors: {
@@ -123,6 +125,53 @@ export function createApp(): DeckyApp {
   sm.onStateChange((snapshot) => {
     io.emit("stateChange", snapshot);
   });
+
+  function applyHookPayload(
+    payload: HookPayload,
+    options?: {
+      approvalFlow?: ApprovalFlow;
+      nonce?: string | null;
+      targetApp?: ApprovalTargetApp;
+    },
+  ) {
+    // Clear any stale gate file when a new tool-approval cycle starts
+    if (payload.event === "PreToolUse") {
+      clearGateFile();
+      pendingApprovalFlow = options?.approvalFlow ?? "gate";
+      pendingApprovalTargetApp = options?.targetApp ?? "claude";
+      pendingGateNonce = options?.nonce ?? null;
+    }
+    return sm.processEvent(payload);
+  }
+
+  const isTestRuntime =
+    process.env.VITEST === "true" ||
+    process.env.NODE_ENV === "test" ||
+    (process.env.DECKY_HOME ?? "").includes(".decky-test");
+  const codexMonitorEnabled = !isTestRuntime && process.env.DECKY_ENABLE_CODEX_MONITOR !== "0";
+  let codexMonitor: CodexMonitor | null = null;
+  if (codexMonitorEnabled) {
+    codexMonitor = new CodexMonitor({
+      onHookEvent: (payload) => {
+        const opts =
+          payload.event === "PreToolUse"
+            ? { approvalFlow: "mirror" as const, nonce: null, targetApp: "codex" as const }
+            : undefined;
+        applyHookPayload(payload, opts);
+      },
+      onError: (error) => {
+        console.warn("[codex-monitor] poll error:", error);
+      },
+    });
+    void codexMonitor.start().then((started) => {
+      if (started) {
+        console.log("[codex-monitor] mirroring Codex approval events from state DB");
+      }
+    });
+    httpServer.on("close", () => {
+      codexMonitor?.stop();
+    });
+  }
 
   // --- Middleware ---
 
@@ -161,21 +210,26 @@ export function createApp(): DeckyApp {
       `[hook] received: event=${payload.event}${payload.tool ? ` tool=${payload.tool}` : ""}`
     );
 
-    // Clear any stale gate file when a new tool-approval cycle starts
-    if (payload.event === "PreToolUse") {
-      clearGateFile();
-      const flowHeader = req.header("x-decky-approval-flow");
-      pendingApprovalFlow =
-        typeof flowHeader === "string" && flowHeader.trim().toLowerCase() === "mirror"
-          ? "mirror"
-          : "gate";
-      const nonceHeader = req.header("x-decky-nonce");
-      pendingGateNonce = typeof nonceHeader === "string" && nonceHeader.trim().length > 0
+    const flowHeader = req.header("x-decky-approval-flow");
+    const nonceHeader = req.header("x-decky-nonce");
+    const targetHeader = req.header("x-decky-target-app");
+    const approvalFlow =
+      typeof flowHeader === "string" && flowHeader.trim().toLowerCase() === "mirror"
+        ? "mirror"
+        : "gate";
+    const nonce =
+      typeof nonceHeader === "string" && nonceHeader.trim().length > 0
         ? nonceHeader.trim()
         : null;
-    }
-
-    const snapshot = sm.processEvent(payload);
+    const targetApp =
+      payload.event === "PreToolUse"
+        ? parseApprovalTargetApp(
+            typeof targetHeader === "string" && targetHeader.trim().length > 0
+              ? targetHeader.trim()
+              : body?.targetApp,
+          )
+        : undefined;
+    const snapshot = applyHookPayload(payload, { approvalFlow, nonce, targetApp });
     res.json({ ok: true, state: snapshot });
   });
 
@@ -262,7 +316,10 @@ export function createApp(): DeckyApp {
           socket.emit("error", { error: "Approval action ignored: not awaiting approval" });
           return;
         }
-        const approvalTargetApp = parseApprovalTargetApp(data.targetApp);
+        const approvalTargetApp =
+          pendingApprovalTargetApp === "codex"
+            ? "codex"
+            : parseApprovalTargetApp(data.targetApp);
         if (pendingApprovalFlow === "mirror") {
           pendingGateNonce = null;
           if (entry.result === "approve") {
