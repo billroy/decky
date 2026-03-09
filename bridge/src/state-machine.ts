@@ -49,6 +49,7 @@ export class StateMachine {
     // PreToolUse → awaiting-approval (from thinking or idle)
     "idle:PreToolUse": "awaiting-approval",
     "thinking:PreToolUse": "awaiting-approval",
+    "tool-executing:PreToolUse": "awaiting-approval",
     // If a new tool request arrives after a prior cancel/stop cycle,
     // re-enter approval flow without requiring a manual restart tap.
     "stopped:PreToolUse": "awaiting-approval",

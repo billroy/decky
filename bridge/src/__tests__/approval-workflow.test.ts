@@ -215,4 +215,19 @@ describe("approval workflow — full cycle", () => {
     expect(readFileSync(GATE_FILE_PATH, "utf-8")).toBe("approve");
     sock.disconnect();
   });
+
+  it("new PreToolUse from tool-executing re-enters awaiting-approval and accepts approve", async () => {
+    decky.sm.forceState("tool-executing", "test reset");
+
+    const { data: s1 } = await postHook({ event: "PreToolUse", tool: "Bash" });
+    expect(s1.state.state).toBe("awaiting-approval");
+    expect(s1.state.previousState).toBe("tool-executing");
+
+    const sock = await connectClient();
+    const execPromise = waitForState(sock, "tool-executing");
+    sock.emit("action", { action: "approve" });
+    await execPromise;
+    expect(readFileSync(GATE_FILE_PATH, "utf-8")).toBe("approve");
+    sock.disconnect();
+  });
 });
