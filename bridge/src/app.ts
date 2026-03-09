@@ -312,14 +312,32 @@ export function createApp(): DeckyApp {
 
       const entry = validActions[data.action];
       if (entry) {
-        if (sm.getSnapshot().state !== "awaiting-approval") {
-          socket.emit("error", { error: "Approval action ignored: not awaiting approval" });
-          return;
-        }
+        const currentState = sm.getSnapshot().state;
         const approvalTargetApp =
           pendingApprovalTargetApp === "codex"
             ? "codex"
             : parseApprovalTargetApp(data.targetApp);
+
+        if (data.action === "cancel" && currentState !== "awaiting-approval") {
+          sm.forceState("stopped", "cancelled via StreamDeck");
+          if (approvalTargetApp === "claude") {
+            dismissClaudeApproval().catch((err) => {
+              console.error("[io] cancel action failed outside approval state:", err);
+              socket.emit("error", { error: "Failed to dismiss Claude" });
+            });
+          } else {
+            dismissApprovalInTargetApp(approvalTargetApp).catch((err) => {
+              console.error("[io] cancel action failed outside approval state:", err);
+              socket.emit("error", { error: "Failed to dismiss Codex" });
+            });
+          }
+          return;
+        }
+
+        if (currentState !== "awaiting-approval") {
+          socket.emit("error", { error: "Approval action ignored: not awaiting approval" });
+          return;
+        }
         if (pendingApprovalFlow === "mirror") {
           pendingGateNonce = null;
           if (entry.result === "approve") {
