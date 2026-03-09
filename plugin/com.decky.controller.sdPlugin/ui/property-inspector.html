@@ -15,6 +15,12 @@
     .section {
       margin-bottom: 12px;
     }
+    .section.global-panel {
+      padding: 8px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+    }
     h3 {
       font-size: 12px;
       margin: 0 0 8px 0;
@@ -125,6 +131,15 @@
     .field-group.target-group {
       flex: 1 1 100%;
     }
+    .field-group.submit-group {
+      flex: 0 0 auto;
+      flex-direction: row;
+      align-items: center;
+      gap: 6px;
+    }
+    .field-group.submit-group label {
+      margin-bottom: 0;
+    }
     .macro-item label {
       display: block;
       font-size: 10px;
@@ -143,6 +158,12 @@
       font-size: 12px;
       padding: 3px 5px;
       font-family: inherit;
+    }
+    .macro-item input[type="checkbox"] {
+      width: auto;
+      flex: 0 0 auto;
+      margin: 0;
+      accent-color: #3b82f6;
     }
     .macro-item input:focus,
     .macro-item textarea:focus,
@@ -330,14 +351,6 @@
       border-radius: 4px;
     }
 
-    /* --- Macro help --- */
-    .macro-help {
-      font-size: 10px;
-      color: #666;
-      margin-bottom: 8px;
-      line-height: 1.4;
-    }
-
     /* --- Status --- */
     .status {
       font-size: 10px;
@@ -402,6 +415,11 @@
       white-space: pre-wrap;
       word-break: break-word;
     }
+    .debug-diag {
+      margin-top: 6px;
+      font-size: 9px;
+      color: #7b8497;
+    }
     .scope-chip {
       display: inline-block;
       margin-left: 6px;
@@ -431,7 +449,7 @@
   <div id="compat-warning" class="status error hidden" style="margin:0 0 8px 0"></div>
 
   <!-- Settings -->
-  <div class="section">
+  <div class="section global-panel">
     <h3>Global Behavior <span class="scope-chip">Global</span></h3>
     <div class="setting-row">
       <label>Theme</label>
@@ -480,7 +498,7 @@
   <hr />
 
   <!-- Default Colors -->
-  <div class="section">
+  <div class="section global-panel">
     <h3>Global Appearance <span class="scope-chip">Global</span></h3>
     <div class="setting-hint" style="margin-left:0">Theme and page defaults affect all slots unless a per-slot override is set.</div>
     <div id="default-colors"></div>
@@ -495,19 +513,6 @@
   <!-- Macros -->
   <div class="section">
     <h3>Selected Slot Settings <span class="scope-chip">Selected Slot</span> <span id="macro-count" style="color:#666; font-weight:normal"></span></h3>
-    <div class="setting-row">
-      <label>Target app <span class="scope-chip inline">Selected slot</span></label>
-      <select id="selected-target-app">
-        <option value="">Use default (Claude)</option>
-        <option value="claude">Claude (CLD)</option>
-        <option value="codex">Codex (CDX)</option>
-        <option value="chatgpt">ChatGPT (CGP)</option>
-        <option value="cursor">Cursor (CSR)</option>
-        <option value="windsurf">Windsurf (WDF)</option>
-      </select>
-    </div>
-    <div class="setting-hint" id="selected-target-hint">Applies to selected slot only.</div>
-    <div class="macro-help">Configure the selected slot in focused mode, or all slots in list mode. Label is deck text; Prompt to send is injected when pressed. Each slot can define Icon, Target app, and per-slot colors. <span id="pi-diag" style="color:#8aa3d9"></span></div>
     <div id="macro-list" class="macro-list"></div>
     <div class="btn-row">
       <button class="primary" id="btn-save">Apply now</button>
@@ -534,6 +539,7 @@
         <button id="btn-debug-copy">Copy debug log</button>
       </div>
       <div id="debug-log" class="debug-log">No debug data yet.</div>
+      <div id="pi-diag" class="debug-diag"></div>
     </details>
   </div>
 
@@ -841,26 +847,6 @@
       btn.disabled = selectedMacroIndex < 0 || selectedMacroIndex >= macros.length;
     }
 
-    function syncSelectedTargetControl() {
-      var sel = document.getElementById("selected-target-app");
-      var hint = document.getElementById("selected-target-hint");
-      var valid = selectedMacroIndex >= 0 && selectedMacroIndex < macros.length;
-      var isCommand = valid && (macros[selectedMacroIndex].type === "macro" || !macros[selectedMacroIndex].type);
-      sel.disabled = !valid || !isCommand;
-      if (!valid) {
-        sel.value = "";
-        hint.textContent = "No selected slot.";
-        return;
-      }
-      if (!isCommand) {
-        sel.value = "";
-        hint.textContent = "Target app applies to Command items only.";
-        return;
-      }
-      sel.value = (macros[selectedMacroIndex].targetApp || "").trim();
-      hint.textContent = "Applies to slot " + (selectedMacroIndex + 1) + " only.";
-    }
-
     function hasAnyColorOverrides() {
       if (defaultColors.bg || defaultColors.text || defaultColors.icon) return true;
       return macros.some(function (m) {
@@ -1064,7 +1050,6 @@
         if (isApplySync) showStatus("Applied", "saved");
         setConnectionStatus(true);
         syncScopeButton();
-        syncSelectedTargetControl();
         renderDefaultColors();
         renderMacros();
       }
@@ -1188,7 +1173,6 @@
         ? "(slot " + (selectedMacroIndex + 1) + " of " + macros.length + ")"
         : "(" + macros.length + "/" + MAX_MACROS + ")";
       syncScopeButton();
-      syncSelectedTargetControl();
 
       visibleIndexes.forEach((i) => {
         const macro = macros[i];
@@ -1258,7 +1242,7 @@
             "</div>" +
           "</div>" : "") +
           (macroType === "macro" ? '<div class="field-row">' +
-            '<div class="field-group">' +
+            '<div class="field-group submit-group">' +
               "<label>Submit</label>" +
               '<input type="checkbox" data-field="submit" data-index="' + i + '"' + (macro.submit === false ? "" : " checked") + " />" +
             "</div>" +
@@ -1513,31 +1497,6 @@
       el.addEventListener("input", markDirty);
       el.addEventListener("change", markDirty);
     });
-    document.getElementById("selected-target-app").addEventListener("change", function (e) {
-      if (!macros.length) return;
-      if (selectedMacroIndex < 0 || selectedMacroIndex >= macros.length) {
-        var firstVisible = document.querySelector("#macro-list .macro-item");
-        if (firstVisible && firstVisible.dataset && firstVisible.dataset.index !== undefined) {
-          var inferred = parseInt(firstVisible.dataset.index, 10);
-          if (Number.isFinite(inferred) && inferred >= 0 && inferred < macros.length) {
-            selectedMacroIndex = inferred;
-          }
-        }
-      }
-      if (selectedMacroIndex < 0 || selectedMacroIndex >= macros.length) {
-        showStatus("No selected slot to update", "error");
-        return;
-      }
-      var selectedType = macros[selectedMacroIndex].type || "macro";
-      if (selectedType !== "macro") {
-        showStatus("Target app applies to Command items only", "error");
-        syncSelectedTargetControl();
-        return;
-      }
-      macros[selectedMacroIndex].targetApp = e.target.value || "";
-      markDirty();
-      showStatus("Target change pending. Click Apply now.", "error");
-    });
     document.getElementById("theme").addEventListener("change", function () {
       pendingThemeChange = document.getElementById("theme").value !== savedTheme;
       showStatus("Theme change pending. Use Apply Theme… to commit.", "error");
@@ -1643,7 +1602,6 @@
     // Initial render
     renderDefaultColors();
     renderMacros();
-    syncSelectedTargetControl();
   </script>
 </body>
 </html>
