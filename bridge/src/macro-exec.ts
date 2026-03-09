@@ -101,6 +101,20 @@ export type ApprovalTargetApp = "claude" | "codex";
 
 const CODEX_BUNDLE_ID = "com.openai.codex";
 const CURSOR_BUNDLE_ID = "com.todesktop.230313mzl4w4u92";
+const CODEX_DISMISS_BUTTON_LABELS = ["Reject", "Deny", "Cancel", "Dismiss", "Decline"] as const;
+
+function runAppleScript(script: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile("osascript", ["-e", script], (asErr, stdout) => {
+      if (asErr) return reject(asErr);
+      resolve((stdout ?? "").trim());
+    });
+  });
+}
+
+function appleScriptString(value: string): string {
+  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+}
 
 async function getFrontmostBundleId(): Promise<string | null> {
   const script = `
@@ -109,13 +123,12 @@ async function getFrontmostBundleId(): Promise<string | null> {
       return bundle identifier of frontApp
     end tell
   `;
-  return new Promise((resolve) => {
-    execFile("osascript", ["-e", script], (asErr, stdout) => {
-      if (asErr) return resolve(null);
-      const id = stdout.trim();
-      resolve(id.length > 0 ? id : null);
-    });
-  });
+  try {
+    const id = await runAppleScript(script);
+    return id.length > 0 ? id : null;
+  } catch {
+    return null;
+  }
 }
 
 function runFrontmostSystemKeystroke(keystrokeScript: string): Promise<void> {
@@ -124,12 +137,7 @@ function runFrontmostSystemKeystroke(keystrokeScript: string): Promise<void> {
       ${keystrokeScript}
     end tell
   `;
-  return new Promise((resolve, reject) => {
-    execFile("osascript", ["-e", script], (asErr) => {
-      if (asErr) return reject(asErr);
-      resolve();
-    });
-  });
+  return runAppleScript(script).then(() => undefined);
 }
 
 function runSystemKeystroke(targetApp: TargetApp, keystrokeScript: string): Promise<void> {
@@ -141,12 +149,56 @@ function runSystemKeystroke(targetApp: TargetApp, keystrokeScript: string): Prom
       ${keystrokeScript}
     end tell
   `;
-  return new Promise((resolve, reject) => {
-    execFile("osascript", ["-e", script], (asErr) => {
-      if (asErr) return reject(asErr);
-      resolve();
-    });
-  });
+  return runAppleScript(script).then(() => undefined);
+}
+
+async function clickApprovalButtonInTargetApp(
+  targetApp: TargetApp,
+  labels: readonly string[],
+  activate: boolean,
+): Promise<boolean> {
+  const targetName = TARGET_APP_SPECS[targetApp].appName;
+  const activation = activate ? `${activationScriptFor(targetApp)}\n    delay 0.1` : "";
+  const labelList = labels.map(appleScriptString).join(", ");
+  const script = `
+    ${activation}
+    tell application "System Events"
+      if not (exists process ${appleScriptString(targetName)}) then
+        return "no-process"
+      end if
+      tell process ${appleScriptString(targetName)}
+        if (count of windows) is 0 then
+          return "no-window"
+        end if
+        set targetLabels to {${labelList}}
+        repeat with targetLabel in targetLabels
+          set labelText to targetLabel as text
+          try
+            click button labelText of front window
+            return "clicked"
+          end try
+          try
+            click (first button of front window whose name is labelText)
+            return "clicked"
+          end try
+          try
+            click button labelText of sheet 1 of front window
+            return "clicked"
+          end try
+          try
+            click (first button of sheet 1 of front window whose name is labelText)
+            return "clicked"
+          end try
+        end repeat
+      end tell
+    end tell
+    return "not-found"
+  `;
+  try {
+    return (await runAppleScript(script)) === "clicked";
+  } catch {
+    return false;
+  }
 }
 
 async function runFrontmostCodexKeystroke(keystrokeScript: string): Promise<boolean> {
@@ -187,6 +239,22 @@ export async function dismissApprovalInTargetApp(targetApp: ApprovalTargetApp): 
       keystroke "." using command down`;
 
   if (targetApp === "codex") {
+    const frontmostBundleId = await getFrontmostBundleId();
+    const frontmostTarget =
+      frontmostBundleId === CODEX_BUNDLE_ID
+        ? "codex"
+        : frontmostBundleId === CURSOR_BUNDLE_ID
+          ? "cursor"
+          : null;
+    if (
+      frontmostTarget &&
+      (await clickApprovalButtonInTargetApp(frontmostTarget, CODEX_DISMISS_BUTTON_LABELS, false))
+    ) {
+      return;
+    }
+    if (await clickApprovalButtonInTargetApp("codex", CODEX_DISMISS_BUTTON_LABELS, true)) return;
+    if (await clickApprovalButtonInTargetApp("cursor", CODEX_DISMISS_BUTTON_LABELS, true)) return;
+
     try {
       // Only use frontmost when it is known to be Codex/Cursor.
       if (await runFrontmostCodexKeystroke(codexDismissSequence)) return;

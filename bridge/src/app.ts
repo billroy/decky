@@ -353,14 +353,18 @@ export function createApp(): DeckyApp {
               });
             }
           } else {
-            sm.forceState("idle", `${entry.result} via StreamDeck (mirror)`);
+            const mirrorDismissReason = `${entry.result} via StreamDeck (mirror)`;
             if (approvalTargetApp === "claude") {
-              dismissClaudeApproval().catch((err) => {
+              dismissClaudeApproval().then(() => {
+                sm.forceState("idle", mirrorDismissReason);
+              }).catch((err) => {
                 console.error("[io] deny/cancel action failed in mirror flow:", err);
                 socket.emit("error", { error: "Failed to dismiss Claude approval" });
               });
             } else {
-              dismissApprovalInTargetApp(approvalTargetApp).catch((err) => {
+              dismissApprovalInTargetApp(approvalTargetApp).then(() => {
+                sm.forceState("idle", mirrorDismissReason);
+              }).catch((err) => {
                 console.error("[io] deny/cancel action failed in mirror flow:", err);
                 socket.emit("error", { error: "Failed to dismiss Codex approval" });
               });
