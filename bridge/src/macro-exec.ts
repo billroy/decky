@@ -99,6 +99,20 @@ export function approveOnceInClaude(): Promise<void> {
 
 export type ApprovalTargetApp = "claude" | "codex";
 
+function runFrontmostSystemKeystroke(keystrokeScript: string): Promise<void> {
+  const script = `
+    tell application "System Events"
+      ${keystrokeScript}
+    end tell
+  `;
+  return new Promise((resolve, reject) => {
+    execFile("osascript", ["-e", script], (asErr) => {
+      if (asErr) return reject(asErr);
+      resolve();
+    });
+  });
+}
+
 function runSystemKeystroke(targetApp: TargetApp, keystrokeScript: string): Promise<void> {
   const activation = activationScriptFor(targetApp);
   const script = `
@@ -117,6 +131,17 @@ function runSystemKeystroke(targetApp: TargetApp, keystrokeScript: string): Prom
 }
 
 export async function approveInTargetApp(targetApp: ApprovalTargetApp): Promise<void> {
+  if (targetApp === "codex") {
+    // Codex approvals may be surfaced in Codex.app or Cursor.app.
+    // Prefer the currently focused app to avoid stealing focus first.
+    try {
+      await runFrontmostSystemKeystroke("keystroke return");
+      return;
+    } catch {
+      // Fall through to explicit app targeting.
+    }
+  }
+
   try {
     await runSystemKeystroke(targetApp, "keystroke return");
   } catch (err) {
@@ -131,12 +156,27 @@ export function dismissClaudeApproval(): Promise<void> {
 }
 
 export async function dismissApprovalInTargetApp(targetApp: ApprovalTargetApp): Promise<void> {
+  const codexDismissSequence = `key code 53
+      delay 0.05
+      keystroke "." using command down`;
+
+  if (targetApp === "codex") {
+    // Prefer dismissing in whichever app currently has focus.
+    // Escape handles most prompts; Cmd+. handles macOS cancel dialogs.
+    try {
+      await runFrontmostSystemKeystroke(codexDismissSequence);
+      return;
+    } catch {
+      // Fall through to explicit app targeting.
+    }
+  }
+
   try {
-    await runSystemKeystroke(targetApp, "key code 53");
+    await runSystemKeystroke(targetApp, targetApp === "codex" ? codexDismissSequence : "key code 53");
   } catch (err) {
     // Codex approvals may be hosted inside Cursor.app; retry there.
     if (targetApp !== "codex") throw err;
-    await runSystemKeystroke("cursor", "key code 53");
+    await runSystemKeystroke("cursor", codexDismissSequence);
   }
 }
 
