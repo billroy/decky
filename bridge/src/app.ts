@@ -258,6 +258,7 @@ export function createApp(): DeckyApp {
               socket.emit("error", { error: "Failed to approve in Claude" });
             });
           } else {
+            sm.forceState("idle", `${entry.result} via StreamDeck (mirror)`);
             dismissClaudeApproval().catch((err) => {
               console.error("[io] deny/cancel action failed in mirror flow:", err);
               socket.emit("error", { error: "Failed to dismiss Claude approval" });
