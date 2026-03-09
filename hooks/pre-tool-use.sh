@@ -22,6 +22,9 @@ fi
 
 # Read JSON payload from stdin
 PAYLOAD="$(cat)"
+if [ -z "$(printf '%s' "$PAYLOAD" | tr -d '[:space:]')" ]; then
+  PAYLOAD="{}"
+fi
 
 # Ensure ~/.decky/ exists
 mkdir -p "$HOME/.decky"
@@ -43,6 +46,7 @@ fi
 HTTP_CODE="$(
   curl -sS -o /dev/null -w '%{http_code}' -X POST "$BRIDGE_URL/hook" \
     -H "Content-Type: application/json" \
+    -H "x-decky-event: PreToolUse" \
     -H "x-decky-nonce: $NONCE" \
     "${AUTH_ARGS[@]}" \
     -d "$PAYLOAD" || echo "000"
