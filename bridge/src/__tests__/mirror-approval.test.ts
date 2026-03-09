@@ -82,6 +82,22 @@ function connectClient(): Promise<ClientSocket> {
   });
 }
 
+function waitForSocketEvent<T>(
+  socket: ClientSocket,
+  event: string,
+  timeoutMs = 800,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`Timed out waiting for socket event: ${event}`));
+    }, timeoutMs);
+    socket.once(event, (payload: unknown) => {
+      clearTimeout(timeout);
+      resolve(payload as T);
+    });
+  });
+}
+
 describe("approval workflow — mirror mode", () => {
   it("approve action forwards to Claude and does not write gate/force state", async () => {
     const { status } = await postHook(
@@ -116,6 +132,26 @@ describe("approval workflow — mirror mode", () => {
     expect(macroMocks.approveTarget).toHaveBeenCalledOnce();
     expect(macroMocks.approveTarget).toHaveBeenCalledWith("codex");
     expect(gateFileExists()).toBe(false);
+    const { data } = await getStatus();
+    expect(data.state).toBe("awaiting-approval");
+    sock.disconnect();
+  });
+
+  it("approve action surfaces Codex automation errors and keeps awaiting-approval", async () => {
+    const { status } = await postHook(
+      { event: "PreToolUse", tool: "Write" },
+      { "x-decky-approval-flow": "mirror" },
+    );
+    expect(status).toBe(200);
+    macroMocks.approveTarget.mockRejectedValueOnce(new Error("approve failed"));
+
+    const sock = await connectClient();
+    const errorPromise = waitForSocketEvent<{ error: string }>(sock, "error");
+    sock.emit("action", { action: "approve", targetApp: "codex" });
+
+    const err = await errorPromise;
+    expect(err.error).toBe("Failed to approve in Codex");
+    expect(macroMocks.approveTarget).toHaveBeenCalledOnce();
     const { data } = await getStatus();
     expect(data.state).toBe("awaiting-approval");
     sock.disconnect();
