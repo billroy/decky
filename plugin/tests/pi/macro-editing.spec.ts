@@ -38,10 +38,10 @@ test.describe("PI macro editing", () => {
     await expect(page.locator('#macro-list input[data-field="label"][data-index="0"]')).toHaveValue("Affirm");
   });
 
-  test("selected target app dropdown updates only selected macro", async ({ piHarness }) => {
+  test("selected-slot target app dropdown updates only selected macro", async ({ piHarness }) => {
     const { page } = piHarness;
 
-    await page.selectOption("#selected-target-app", "cursor");
+    await page.selectOption('#macro-list select[data-field="targetApp"][data-index="0"]', "cursor");
     await page.click("#btn-save");
 
     const update = await piHarness.waitForUpdateConfig();
@@ -52,7 +52,7 @@ test.describe("PI macro editing", () => {
     expect(update.showTargetBadge).toBeUndefined();
 
     await piHarness.ackWithSnapshot(update);
-    await expect(page.locator("#selected-target-app")).toHaveValue("cursor");
+    await expect(page.locator('#macro-list select[data-field="targetApp"][data-index="0"]')).toHaveValue("cursor");
   });
 
   test("per-macro target app in list persists", async ({ piHarness }) => {
@@ -175,7 +175,7 @@ test.describe("PI unconfigured slot promotion", () => {
   test("canonicalizes stale placeholder metadata on color-only updates", async ({ piHarness }) => {
     const { page } = piHarness;
 
-    await page.selectOption("#selected-target-app", "codex");
+    await page.selectOption('#macro-list select[data-field="targetApp"][data-index="5"]', "codex");
     if (await page.locator(".macro-colors-panel").count() === 0) {
       await page.click('[data-colorindex="5"]');
     }

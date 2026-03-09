@@ -4,7 +4,7 @@ test.describe("PI save flow", () => {
   test("enables Apply on target app change and sends correlated updateConfig", async ({ piHarness }) => {
     const { page } = piHarness;
 
-    await page.selectOption("#selected-target-app", "codex");
+    await page.selectOption('#macro-list select[data-field="targetApp"][data-index="0"]', "codex");
     await expect(page.locator("#btn-save")).toBeEnabled();
 
     await page.click("#btn-save");
@@ -51,7 +51,7 @@ test.describe("PI save flow", () => {
     const { page } = piHarness;
 
     await page.check("#show-target-badge");
-    await page.selectOption("#selected-target-app", "codex");
+    await page.selectOption('#macro-list select[data-field="targetApp"][data-index="0"]', "codex");
     await expect(page.locator("#btn-save")).toBeEnabled();
 
     await page.click("#btn-save");
@@ -62,7 +62,7 @@ test.describe("PI save flow", () => {
 
     await piHarness.ackWithSnapshot(update);
     await expect(page.locator("#show-target-badge")).toBeChecked();
-    await expect(page.locator("#selected-target-app")).toHaveValue("codex");
+    await expect(page.locator('#macro-list select[data-field="targetApp"][data-index="0"]')).toHaveValue("codex");
   });
 
   test("legacy Claude utility toggles are not present in unified PI", async ({ piHarness }) => {

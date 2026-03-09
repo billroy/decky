@@ -10,10 +10,18 @@ test.describe("PI global controls", () => {
     const selectedSection = page.locator(".section").filter({
       has: page.locator("h3").filter({ hasText: "Selected Slot Settings" }),
     });
+    const diagnosticsSection = page.locator(".section").filter({
+      has: page.locator("h3").filter({ hasText: "Diagnostics" }),
+    });
 
-    await expect(globalSection.locator("#selected-target-app")).toHaveCount(0);
+    await expect(globalSection.locator('select[data-field="targetApp"]')).toHaveCount(0);
     await expect(globalSection.locator("#show-target-badge")).toHaveCount(1);
-    await expect(selectedSection.locator("#selected-target-app")).toHaveCount(1);
+    await expect(globalSection).toHaveClass(/global-panel/);
+    await expect(selectedSection.locator('select[data-field="targetApp"]')).toHaveCount(1);
+    await expect(selectedSection).toHaveClass(/global-panel/);
+    await expect(selectedSection).not.toContainText("Configure the selected slot");
+    await expect(selectedSection.locator("#pi-diag")).toHaveCount(0);
+    await expect(diagnosticsSection).toHaveClass(/global-panel/);
   });
 
   test("diagnostics are compact and collapsed by default", async ({ piHarness }) => {
@@ -59,13 +67,23 @@ test.describe("PI global controls", () => {
   test("non-badge applies do not overwrite showTargetBadge", async ({ piHarness }) => {
     const { page } = piHarness;
 
-    await page.selectOption("#selected-target-app", "codex");
+    await page.selectOption('#macro-list select[data-field="targetApp"][data-index="0"]', "codex");
     await page.click("#btn-save");
 
     const update = await piHarness.waitForUpdateConfig();
     expect(update.showTargetBadge).toBeUndefined();
     await piHarness.ackWithSnapshot(update);
     await expect(page.locator("#show-target-badge")).toBeChecked();
+  });
+
+  test("diag text is shown in diagnostics section", async ({ piHarness }) => {
+    const { page } = piHarness;
+
+    const diagnosticsSection = page.locator(".section").filter({
+      has: page.locator("h3").filter({ hasText: "Diagnostics" }),
+    });
+
+    await expect(diagnosticsSection.locator("#pi-diag")).toContainText("[diag build=");
   });
 
   test("theme cancel reverts selection and does not dispatch update", async ({ piHarness }) => {
