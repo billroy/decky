@@ -172,10 +172,43 @@ async function clickApprovalButtonInTargetApp(
   targetApp: TargetApp,
   labels: readonly string[],
   activate: boolean,
+  roleHint: "default" | "cancel" | "none" = "none",
 ): Promise<boolean> {
   const targetName = TARGET_APP_SPECS[targetApp].appName;
   const activation = activate ? `${activationScriptFor(targetApp)}\n    delay 0.1` : "";
   const labelList = labels.map(appleScriptString).join(", ");
+  const roleScript =
+    roleHint === "default"
+      ? `
+          try
+            click (first button of front window whose subrole is "AXDefaultButton")
+            return "clicked"
+          end try
+          try
+            click (first button of sheet 1 of front window whose subrole is "AXDefaultButton")
+            return "clicked"
+          end try
+          try
+            click (first button of (entire contents of front window) whose role is "AXButton" and subrole is "AXDefaultButton")
+            return "clicked"
+          end try
+        `
+      : roleHint === "cancel"
+        ? `
+          try
+            click (first button of front window whose subrole is "AXCancelButton")
+            return "clicked"
+          end try
+          try
+            click (first button of sheet 1 of front window whose subrole is "AXCancelButton")
+            return "clicked"
+          end try
+          try
+            click (first button of (entire contents of front window) whose role is "AXButton" and subrole is "AXCancelButton")
+            return "clicked"
+          end try
+        `
+        : "";
   const script = `
     ${activation}
     tell application "System Events"
@@ -186,6 +219,7 @@ async function clickApprovalButtonInTargetApp(
         if (count of windows) is 0 then
           return "no-window"
         end if
+        ${roleScript}
         set targetLabels to {${labelList}}
         repeat with targetLabel in targetLabels
           set labelText to targetLabel as text
@@ -253,12 +287,17 @@ export async function approveInTargetApp(targetApp: ApprovalTargetApp): Promise<
           : null;
     if (
       frontmostTarget &&
-      (await clickApprovalButtonInTargetApp(frontmostTarget, CODEX_APPROVE_BUTTON_LABELS, false))
+      (await clickApprovalButtonInTargetApp(
+        frontmostTarget,
+        CODEX_APPROVE_BUTTON_LABELS,
+        false,
+        "default",
+      ))
     ) {
       return;
     }
-    if (await clickApprovalButtonInTargetApp("codex", CODEX_APPROVE_BUTTON_LABELS, true)) return;
-    if (await clickApprovalButtonInTargetApp("cursor", CODEX_APPROVE_BUTTON_LABELS, true)) return;
+    if (await clickApprovalButtonInTargetApp("codex", CODEX_APPROVE_BUTTON_LABELS, true, "default")) return;
+    if (await clickApprovalButtonInTargetApp("cursor", CODEX_APPROVE_BUTTON_LABELS, true, "default")) return;
 
     try {
       // Only use frontmost when it is known to be Codex/Cursor.
@@ -302,12 +341,17 @@ export async function dismissApprovalInTargetApp(targetApp: ApprovalTargetApp): 
           : null;
     if (
       frontmostTarget &&
-      (await clickApprovalButtonInTargetApp(frontmostTarget, CODEX_DISMISS_BUTTON_LABELS, false))
+      (await clickApprovalButtonInTargetApp(
+        frontmostTarget,
+        CODEX_DISMISS_BUTTON_LABELS,
+        false,
+        "cancel",
+      ))
     ) {
       return;
     }
-    if (await clickApprovalButtonInTargetApp("codex", CODEX_DISMISS_BUTTON_LABELS, true)) return;
-    if (await clickApprovalButtonInTargetApp("cursor", CODEX_DISMISS_BUTTON_LABELS, true)) return;
+    if (await clickApprovalButtonInTargetApp("codex", CODEX_DISMISS_BUTTON_LABELS, true, "cancel")) return;
+    if (await clickApprovalButtonInTargetApp("cursor", CODEX_DISMISS_BUTTON_LABELS, true, "cancel")) return;
 
     try {
       // Only use frontmost when it is known to be Codex/Cursor.
