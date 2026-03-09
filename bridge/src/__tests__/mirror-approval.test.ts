@@ -95,7 +95,7 @@ describe("approval workflow — mirror mode", () => {
     sock.disconnect();
   });
 
-  it("deny action dismisses Claude approval and does not write gate", async () => {
+  it("deny action dismisses Claude approval, clears approval UI, and does not write gate", async () => {
     const { status } = await postHook(
       { event: "PreToolUse", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
@@ -108,10 +108,12 @@ describe("approval workflow — mirror mode", () => {
 
     expect(macroMocks.dismiss).toHaveBeenCalledOnce();
     expect(gateFileExists()).toBe(false);
+    const { data } = await getStatus();
+    expect(data.state).toBe("idle");
     sock.disconnect();
   });
 
-  it("cancel action dismisses Claude approval and does not write gate", async () => {
+  it("cancel action dismisses Claude approval, clears approval UI, and does not write gate", async () => {
     const { status } = await postHook(
       { event: "PreToolUse", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
@@ -124,6 +126,8 @@ describe("approval workflow — mirror mode", () => {
 
     expect(macroMocks.dismiss).toHaveBeenCalledOnce();
     expect(gateFileExists()).toBe(false);
+    const { data } = await getStatus();
+    expect(data.state).toBe("idle");
     sock.disconnect();
   });
 });
