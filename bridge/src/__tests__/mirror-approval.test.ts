@@ -6,12 +6,16 @@ import { clearGateFile, gateFileExists } from "../approval-gate.js";
 const macroMocks = vi.hoisted(() => ({
   approve: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
   dismiss: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
+  approveTarget: vi.fn<(targetApp: "claude" | "codex") => Promise<void>>().mockResolvedValue(undefined),
+  dismissTarget: vi.fn<(targetApp: "claude" | "codex") => Promise<void>>().mockResolvedValue(undefined),
 }));
 
 vi.mock("../macro-exec.js", () => ({
   executeMacro: vi.fn().mockResolvedValue(undefined),
   approveOnceInClaude: macroMocks.approve,
   dismissClaudeApproval: macroMocks.dismiss,
+  approveInTargetApp: macroMocks.approveTarget,
+  dismissApprovalInTargetApp: macroMocks.dismissTarget,
   startDictationForClaude: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -44,6 +48,8 @@ afterEach(() => {
   decky.sm.forceState("idle", "test cleanup");
   macroMocks.approve.mockClear();
   macroMocks.dismiss.mockClear();
+  macroMocks.approveTarget.mockClear();
+  macroMocks.dismissTarget.mockClear();
 });
 
 async function postHook(
@@ -95,6 +101,26 @@ describe("approval workflow — mirror mode", () => {
     sock.disconnect();
   });
 
+  it("approve action forwards to Codex when targetApp is codex", async () => {
+    const { status } = await postHook(
+      { event: "PreToolUse", tool: "Write" },
+      { "x-decky-approval-flow": "mirror" },
+    );
+    expect(status).toBe(200);
+
+    const sock = await connectClient();
+    sock.emit("action", { action: "approve", targetApp: "codex" });
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(macroMocks.approve).not.toHaveBeenCalled();
+    expect(macroMocks.approveTarget).toHaveBeenCalledOnce();
+    expect(macroMocks.approveTarget).toHaveBeenCalledWith("codex");
+    expect(gateFileExists()).toBe(false);
+    const { data } = await getStatus();
+    expect(data.state).toBe("awaiting-approval");
+    sock.disconnect();
+  });
+
   it("deny action dismisses Claude approval, clears approval UI, and does not write gate", async () => {
     const { status } = await postHook(
       { event: "PreToolUse", tool: "Write" },
@@ -113,6 +139,26 @@ describe("approval workflow — mirror mode", () => {
     sock.disconnect();
   });
 
+  it("deny action dismisses Codex approval when targetApp is codex", async () => {
+    const { status } = await postHook(
+      { event: "PreToolUse", tool: "Write" },
+      { "x-decky-approval-flow": "mirror" },
+    );
+    expect(status).toBe(200);
+
+    const sock = await connectClient();
+    sock.emit("action", { action: "deny", targetApp: "codex" });
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(macroMocks.dismiss).not.toHaveBeenCalled();
+    expect(macroMocks.dismissTarget).toHaveBeenCalledOnce();
+    expect(macroMocks.dismissTarget).toHaveBeenCalledWith("codex");
+    expect(gateFileExists()).toBe(false);
+    const { data } = await getStatus();
+    expect(data.state).toBe("idle");
+    sock.disconnect();
+  });
+
   it("cancel action dismisses Claude approval, clears approval UI, and does not write gate", async () => {
     const { status } = await postHook(
       { event: "PreToolUse", tool: "Write" },
@@ -125,6 +171,26 @@ describe("approval workflow — mirror mode", () => {
     await new Promise((r) => setTimeout(r, 100));
 
     expect(macroMocks.dismiss).toHaveBeenCalledOnce();
+    expect(gateFileExists()).toBe(false);
+    const { data } = await getStatus();
+    expect(data.state).toBe("idle");
+    sock.disconnect();
+  });
+
+  it("cancel action dismisses Codex approval when targetApp is codex", async () => {
+    const { status } = await postHook(
+      { event: "PreToolUse", tool: "Write" },
+      { "x-decky-approval-flow": "mirror" },
+    );
+    expect(status).toBe(200);
+
+    const sock = await connectClient();
+    sock.emit("action", { action: "cancel", targetApp: "codex" });
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(macroMocks.dismiss).not.toHaveBeenCalled();
+    expect(macroMocks.dismissTarget).toHaveBeenCalledOnce();
+    expect(macroMocks.dismissTarget).toHaveBeenCalledWith("codex");
     expect(gateFileExists()).toBe(false);
     const { data } = await getStatus();
     expect(data.state).toBe("idle");

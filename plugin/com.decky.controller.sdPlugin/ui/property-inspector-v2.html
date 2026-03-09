@@ -667,6 +667,15 @@
       approveOnceInClaude: true,
       startDictationForClaude: true,
     };
+    const APPROVAL_TARGET_TYPES = {
+      approve: true,
+      deny: true,
+      cancel: true,
+    };
+    const APPROVAL_TARGETS = [
+      { value: "claude", label: "Claude (CLD)" },
+      { value: "codex", label: "Codex (CDX)" },
+    ];
     const SLOT_ACTION_DEFAULTS = {
       approve: { label: "Approve", icon: "checkmark" },
       deny: { label: "Deny", icon: "stop" },
@@ -710,6 +719,9 @@
     let pendingApplyRequestId = "";
     let awaitingPostAckSnapshot = false;
     let configAckTimer = null;
+    function normalizeApprovalTarget(targetApp) {
+      return targetApp === "codex" ? "codex" : "claude";
+    }
     document.getElementById("pi-build").textContent = "PI build: " + PI_BUILD_ID;
     function setConnectionStatus(connected) {
       var dotEl = document.getElementById("conn-dot");
@@ -746,6 +758,9 @@
           var icon = typeof m.icon === "string" ? m.icon : "";
           var macroType = m.type === "widget" || SLOT_ACTION_TYPES[m.type] ? m.type : "macro";
           var macroTarget = (m.targetApp || "").trim();
+          if (APPROVAL_TARGET_TYPES[macroType]) {
+            macroTarget = normalizeApprovalTarget(macroTarget);
+          }
           var isPlaceholder =
             macroType === "macro" &&
             label.trim().length === 0 &&
@@ -976,12 +991,15 @@
         }
         if (Array.isArray(msg.macros)) {
           macros = msg.macros.map((m) => ({
+            type: m.type === "widget" || SLOT_ACTION_TYPES[m.type] ? m.type : "macro",
             label: m.label || "",
             text: m.text || "",
             icon: m.icon || "",
-            targetApp: m.targetApp || "",
+            targetApp:
+              m.type === "approve" || m.type === "deny" || m.type === "cancel"
+                ? normalizeApprovalTarget(m.targetApp || "")
+                : (m.targetApp || ""),
             submit: m.submit !== false,
-            type: m.type === "widget" || SLOT_ACTION_TYPES[m.type] ? m.type : "macro",
             widget: m.widget || null,
             colors: { bg: (m.colors && m.colors.bg) || "", text: (m.colors && m.colors.text) || "", icon: (m.colors && m.colors.icon) || "" },
           }));
@@ -1193,12 +1211,18 @@
         const iconOptions = ICONS.map(
           (ic) => '<option value="' + esc(ic.value) + '"' + (macro.icon === ic.value ? " selected" : "") + ">" + esc(ic.label) + "</option>"
         ).join("");
-        const targetOptions = TARGETS.map(
+        const targetChoices = macroType === "macro"
+          ? TARGETS
+          : (APPROVAL_TARGET_TYPES[macroType] ? APPROVAL_TARGETS : []);
+        const selectedTarget = APPROVAL_TARGET_TYPES[macroType]
+          ? normalizeApprovalTarget(macro.targetApp || "")
+          : (macro.targetApp || "");
+        const targetOptions = targetChoices.map(
           (target) =>
             '<option value="' +
             esc(target.value) +
             '"' +
-            ((macro.targetApp || "") === target.value ? " selected" : "") +
+            (selectedTarget === target.value ? " selected" : "") +
             ">" +
             esc(target.label) +
             "</option>"
@@ -1235,7 +1259,7 @@
               '<select data-field="icon" data-index="' + i + '">' + iconOptions + "</select>" +
             "</div>" +
           "</div>" : "") +
-          (macroType === "macro" ? '<div class="field-row">' +
+          (macroType === "macro" || APPROVAL_TARGET_TYPES[macroType] ? '<div class="field-row">' +
             '<div class="field-group target-group">' +
               "<label>Target app</label>" +
               '<select data-field="targetApp" data-index="' + i + '">' + targetOptions + "</select>" +
@@ -1319,7 +1343,11 @@
           } else if (SLOT_ACTION_TYPES[nextType]) {
             macros[idx].widget = null;
             macros[idx].text = "";
-            macros[idx].targetApp = "";
+            if (APPROVAL_TARGET_TYPES[nextType]) {
+              macros[idx].targetApp = normalizeApprovalTarget(macros[idx].targetApp || "");
+            } else {
+              macros[idx].targetApp = "";
+            }
             macros[idx].submit = true;
             if (!macros[idx].label) macros[idx].label = SLOT_ACTION_DEFAULTS[nextType].label;
             if (!macros[idx].icon) macros[idx].icon = SLOT_ACTION_DEFAULTS[nextType].icon;
