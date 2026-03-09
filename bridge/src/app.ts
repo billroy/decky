@@ -353,8 +353,8 @@ export function createApp(): DeckyApp {
               });
             }
           } else {
-            const mirrorDismissReason = `${entry.result} via StreamDeck (mirror)`;
             if (approvalTargetApp === "claude") {
+              const mirrorDismissReason = `${entry.result} via StreamDeck (mirror)`;
               dismissClaudeApproval().then(() => {
                 sm.forceState("idle", mirrorDismissReason);
               }).catch((err) => {
@@ -362,9 +362,9 @@ export function createApp(): DeckyApp {
                 socket.emit("error", { error: "Failed to dismiss Claude approval" });
               });
             } else {
-              dismissApprovalInTargetApp(approvalTargetApp).then(() => {
-                sm.forceState("idle", mirrorDismissReason);
-              }).catch((err) => {
+              // For Codex mirror flow, rely on mirrored Codex events to advance state
+              // so the Deck never reports idle before the host app actually settles.
+              dismissApprovalInTargetApp(approvalTargetApp).catch((err) => {
                 console.error("[io] deny/cancel action failed in mirror flow:", err);
                 socket.emit("error", { error: "Failed to dismiss Codex approval" });
               });
