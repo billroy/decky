@@ -21,10 +21,10 @@ afterAll(async () => {
   await new Promise<void>((resolve) => decky.httpServer.close(() => resolve()));
 });
 
-async function postHook(body: Record<string, unknown>) {
+async function postHook(body: Record<string, unknown>, headers: Record<string, string> = {}) {
   const res = await fetch(`${baseUrl}/hook`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-decky-token": token },
+    headers: { "Content-Type": "application/json", "x-decky-token": token, ...headers },
     body: JSON.stringify(body),
   });
   return { status: res.status, data: await res.json() };
@@ -91,6 +91,19 @@ describe("POST /hook", () => {
     const { status, data } = await postHook({ event: "PreToolUse" });
     expect(status).toBe(200);
     expect(data.state.state).toBe("awaiting-approval");
+  });
+
+  it("accepts hook_event_name fallback", async () => {
+    const { status, data } = await postHook({ hook_event_name: "PreToolUse", tool_name: "Bash" });
+    expect(status).toBe(200);
+    expect(data.state.state).toBe("awaiting-approval");
+    expect(data.state.tool).toBe("Bash");
+  });
+
+  it("accepts x-decky-event header fallback", async () => {
+    const { status, data } = await postHook({}, { "x-decky-event": "PostToolUse" });
+    expect(status).toBe(200);
+    expect(data.state.state).toBe("thinking");
   });
 
   it("rejects unauthorized requests", async () => {
