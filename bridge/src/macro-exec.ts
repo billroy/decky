@@ -113,6 +113,26 @@ export function approveOnceInClaude(): Promise<void> {
   });
 }
 
+export function dismissClaudeApproval(): Promise<void> {
+  const script = `
+    try
+      tell application id "com.anthropic.claudefordesktop" to activate
+    on error
+      tell application "Claude" to activate
+    end try
+    delay 0.15
+    tell application "System Events"
+      key code 53
+    end tell
+  `;
+  return new Promise((resolve, reject) => {
+    execFile("osascript", ["-e", script], (asErr) => {
+      if (asErr) return reject(asErr);
+      resolve();
+    });
+  });
+}
+
 export function startDictationForClaude(): Promise<void> {
   const script = `
     try
