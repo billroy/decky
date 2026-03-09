@@ -12,6 +12,8 @@ export interface SlotConfig {
   data?: Record<string, unknown>;
 }
 
+type ApprovalTargetApp = "claude" | "codex";
+
 export type LayoutDef = Record<number, SlotConfig>;
 export type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";
 export type ConnectionStatus = "connected" | "disconnected" | "connecting";
@@ -581,18 +583,21 @@ const APPROVE: SlotConfig = {
   svg: roundedRect("#22c55e", "\u2713"),
   title: "Approve",
   action: "approve",
+  data: { targetApp: "claude" },
 };
 
 const DENY: SlotConfig = {
   svg: roundedRect("#ef4444", "\u2717"),
   title: "Deny",
   action: "deny",
+  data: { targetApp: "claude" },
 };
 
 const CANCEL: SlotConfig = {
   svg: roundedRect("#f59e0b", "\u23F9"),
   title: "Cancel",
   action: "cancel",
+  data: { targetApp: "claude" },
 };
 
 const STOP: SlotConfig = {
@@ -661,6 +666,10 @@ function resolveColor(base: string, pageOverride?: string, macroOverride?: strin
   return sanitizeColor(macroOverride) ?? sanitizeColor(pageOverride) ?? base;
 }
 
+function resolveApprovalTargetApp(targetApp?: TargetApp): ApprovalTargetApp {
+  return targetApp === "codex" ? "codex" : "claude";
+}
+
 function macroSlot(index: number, macro: MacroInput): SlotConfig {
   const macroIcon = typeof macro.icon === "string" ? macro.icon.trim() : "";
   const isPlaceholder =
@@ -670,9 +679,33 @@ function macroSlot(index: number, macro: MacroInput): SlotConfig {
     macroIcon.length === 0;
   if (isPlaceholder) return emptySlot(index, macro.colors);
 
-  if (macro.type === "approve") return { ...APPROVE, svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"), title: macro.label || APPROVE.title };
-  if (macro.type === "deny") return { ...DENY, svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"), title: macro.label || DENY.title };
-  if (macro.type === "cancel") return { ...CANCEL, svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"), title: macro.label || CANCEL.title };
+  if (macro.type === "approve") {
+    const targetApp = resolveApprovalTargetApp(macro.targetApp);
+    return {
+      ...APPROVE,
+      svg: macroSVG(index, macro.label, macro.icon, macro.colors, targetApp),
+      title: macro.label || APPROVE.title,
+      data: { targetApp },
+    };
+  }
+  if (macro.type === "deny") {
+    const targetApp = resolveApprovalTargetApp(macro.targetApp);
+    return {
+      ...DENY,
+      svg: macroSVG(index, macro.label, macro.icon, macro.colors, targetApp),
+      title: macro.label || DENY.title,
+      data: { targetApp },
+    };
+  }
+  if (macro.type === "cancel") {
+    const targetApp = resolveApprovalTargetApp(macro.targetApp);
+    return {
+      ...CANCEL,
+      svg: macroSVG(index, macro.label, macro.icon, macro.colors, targetApp),
+      title: macro.label || CANCEL.title,
+      data: { targetApp },
+    };
+  }
   if (macro.type === "restart") return { ...RESTART, svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"), title: macro.label || RESTART.title };
   if (macro.type === "openConfig") return { ...OPEN_CONFIG, svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"), title: macro.label || OPEN_CONFIG.title };
   if (macro.type === "approveOnceInClaude") {

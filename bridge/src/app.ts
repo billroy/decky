@@ -21,7 +21,14 @@ import {
   type Theme,
   ConfigValidationError,
 } from "./config.js";
-import { executeMacro, approveOnceInClaude, dismissClaudeApproval, startDictationForClaude } from "./macro-exec.js";
+import {
+  executeMacro,
+  approveOnceInClaude,
+  dismissClaudeApproval,
+  approveInTargetApp,
+  dismissApprovalInTargetApp,
+  startDictationForClaude,
+} from "./macro-exec.js";
 import { getBridgeToken, readRequestToken, redactActionForLog } from "./security.js";
 
 const MAX_MACRO_ACTION_TEXT = 2000;
@@ -83,6 +90,11 @@ export interface DeckyApp {
 }
 
 type ApprovalFlow = "gate" | "mirror";
+type ApprovalTargetApp = "claude" | "codex";
+
+function parseApprovalTargetApp(value: unknown): ApprovalTargetApp {
+  return value === "codex" ? "codex" : "claude";
+}
 
 export function createApp(): DeckyApp {
   const app = express();
@@ -250,19 +262,34 @@ export function createApp(): DeckyApp {
           socket.emit("error", { error: "Approval action ignored: not awaiting approval" });
           return;
         }
+        const approvalTargetApp = parseApprovalTargetApp(data.targetApp);
         if (pendingApprovalFlow === "mirror") {
           pendingGateNonce = null;
           if (entry.result === "approve") {
-            approveOnceInClaude().catch((err) => {
-              console.error("[io] approve action failed in mirror flow:", err);
-              socket.emit("error", { error: "Failed to approve in Claude" });
-            });
+            if (approvalTargetApp === "claude") {
+              approveOnceInClaude().catch((err) => {
+                console.error("[io] approve action failed in mirror flow:", err);
+                socket.emit("error", { error: "Failed to approve in Claude" });
+              });
+            } else {
+              approveInTargetApp(approvalTargetApp).catch((err) => {
+                console.error("[io] approve action failed in mirror flow:", err);
+                socket.emit("error", { error: "Failed to approve in Codex" });
+              });
+            }
           } else {
             sm.forceState("idle", `${entry.result} via StreamDeck (mirror)`);
-            dismissClaudeApproval().catch((err) => {
-              console.error("[io] deny/cancel action failed in mirror flow:", err);
-              socket.emit("error", { error: "Failed to dismiss Claude approval" });
-            });
+            if (approvalTargetApp === "claude") {
+              dismissClaudeApproval().catch((err) => {
+                console.error("[io] deny/cancel action failed in mirror flow:", err);
+                socket.emit("error", { error: "Failed to dismiss Claude approval" });
+              });
+            } else {
+              dismissApprovalInTargetApp(approvalTargetApp).catch((err) => {
+                console.error("[io] deny/cancel action failed in mirror flow:", err);
+                socket.emit("error", { error: "Failed to dismiss Codex approval" });
+              });
+            }
           }
           return;
         }

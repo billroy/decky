@@ -94,12 +94,15 @@ export function executeMacro(text: string, options: MacroExecutionOptions = {}):
 }
 
 export function approveOnceInClaude(): Promise<void> {
+  return approveInTargetApp("claude");
+}
+
+export type ApprovalTargetApp = "claude" | "codex";
+
+export function approveInTargetApp(targetApp: ApprovalTargetApp): Promise<void> {
+  const activation = activationScriptFor(targetApp);
   const script = `
-    try
-      tell application id "com.anthropic.claudefordesktop" to activate
-    on error
-      tell application "Claude" to activate
-    end try
+    ${activation}
     delay 0.15
     tell application "System Events"
       keystroke return
@@ -114,12 +117,13 @@ export function approveOnceInClaude(): Promise<void> {
 }
 
 export function dismissClaudeApproval(): Promise<void> {
+  return dismissApprovalInTargetApp("claude");
+}
+
+export function dismissApprovalInTargetApp(targetApp: ApprovalTargetApp): Promise<void> {
+  const activation = activationScriptFor(targetApp);
   const script = `
-    try
-      tell application id "com.anthropic.claudefordesktop" to activate
-    on error
-      tell application "Claude" to activate
-    end try
+    ${activation}
     delay 0.15
     tell application "System Events"
       key code 53
