@@ -27,12 +27,16 @@ import {
   dismissClaudeApproval,
   approveInTargetApp,
   dismissApprovalInTargetApp,
+  setApprovalAttemptLogger,
   startDictationForClaude,
+  withApprovalAttemptContext,
 } from "./macro-exec.js";
 import { getBridgeToken, readRequestToken, redactActionForLog } from "./security.js";
 import { CodexMonitor } from "./codex-monitor.js";
+import { ApprovalTraceStore } from "./approval-trace.js";
 
 const MAX_MACRO_ACTION_TEXT = 2000;
+const MIRROR_SETTLE_TIMEOUT_MS = 8000;
 
 const VALID_EVENTS: Set<string> = new Set([
   "PreToolUse",
@@ -92,18 +96,36 @@ export interface DeckyApp {
 
 type ApprovalFlow = "gate" | "mirror";
 type ApprovalTargetApp = "claude" | "codex";
+type HookSource = "hook" | "codex-monitor";
 
 function parseApprovalTargetApp(value: unknown): ApprovalTargetApp {
   return value === "codex" ? "codex" : "claude";
+}
+
+function normalizeActionId(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  if (!trimmed) return null;
+  return /^[A-Za-z0-9._:-]{6,120}$/.test(trimmed) ? trimmed : null;
+}
+
+function createActionId(prefix = "bridge"): string {
+  const stamp = Date.now().toString(36);
+  const rand = Math.random().toString(36).slice(2, 8);
+  return `${prefix}-${stamp}-${rand}`;
 }
 
 export function createApp(): DeckyApp {
   const app = express();
   const httpServer = createServer(app);
   const bridgeToken = getBridgeToken();
+  const approvalTrace = new ApprovalTraceStore();
   let pendingGateNonce: string | null = null;
   let pendingApprovalFlow: ApprovalFlow = "gate";
   let pendingApprovalTargetApp: ApprovalTargetApp = "claude";
+  let pendingMirrorSettlement:
+    | { actionId: string; socketId: string; timer: NodeJS.Timeout }
+    | null = null;
 
   const io = new SocketIOServer(httpServer, {
     cors: {
@@ -118,6 +140,22 @@ export function createApp(): DeckyApp {
 
   const sm = new StateMachine();
 
+  setApprovalAttemptLogger((attempt) => {
+    if (!attempt.contextId) return;
+    approvalTrace.append(
+      attempt.contextId,
+      "macro.attempt",
+      `${attempt.phase}:${attempt.strategy}`,
+      {
+        targetApp: attempt.targetApp,
+        hostApp: attempt.hostApp,
+        success: attempt.success,
+        detail: attempt.detail,
+        error: attempt.error,
+      },
+    );
+  });
+
   // Load config from ~/.decky/config.json
   loadConfig();
 
@@ -126,14 +164,57 @@ export function createApp(): DeckyApp {
     io.emit("stateChange", snapshot);
   });
 
+  function clearPendingMirrorSettlement(reason?: string): void {
+    if (!pendingMirrorSettlement) return;
+    clearTimeout(pendingMirrorSettlement.timer);
+    if (reason) {
+      approvalTrace.append(
+        pendingMirrorSettlement.actionId,
+        "settlement",
+        "pending settlement cleared",
+        { reason },
+      );
+    }
+    pendingMirrorSettlement = null;
+  }
+
+  function startMirrorSettlement(actionId: string, socketId: string): void {
+    clearPendingMirrorSettlement("replaced by newer action");
+    const timer = setTimeout(() => {
+      if (!pendingMirrorSettlement || pendingMirrorSettlement.actionId !== actionId) return;
+      const snap = sm.getSnapshot();
+      approvalTrace.append(actionId, "settlement.timeout", "no monitor settlement observed", {
+        state: snap.state,
+        timeoutMs: MIRROR_SETTLE_TIMEOUT_MS,
+      });
+      approvalTrace.settle({
+        actionId,
+        status: "timed-out",
+        finalState: snap.state,
+        finalReason: "timeout waiting for codex monitor settlement",
+      });
+      io.to(socketId).emit("error", { error: "Dismiss timed out waiting for Codex settlement" });
+      if (snap.state === "awaiting-approval") {
+        sm.forceState("stopped", "dismiss timed out via StreamDeck");
+      }
+      clearPendingMirrorSettlement("timeout");
+    }, MIRROR_SETTLE_TIMEOUT_MS);
+    pendingMirrorSettlement = { actionId, socketId, timer };
+    approvalTrace.setStatus(actionId, "settling", "waiting for codex monitor settlement", {
+      timeoutMs: MIRROR_SETTLE_TIMEOUT_MS,
+    });
+  }
+
   function applyHookPayload(
     payload: HookPayload,
     options?: {
       approvalFlow?: ApprovalFlow;
       nonce?: string | null;
       targetApp?: ApprovalTargetApp;
+      source?: HookSource;
     },
   ) {
+    const source = options?.source ?? "hook";
     // Clear any stale gate file when a new tool-approval cycle starts
     if (payload.event === "PreToolUse") {
       clearGateFile();
@@ -141,7 +222,31 @@ export function createApp(): DeckyApp {
       pendingApprovalTargetApp = options?.targetApp ?? "claude";
       pendingGateNonce = options?.nonce ?? null;
     }
-    return sm.processEvent(payload);
+    const snapshot = sm.processEvent(payload);
+
+    if (pendingMirrorSettlement && source === "codex-monitor") {
+      approvalTrace.append(
+        pendingMirrorSettlement.actionId,
+        "codex.monitor",
+        `monitor event ${payload.event}`,
+        {
+          tool: payload.tool ?? null,
+          state: snapshot.state,
+          previousState: snapshot.previousState,
+        },
+      );
+      if (payload.event !== "PreToolUse") {
+        approvalTrace.settle({
+          actionId: pendingMirrorSettlement.actionId,
+          status: "settled",
+          finalState: snapshot.state,
+          finalReason: `codex monitor ${payload.event}`,
+        });
+        clearPendingMirrorSettlement("settled by monitor event");
+      }
+    }
+
+    return snapshot;
   }
 
   const isTestRuntime =
@@ -155,8 +260,13 @@ export function createApp(): DeckyApp {
       onHookEvent: (payload) => {
         const opts =
           payload.event === "PreToolUse"
-            ? { approvalFlow: "mirror" as const, nonce: null, targetApp: "codex" as const }
-            : undefined;
+            ? {
+              approvalFlow: "mirror" as const,
+              nonce: null,
+              targetApp: "codex" as const,
+              source: "codex-monitor" as const,
+            }
+            : { source: "codex-monitor" as const };
         applyHookPayload(payload, opts);
       },
       onError: (error) => {
@@ -172,6 +282,10 @@ export function createApp(): DeckyApp {
       codexMonitor?.stop();
     });
   }
+  httpServer.on("close", () => {
+    clearPendingMirrorSettlement("server closed");
+    setApprovalAttemptLogger(null);
+  });
 
   // --- Middleware ---
 
@@ -235,6 +349,18 @@ export function createApp(): DeckyApp {
 
   app.get("/status", (_req, res) => {
     res.json(sm.getSnapshot());
+  });
+
+  app.get("/debug/approval-trace", (req, res) => {
+    const raw = typeof req.query.limit === "string" ? Number(req.query.limit) : 25;
+    const limit = Number.isFinite(raw) ? Math.max(1, Math.min(100, Math.floor(raw))) : 25;
+    res.json({
+      traces: approvalTrace.list(limit),
+      pendingMirrorSettlement: pendingMirrorSettlement
+        ? { actionId: pendingMirrorSettlement.actionId, socketId: pendingMirrorSettlement.socketId }
+        : null,
+      now: Date.now(),
+    });
   });
 
   app.get("/config", (_req, res) => {
@@ -302,6 +428,7 @@ export function createApp(): DeckyApp {
     socket.emit("configUpdate", getConfig());
 
     socket.on("action", (data: { action: string; [key: string]: unknown }) => {
+      const actionId = normalizeActionId(data.actionId) ?? createActionId("sd");
       console.log(`[io] action received: ${JSON.stringify(redactActionForLog(data as Record<string, unknown>))}`);
 
       const validActions: Record<string, { result: ApprovalResult; state: string; reason: string }> = {
@@ -317,16 +444,49 @@ export function createApp(): DeckyApp {
           pendingApprovalTargetApp === "codex"
             ? "codex"
             : parseApprovalTargetApp(data.targetApp);
+        approvalTrace.start({ actionId, action: data.action, targetApp: approvalTargetApp });
+        approvalTrace.append(actionId, "bridge.action.received", "approval action received", {
+          action: data.action,
+          state: currentState,
+          pendingApprovalFlow,
+          pendingApprovalTargetApp,
+          resolvedTargetApp: approvalTargetApp,
+          socketId: socket.id,
+        });
+
+        const settleFailed = (errorText: string, reason: string): void => {
+          approvalTrace.append(actionId, "bridge.action.failed", reason, { error: errorText });
+          approvalTrace.settle({
+            actionId,
+            status: "failed",
+            finalState: sm.getSnapshot().state,
+            finalReason: reason,
+          });
+          socket.emit("error", { error: errorText });
+          if (pendingMirrorSettlement?.actionId === actionId) {
+            clearPendingMirrorSettlement("failed");
+          }
+        };
 
         if (data.action === "cancel" && currentState !== "awaiting-approval") {
           sm.forceState("stopped", "cancelled via StreamDeck");
+          approvalTrace.append(actionId, "state.force", "forced state", {
+            state: "stopped",
+            reason: "cancelled via StreamDeck",
+          });
+          approvalTrace.settle({
+            actionId,
+            status: "settled",
+            finalState: "stopped",
+            finalReason: "cancelled via StreamDeck",
+          });
           if (approvalTargetApp === "claude") {
-            dismissClaudeApproval().catch((err) => {
+            withApprovalAttemptContext(actionId, () => dismissClaudeApproval()).catch((err) => {
               console.error("[io] cancel action failed outside approval state:", err);
               socket.emit("error", { error: "Failed to dismiss Claude" });
             });
           } else {
-            dismissApprovalInTargetApp(approvalTargetApp).catch((err) => {
+            withApprovalAttemptContext(actionId, () => dismissApprovalInTargetApp(approvalTargetApp)).catch((err) => {
               console.error("[io] cancel action failed outside approval state:", err);
               socket.emit("error", { error: "Failed to dismiss Codex" });
             });
@@ -335,6 +495,13 @@ export function createApp(): DeckyApp {
         }
 
         if (currentState !== "awaiting-approval") {
+          approvalTrace.append(actionId, "bridge.action.ignored", "not awaiting approval", { state: currentState });
+          approvalTrace.settle({
+            actionId,
+            status: "failed",
+            finalState: currentState,
+            finalReason: "Approval action ignored: not awaiting approval",
+          });
           socket.emit("error", { error: "Approval action ignored: not awaiting approval" });
           return;
         }
@@ -342,31 +509,47 @@ export function createApp(): DeckyApp {
           pendingGateNonce = null;
           if (entry.result === "approve") {
             if (approvalTargetApp === "claude") {
-              approveOnceInClaude().catch((err) => {
+              withApprovalAttemptContext(actionId, () => approveOnceInClaude()).catch((err) => {
                 console.error("[io] approve action failed in mirror flow:", err);
-                socket.emit("error", { error: "Failed to approve in Claude" });
+                settleFailed("Failed to approve in Claude", "approve action failed in mirror flow");
               });
             } else {
-              approveInTargetApp(approvalTargetApp).catch((err) => {
+              withApprovalAttemptContext(actionId, () => approveInTargetApp(approvalTargetApp)).catch((err) => {
                 console.error("[io] approve action failed in mirror flow:", err);
-                socket.emit("error", { error: "Failed to approve in Codex" });
+                settleFailed("Failed to approve in Codex", "approve action failed in mirror flow");
               });
             }
+            approvalTrace.setStatus(actionId, "settling", "mirror approve dispatched");
           } else {
             if (approvalTargetApp === "claude") {
               const mirrorDismissReason = `${entry.result} via StreamDeck (mirror)`;
-              dismissClaudeApproval().then(() => {
+              withApprovalAttemptContext(actionId, () => dismissClaudeApproval()).then(() => {
                 sm.forceState("idle", mirrorDismissReason);
+                approvalTrace.append(actionId, "state.force", "forced state", {
+                  state: "idle",
+                  reason: mirrorDismissReason,
+                });
+                approvalTrace.settle({
+                  actionId,
+                  status: "settled",
+                  finalState: "idle",
+                  finalReason: mirrorDismissReason,
+                });
               }).catch((err) => {
                 console.error("[io] deny/cancel action failed in mirror flow:", err);
-                socket.emit("error", { error: "Failed to dismiss Claude approval" });
+                settleFailed("Failed to dismiss Claude approval", "deny/cancel action failed in mirror flow");
               });
             } else {
               // For Codex mirror flow, rely on mirrored Codex events to advance state
               // so the Deck never reports idle before the host app actually settles.
-              dismissApprovalInTargetApp(approvalTargetApp).catch((err) => {
+              startMirrorSettlement(actionId, socket.id);
+              withApprovalAttemptContext(actionId, () => dismissApprovalInTargetApp(approvalTargetApp)).then(() => {
+                approvalTrace.append(actionId, "bridge.dismiss.dispatched", "dismiss sent to codex host", {
+                  targetApp: approvalTargetApp,
+                });
+              }).catch((err) => {
                 console.error("[io] deny/cancel action failed in mirror flow:", err);
-                socket.emit("error", { error: "Failed to dismiss Codex approval" });
+                settleFailed("Failed to dismiss Codex approval", "deny/cancel action failed in mirror flow");
               });
             }
           }
@@ -375,6 +558,17 @@ export function createApp(): DeckyApp {
         writeGateFile(entry.result, pendingGateNonce ?? undefined);
         pendingGateNonce = null;
         sm.forceState(entry.state as Parameters<typeof sm.forceState>[0], entry.reason);
+        approvalTrace.append(actionId, "gate.write", "wrote gate result", { result: entry.result });
+        approvalTrace.append(actionId, "state.force", "forced state", {
+          state: entry.state,
+          reason: entry.reason,
+        });
+        approvalTrace.settle({
+          actionId,
+          status: "settled",
+          finalState: entry.state,
+          finalReason: entry.reason,
+        });
       } else if (data.action === "restart") {
         sm.forceState("idle", "restarted via StreamDeck");
       } else if (data.action === "macro") {

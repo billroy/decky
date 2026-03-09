@@ -99,6 +99,52 @@ export function approveOnceInClaude(): Promise<void> {
 
 export type ApprovalTargetApp = "claude" | "codex";
 
+export interface ApprovalAttempt {
+  timestamp: number;
+  contextId: string | null;
+  phase: "approve" | "dismiss";
+  strategy: string;
+  targetApp: ApprovalTargetApp;
+  hostApp: TargetApp | "frontmost";
+  success: boolean;
+  detail?: string;
+  error?: string;
+}
+
+type ApprovalAttemptLogger = (attempt: ApprovalAttempt) => void;
+
+let approvalAttemptLogger: ApprovalAttemptLogger | null = null;
+const approvalAttemptContextStack: string[] = [];
+
+function currentAttemptContextId(): string | null {
+  const idx = approvalAttemptContextStack.length - 1;
+  return idx >= 0 ? approvalAttemptContextStack[idx] : null;
+}
+
+function reportApprovalAttempt(attempt: Omit<ApprovalAttempt, "timestamp" | "contextId">): void {
+  approvalAttemptLogger?.({
+    timestamp: Date.now(),
+    contextId: currentAttemptContextId(),
+    ...attempt,
+  });
+}
+
+export function setApprovalAttemptLogger(logger: ApprovalAttemptLogger | null): void {
+  approvalAttemptLogger = logger;
+}
+
+export async function withApprovalAttemptContext<T>(
+  actionId: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  approvalAttemptContextStack.push(actionId);
+  try {
+    return await fn();
+  } finally {
+    approvalAttemptContextStack.pop();
+  }
+}
+
 const CODEX_BUNDLE_ID = "com.openai.codex";
 const CURSOR_BUNDLE_ID = "com.todesktop.230313mzl4w4u92";
 const CODEX_APPROVE_BUTTON_LABELS = [
@@ -169,13 +215,15 @@ function runSystemKeystroke(targetApp: TargetApp, keystrokeScript: string): Prom
 }
 
 async function clickApprovalButtonInTargetApp(
-  targetApp: TargetApp,
+  phase: "approve" | "dismiss",
+  approvalTarget: ApprovalTargetApp,
+  hostApp: TargetApp,
   labels: readonly string[],
   activate: boolean,
   roleHint: "default" | "cancel" | "none" = "none",
 ): Promise<boolean> {
-  const targetName = TARGET_APP_SPECS[targetApp].appName;
-  const activation = activate ? `${activationScriptFor(targetApp)}\n    delay 0.1` : "";
+  const targetName = TARGET_APP_SPECS[hostApp].appName;
+  const activation = activate ? `${activationScriptFor(hostApp)}\n    delay 0.1` : "";
   const labelList = labels.map(appleScriptString).join(", ");
   const roleScript =
     roleHint === "default"
@@ -261,8 +309,27 @@ async function clickApprovalButtonInTargetApp(
     return "not-found"
   `;
   try {
-    return (await runAppleScript(script)) === "clicked";
-  } catch {
+    const result = await runAppleScript(script);
+    const clicked = result === "clicked";
+    reportApprovalAttempt({
+      phase,
+      strategy: "click-button",
+      targetApp: approvalTarget,
+      hostApp,
+      success: clicked,
+      detail: `${clicked ? "clicked" : result}; activate=${activate}; roleHint=${roleHint}`,
+    });
+    return clicked;
+  } catch (err) {
+    reportApprovalAttempt({
+      phase,
+      strategy: "click-button",
+      targetApp: approvalTarget,
+      hostApp,
+      success: false,
+      detail: `activate=${activate}; roleHint=${roleHint}`,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return false;
   }
 }
@@ -288,6 +355,8 @@ export async function approveInTargetApp(targetApp: ApprovalTargetApp): Promise<
     if (
       frontmostTarget &&
       (await clickApprovalButtonInTargetApp(
+        "approve",
+        targetApp,
         frontmostTarget,
         CODEX_APPROVE_BUTTON_LABELS,
         false,
@@ -296,13 +365,33 @@ export async function approveInTargetApp(targetApp: ApprovalTargetApp): Promise<
     ) {
       return;
     }
-    if (await clickApprovalButtonInTargetApp("codex", CODEX_APPROVE_BUTTON_LABELS, true, "default")) return;
-    if (await clickApprovalButtonInTargetApp("cursor", CODEX_APPROVE_BUTTON_LABELS, true, "default")) return;
+    if (
+      await clickApprovalButtonInTargetApp("approve", targetApp, "codex", CODEX_APPROVE_BUTTON_LABELS, true, "default")
+    ) return;
+    if (
+      await clickApprovalButtonInTargetApp("approve", targetApp, "cursor", CODEX_APPROVE_BUTTON_LABELS, true, "default")
+    ) return;
 
     try {
       // Only use frontmost when it is known to be Codex/Cursor.
-      if (await runFrontmostCodexKeystroke("keystroke return")) return;
-    } catch {
+      const used = await runFrontmostCodexKeystroke("keystroke return");
+      reportApprovalAttempt({
+        phase: "approve",
+        strategy: "frontmost-keystroke:return",
+        targetApp,
+        hostApp: "frontmost",
+        success: used,
+      });
+      if (used) return;
+    } catch (err) {
+      reportApprovalAttempt({
+        phase: "approve",
+        strategy: "frontmost-keystroke:return",
+        targetApp,
+        hostApp: "frontmost",
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
       // Fall through to explicit app targeting.
     }
   }
@@ -311,15 +400,44 @@ export async function approveInTargetApp(targetApp: ApprovalTargetApp): Promise<
     // Keypresses can no-op without throwing; try both host apps explicitly.
     try {
       await runSystemKeystroke("codex", "keystroke return");
+      reportApprovalAttempt({
+        phase: "approve",
+        strategy: "keystroke:return",
+        targetApp,
+        hostApp: "codex",
+        success: true,
+      });
       return;
-    } catch {
+    } catch (err) {
+      reportApprovalAttempt({
+        phase: "approve",
+        strategy: "keystroke:return",
+        targetApp,
+        hostApp: "codex",
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
       // Fall through to Cursor attempt.
     }
     await runSystemKeystroke("cursor", "keystroke return");
+    reportApprovalAttempt({
+      phase: "approve",
+      strategy: "keystroke:return",
+      targetApp,
+      hostApp: "cursor",
+      success: true,
+    });
     return;
   }
 
   await runSystemKeystroke(targetApp, "keystroke return");
+  reportApprovalAttempt({
+    phase: "approve",
+    strategy: "keystroke:return",
+    targetApp,
+    hostApp: targetApp,
+    success: true,
+  });
 }
 
 export function dismissClaudeApproval(): Promise<void> {
@@ -342,6 +460,8 @@ export async function dismissApprovalInTargetApp(targetApp: ApprovalTargetApp): 
     if (
       frontmostTarget &&
       (await clickApprovalButtonInTargetApp(
+        "dismiss",
+        targetApp,
         frontmostTarget,
         CODEX_DISMISS_BUTTON_LABELS,
         false,
@@ -350,13 +470,33 @@ export async function dismissApprovalInTargetApp(targetApp: ApprovalTargetApp): 
     ) {
       return;
     }
-    if (await clickApprovalButtonInTargetApp("codex", CODEX_DISMISS_BUTTON_LABELS, true, "cancel")) return;
-    if (await clickApprovalButtonInTargetApp("cursor", CODEX_DISMISS_BUTTON_LABELS, true, "cancel")) return;
+    if (
+      await clickApprovalButtonInTargetApp("dismiss", targetApp, "codex", CODEX_DISMISS_BUTTON_LABELS, true, "cancel")
+    ) return;
+    if (
+      await clickApprovalButtonInTargetApp("dismiss", targetApp, "cursor", CODEX_DISMISS_BUTTON_LABELS, true, "cancel")
+    ) return;
 
     try {
       // Only use frontmost when it is known to be Codex/Cursor.
-      if (await runFrontmostCodexKeystroke(codexDismissSequence)) return;
-    } catch {
+      const used = await runFrontmostCodexKeystroke(codexDismissSequence);
+      reportApprovalAttempt({
+        phase: "dismiss",
+        strategy: "frontmost-keystroke:escape-cmddot",
+        targetApp,
+        hostApp: "frontmost",
+        success: used,
+      });
+      if (used) return;
+    } catch (err) {
+      reportApprovalAttempt({
+        phase: "dismiss",
+        strategy: "frontmost-keystroke:escape-cmddot",
+        targetApp,
+        hostApp: "frontmost",
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
       // Fall through to explicit app targeting.
     }
   }
@@ -365,15 +505,44 @@ export async function dismissApprovalInTargetApp(targetApp: ApprovalTargetApp): 
     // Keypresses can no-op without throwing; try both host apps explicitly.
     try {
       await runSystemKeystroke("codex", codexDismissSequence);
+      reportApprovalAttempt({
+        phase: "dismiss",
+        strategy: "keystroke:escape-cmddot",
+        targetApp,
+        hostApp: "codex",
+        success: true,
+      });
       return;
-    } catch {
+    } catch (err) {
+      reportApprovalAttempt({
+        phase: "dismiss",
+        strategy: "keystroke:escape-cmddot",
+        targetApp,
+        hostApp: "codex",
+        success: false,
+        error: err instanceof Error ? err.message : String(err),
+      });
       // Fall through to Cursor attempt.
     }
     await runSystemKeystroke("cursor", codexDismissSequence);
+    reportApprovalAttempt({
+      phase: "dismiss",
+      strategy: "keystroke:escape-cmddot",
+      targetApp,
+      hostApp: "cursor",
+      success: true,
+    });
     return;
   }
 
   await runSystemKeystroke(targetApp, "key code 53");
+  reportApprovalAttempt({
+    phase: "dismiss",
+    strategy: "keystroke:escape",
+    targetApp,
+    hostApp: targetApp,
+    success: true,
+  });
 }
 
 export function startDictationForClaude(): Promise<void> {

@@ -16,6 +16,8 @@ vi.mock("../macro-exec.js", () => ({
   dismissClaudeApproval: macroMocks.dismiss,
   approveInTargetApp: macroMocks.approveTarget,
   dismissApprovalInTargetApp: macroMocks.dismissTarget,
+  setApprovalAttemptLogger: vi.fn(),
+  withApprovalAttemptContext: vi.fn(async (_actionId: string, fn: () => Promise<void>) => await fn()),
   startDictationForClaude: vi.fn().mockResolvedValue(undefined),
 }));
 
@@ -70,6 +72,13 @@ async function postHook(
 
 async function getStatus() {
   const res = await fetch(`${baseUrl}/status`, {
+    headers: { "x-decky-token": token },
+  });
+  return { status: res.status, data: await res.json() };
+}
+
+async function getApprovalTrace(limit = 10) {
+  const res = await fetch(`${baseUrl}/debug/approval-trace?limit=${limit}`, {
     headers: { "x-decky-token": token },
   });
   return { status: res.status, data: await res.json() };
@@ -230,6 +239,29 @@ describe("approval workflow — mirror mode", () => {
     expect(gateFileExists()).toBe(false);
     const { data } = await getStatus();
     expect(data.state).toBe("awaiting-approval");
+    sock.disconnect();
+  });
+
+  it("records action-level trace entries for codex mirror cancel", async () => {
+    const { status } = await postHook(
+      { event: "PreToolUse", tool: "Write" },
+      { "x-decky-approval-flow": "mirror" },
+    );
+    expect(status).toBe(200);
+
+    const sock = await connectClient();
+    sock.emit("action", { action: "cancel", targetApp: "codex", actionId: "sd-trace-test-1" });
+    await new Promise((r) => setTimeout(r, 120));
+
+    const traceRes = await getApprovalTrace(20);
+    expect(traceRes.status).toBe(200);
+    const traces = Array.isArray(traceRes.data?.traces) ? traceRes.data.traces : [];
+    const trace = traces.find((t: { actionId?: string }) => t.actionId === "sd-trace-test-1");
+    expect(trace).toBeTruthy();
+    expect(Array.isArray(trace.events)).toBe(true);
+    expect(
+      trace.events.some((e: { stage?: string }) => e.stage === "bridge.action.received")
+    ).toBe(true);
     sock.disconnect();
   });
 
