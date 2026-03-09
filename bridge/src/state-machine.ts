@@ -138,9 +138,10 @@ export class StateMachine {
   /**
    * Force-set state (for approve/deny actions from StreamDeck).
    */
-  forceState(newState: State, reason?: string): StateSnapshot {
+  forceState(newState: State, reason?: string, tool?: string | null): StateSnapshot {
     this.previousState = this.state;
     this.state = newState;
+    if (tool !== undefined) this.tool = tool;
     this.timestamp = Date.now();
 
     const snap = this.getSnapshot();

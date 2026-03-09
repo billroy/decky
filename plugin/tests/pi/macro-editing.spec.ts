@@ -12,12 +12,13 @@ async function clickColor(page: import("@playwright/test").Page, root: string, r
 }
 
 test.describe("PI macro editing", () => {
-  test("uses Prompt wording and shows label/title guidance", async ({ piHarness }) => {
+  test("uses Prompt wording and includes font-size control", async ({ piHarness }) => {
     const { page } = piHarness;
 
-    await expect(page.locator('#macro-list label:has-text("Prompt to send")')).toHaveCount(1);
+    await expect(page.locator('#macro-list label:has-text("Prompt")')).toHaveCount(1);
     await expect(page.locator('#macro-list label:has-text("Text to send")')).toHaveCount(0);
-    await expect(page.locator('#macro-list .helper:has-text("Stream Deck title text is not used")')).toHaveCount(1);
+    await expect(page.locator('#macro-list label:has-text("Font size")')).toHaveCount(1);
+    await expect(page.locator('#macro-list .helper:has-text("Stream Deck title text is not used")')).toHaveCount(0);
   });
 
   test("label, text, and icon edits are persisted", async ({ piHarness }) => {
@@ -36,6 +37,20 @@ test.describe("PI macro editing", () => {
 
     await piHarness.ackWithSnapshot(update);
     await expect(page.locator('#macro-list input[data-field="label"][data-index="0"]')).toHaveValue("Affirm");
+  });
+
+  test("font size edits are persisted", async ({ piHarness }) => {
+    const { page } = piHarness;
+
+    await page.fill('#macro-list input[data-field="fontSize"][data-index="0"]', "34");
+    await page.click("#btn-save");
+
+    const update = await piHarness.waitForUpdateConfig();
+    const macro0 = findMacro(update, 0);
+    expect(macro0.fontSize).toBe(34);
+
+    await piHarness.ackWithSnapshot(update);
+    await expect(page.locator('#macro-list input[data-field="fontSize"][data-index="0"]')).toHaveValue("34");
   });
 
   test("selected-slot target app dropdown updates only selected macro", async ({ piHarness }) => {

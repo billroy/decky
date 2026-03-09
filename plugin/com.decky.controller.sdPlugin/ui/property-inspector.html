@@ -443,10 +443,45 @@
       margin-top: 2px;
       line-height: 1.3;
     }
+    .state-legend {
+      margin: 0 0 12px 0;
+      padding: 8px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.04);
+      border: 1px solid rgba(255,255,255,0.1);
+      font-size: 10px;
+      color: #b7c0d2;
+      line-height: 1.35;
+    }
+    .state-legend-title {
+      font-size: 11px;
+      color: #9fb1cf;
+      margin-bottom: 4px;
+      font-weight: 600;
+    }
+    .state-legend-line {
+      margin: 2px 0;
+    }
+    .field-group.font-size-group {
+      flex: 0 0 92px;
+    }
   </style>
 </head>
 <body>
   <div id="compat-warning" class="status error hidden" style="margin:0 0 8px 0"></div>
+
+  <div id="pi-meta" class="pi-meta">
+    <span id="conn-dot" class="conn-dot disconnected"></span>
+    <span id="conn-status">Connecting...</span>
+    <span id="pi-build" class="pi-build">PI build: unknown</span>
+  </div>
+
+  <div class="state-legend">
+    <div class="state-legend-title">State Legend</div>
+    <div class="state-legend-line"><strong>••• Thinking</strong>: Codex is running; key is informational only.</div>
+    <div class="state-legend-line"><strong>■ Stop</strong>: Sends cancel/stop action.</div>
+    <div class="state-legend-line"><strong>↻ Restart</strong>: Returns Deck from stopped to idle.</div>
+  </div>
 
   <!-- Settings -->
   <div class="section global-panel">
@@ -526,11 +561,6 @@
 
   <div class="section global-panel">
     <h3>Diagnostics <span class="scope-chip">Global</span></h3>
-    <div id="pi-meta" class="pi-meta">
-      <span id="conn-dot" class="conn-dot disconnected"></span>
-      <span id="conn-status">Connecting...</span>
-      <span id="pi-build" class="pi-build">PI build: unknown</span>
-    </div>
     <details class="debug-panel" id="debug-panel">
       <summary>Debug tools</summary>
       <div class="btn-row" style="margin-top:6px">
@@ -607,30 +637,36 @@
     const MAX_MACROS = 36;
     const ICONS = [
       { value: "", label: "None" },
-      { value: "checkmark", label: "\u2713 Checkmark" },
-      { value: "stop", label: "\u2B23 Stop" },
-      { value: "exclamation", label: "! Exclamation" },
-      { value: "check", label: "\u2500 Check" },
-      { value: "x", label: "\u2500 X / Close" },
-      { value: "circle-stop", label: "\u2500 Circle Stop" },
-      { value: "triangle-alert", label: "\u2500 Alert" },
-      { value: "zap", label: "\u2500 Zap" },
-      { value: "settings", label: "\u2500 Settings" },
-      { value: "pencil", label: "\u2500 Pencil" },
-      { value: "star", label: "\u2500 Star" },
-      { value: "refresh-cw", label: "\u2500 Refresh" },
-      { value: "corner-down-left", label: "\u2500 Enter" },
-      { value: "lock", label: "\u2500 Lock" },
-      { value: "folder", label: "\u2500 Folder" },
-      { value: "play", label: "\u2500 Play" },
-      { value: "pause", label: "\u2500 Pause" },
-      { value: "send", label: "\u2500 Send" },
-      { value: "terminal", label: "\u2500 Terminal" },
-      { value: "code", label: "\u2500 Code" },
-      { value: "git-branch", label: "\u2500 Git Branch" },
-      { value: "bug", label: "\u2500 Bug" },
-      { value: "rocket", label: "\u2500 Rocket" },
-      { value: "thumbs-up", label: "\u2500 Thumbs Up" },
+      { value: "check", label: "Check" },
+      { value: "octagon-x", label: "Stop Sign" },
+      { value: "x", label: "X / Close" },
+      { value: "triangle-alert", label: "Alert" },
+      { value: "slash", label: "Slash" },
+      { value: "ban", label: "Ban" },
+      { value: "shield-off", label: "Shield Off" },
+      { value: "hand", label: "Hand" },
+      { value: "clock-3", label: "Clock" },
+      { value: "timer-reset", label: "Timer Reset" },
+      { value: "message-square-warning", label: "Message Warning" },
+      { value: "file-warning", label: "File Warning" },
+      { value: "bell-off", label: "Bell Off" },
+      { value: "zap", label: "Zap" },
+      { value: "settings", label: "Settings" },
+      { value: "pencil", label: "Pencil" },
+      { value: "star", label: "Star" },
+      { value: "refresh-cw", label: "Refresh" },
+      { value: "corner-down-left", label: "Enter" },
+      { value: "lock", label: "Lock" },
+      { value: "folder", label: "Folder" },
+      { value: "play", label: "Play" },
+      { value: "pause", label: "Pause" },
+      { value: "send", label: "Send" },
+      { value: "terminal", label: "Terminal" },
+      { value: "code", label: "Code" },
+      { value: "git-branch", label: "Git Branch" },
+      { value: "bug", label: "Bug" },
+      { value: "rocket", label: "Rocket" },
+      { value: "thumbs-up", label: "Thumbs Up" },
     ];
     const TARGETS = [
       { value: "", label: "Use default" },
@@ -667,15 +703,32 @@
       approveOnceInClaude: true,
       startDictationForClaude: true,
     };
+    const APPROVAL_TARGET_TYPES = {
+      approve: true,
+      deny: true,
+      cancel: true,
+    };
+    const APPROVAL_TARGETS = [
+      { value: "claude", label: "Claude (CLD)" },
+      { value: "codex", label: "Codex (CDX)" },
+    ];
     const SLOT_ACTION_DEFAULTS = {
-      approve: { label: "Approve", icon: "checkmark" },
-      deny: { label: "Deny", icon: "stop" },
-      cancel: { label: "Cancel", icon: "stop" },
+      approve: { label: "Approve", icon: "check" },
+      deny: { label: "Deny", icon: "octagon-x" },
+      cancel: { label: "Cancel", icon: "octagon-x" },
       restart: { label: "Restart", icon: "refresh-cw" },
       openConfig: { label: "Config", icon: "settings" },
-      approveOnceInClaude: { label: "Approve Once", icon: "checkmark" },
+      approveOnceInClaude: { label: "Approve Once", icon: "check" },
       startDictationForClaude: { label: "Talk", icon: "terminal" },
     };
+    const ICON_ALIASES = {
+      checkmark: "check",
+      stop: "octagon-x",
+      exclamation: "triangle-alert",
+      "circle-stop": "octagon-x",
+    };
+    const MIN_FONT_SIZE = 16;
+    const MAX_FONT_SIZE = 42;
     const COLOR_PALETTE = [
       { value: "", label: "None" },
       { value: "#0f172a", label: "Dark Navy" },
@@ -710,6 +763,21 @@
     let pendingApplyRequestId = "";
     let awaitingPostAckSnapshot = false;
     let configAckTimer = null;
+    function normalizeApprovalTarget(targetApp) {
+      return targetApp === "codex" ? "codex" : "claude";
+    }
+    function normalizeIcon(icon) {
+      if (typeof icon !== "string") return "";
+      var trimmed = icon.trim();
+      if (!trimmed) return "";
+      return ICON_ALIASES[trimmed] || trimmed;
+    }
+    function normalizeFontSize(fontSize) {
+      if (!Number.isFinite(fontSize)) return undefined;
+      var n = Math.floor(Number(fontSize));
+      if (n < MIN_FONT_SIZE || n > MAX_FONT_SIZE) return undefined;
+      return n;
+    }
     document.getElementById("pi-build").textContent = "PI build: " + PI_BUILD_ID;
     function setConnectionStatus(connected) {
       var dotEl = document.getElementById("conn-dot");
@@ -743,9 +811,13 @@
         macros: macros.map(function (m) {
           var label = typeof m.label === "string" ? m.label : "";
           var text = typeof m.text === "string" ? m.text : "";
-          var icon = typeof m.icon === "string" ? m.icon : "";
+          var icon = normalizeIcon(m.icon);
+          var fontSize = normalizeFontSize(m.fontSize);
           var macroType = m.type === "widget" || SLOT_ACTION_TYPES[m.type] ? m.type : "macro";
           var macroTarget = (m.targetApp || "").trim();
+          if (APPROVAL_TARGET_TYPES[macroType]) {
+            macroTarget = normalizeApprovalTarget(macroTarget);
+          }
           var isPlaceholder =
             macroType === "macro" &&
             label.trim().length === 0 &&
@@ -776,6 +848,7 @@
             o.text = "";
           }
           if (icon) o.icon = icon;
+          if (fontSize !== undefined) o.fontSize = fontSize;
           if (macroTarget) o.targetApp = macroTarget;
           if (m.submit === false) o.submit = false;
           if (m.colors && (m.colors.bg || m.colors.text || m.colors.icon)) o.colors = m.colors;
@@ -976,12 +1049,16 @@
         }
         if (Array.isArray(msg.macros)) {
           macros = msg.macros.map((m) => ({
+            type: m.type === "widget" || SLOT_ACTION_TYPES[m.type] ? m.type : "macro",
             label: m.label || "",
             text: m.text || "",
-            icon: m.icon || "",
-            targetApp: m.targetApp || "",
+            icon: normalizeIcon(m.icon || ""),
+            fontSize: normalizeFontSize(m.fontSize),
+            targetApp:
+              m.type === "approve" || m.type === "deny" || m.type === "cancel"
+                ? normalizeApprovalTarget(m.targetApp || "")
+                : (m.targetApp || ""),
             submit: m.submit !== false,
-            type: m.type === "widget" || SLOT_ACTION_TYPES[m.type] ? m.type : "macro",
             widget: m.widget || null,
             colors: { bg: (m.colors && m.colors.bg) || "", text: (m.colors && m.colors.text) || "", icon: (m.colors && m.colors.icon) || "" },
           }));
@@ -1018,6 +1095,7 @@
               label: "",
               text: "",
               icon: "",
+              fontSize: undefined,
               targetApp: "",
               submit: true,
               type: "macro",
@@ -1193,12 +1271,18 @@
         const iconOptions = ICONS.map(
           (ic) => '<option value="' + esc(ic.value) + '"' + (macro.icon === ic.value ? " selected" : "") + ">" + esc(ic.label) + "</option>"
         ).join("");
-        const targetOptions = TARGETS.map(
+        const targetChoices = macroType === "macro"
+          ? TARGETS
+          : (APPROVAL_TARGET_TYPES[macroType] ? APPROVAL_TARGETS : []);
+        const selectedTarget = APPROVAL_TARGET_TYPES[macroType]
+          ? normalizeApprovalTarget(macro.targetApp || "")
+          : (macro.targetApp || "");
+        const targetOptions = targetChoices.map(
           (target) =>
             '<option value="' +
             esc(target.value) +
             '"' +
-            ((macro.targetApp || "") === target.value ? " selected" : "") +
+            (selectedTarget === target.value ? " selected" : "") +
             ">" +
             esc(target.label) +
             "</option>"
@@ -1222,31 +1306,26 @@
             '<div class="field-group">' +
               "<label>Label</label>" +
               '<input type="text" data-field="label" data-index="' + i + '" value="' + esc(macro.label) + '" placeholder="Button label" maxlength="20" />' +
-              '<div class="helper">Decky draws this label inside the icon. Stream Deck title text is not used.</div>' +
             "</div>" +
+            '<div class="field-group font-size-group">' +
+              "<label>Font size</label>" +
+              '<input type="number" data-field="fontSize" data-index="' + i + '" value="' + (Number.isFinite(macro.fontSize) ? String(Math.floor(macro.fontSize)) : "") + '" min="' + MIN_FONT_SIZE + '" max="' + MAX_FONT_SIZE + '" placeholder="Auto" />' +
+            "</div>" +
+          "</div>" +
+          '<div class="field-row">' +
             '<div class="field-group">' +
               "<label>Type</label>" +
               '<select data-widget-type="' + i + '">' + macroTypeOptions + "</select>" +
             "</div>" +
-          "</div>" +
-          (macroType !== "widget" ? '<div class="field-row">' +
-            '<div class="field-group icon-group">' +
+            (macroType !== "widget" ? '<div class="field-group icon-group">' +
               "<label>Icon</label>" +
               '<select data-field="icon" data-index="' + i + '">' + iconOptions + "</select>" +
-            "</div>" +
-          "</div>" : "") +
-          (macroType === "macro" ? '<div class="field-row">' +
-            '<div class="field-group target-group">' +
-              "<label>Target app</label>" +
-              '<select data-field="targetApp" data-index="' + i + '">' + targetOptions + "</select>" +
-            "</div>" +
-          "</div>" : "") +
-          (macroType === "macro" ? '<div class="field-row">' +
-            '<div class="field-group submit-group">' +
+            "</div>" : "") +
+            (macroType === "macro" ? '<div class="field-group submit-group">' +
               "<label>Submit</label>" +
               '<input type="checkbox" data-field="submit" data-index="' + i + '"' + (macro.submit === false ? "" : " checked") + " />" +
-            "</div>" +
-          "</div>" : "") +
+            "</div>" : "") +
+          "</div>" +
           (macroType === "widget"
             ? '<div class="field-row">' +
                 '<div class="field-group">' +
@@ -1265,9 +1344,17 @@
                   : "") +
               "</div>"
             : (macroType === "macro"
-              ? "<label>Prompt to send</label>" +
-                '<textarea data-field="text" data-index="' + i + '" placeholder="Prompt injected into target app">' + esc(macro.text) + "</textarea>"
+              ? '<div class="field-row"><div class="field-group">' +
+                  "<label>Prompt</label>" +
+                  '<textarea data-field="text" data-index="' + i + '" placeholder="Prompt injected into target app">' + esc(macro.text) + "</textarea>" +
+                "</div></div>"
               : '<div class="field-row"><div class="field-group"><label>Action</label><div class="helper">Uses built-in action behavior for this slot type.</div></div></div>')) +
+          (macroType === "macro" || APPROVAL_TARGET_TYPES[macroType] ? '<div class="field-row">' +
+            '<div class="field-group target-group">' +
+              "<label>Provider</label>" +
+              '<select data-field="targetApp" data-index="' + i + '">' + targetOptions + "</select>" +
+            "</div>" +
+          "</div>" : "") +
           '<div class="macro-colors-toggle" data-colorindex="' + i + '">Per-macro colors \u25B6</div>' +
           '<div class="btn-row" style="margin-top:4px"><button data-reset-macro-colors="' + i + '">Reset this macro colors</button></div>';
 
@@ -1283,14 +1370,30 @@
           var idx = parseInt(e.target.dataset.index);
           var field = e.target.dataset.field;
           if (!Number.isFinite(idx) || !field || !macros[idx]) return;
-          macros[idx][field] = e.target.type === "checkbox" ? !!e.target.checked : e.target.value;
+          if (field === "fontSize") {
+            var normalized = normalizeFontSize(Number(e.target.value));
+            macros[idx].fontSize = normalized;
+            if (!e.target.value || normalized === undefined) e.target.value = "";
+          } else if (field === "icon") {
+            macros[idx].icon = normalizeIcon(e.target.value);
+          } else {
+            macros[idx][field] = e.target.type === "checkbox" ? !!e.target.checked : e.target.value;
+          }
           markDirty();
         });
         el.addEventListener("change", function (e) {
           var idx = parseInt(e.target.dataset.index);
           var field = e.target.dataset.field;
           if (!Number.isFinite(idx) || !field || !macros[idx]) return;
-          macros[idx][field] = e.target.type === "checkbox" ? !!e.target.checked : e.target.value;
+          if (field === "fontSize") {
+            var normalized = normalizeFontSize(Number(e.target.value));
+            macros[idx].fontSize = normalized;
+            e.target.value = normalized === undefined ? "" : String(normalized);
+          } else if (field === "icon") {
+            macros[idx].icon = normalizeIcon(e.target.value);
+          } else {
+            macros[idx][field] = e.target.type === "checkbox" ? !!e.target.checked : e.target.value;
+          }
           markDirty();
         });
       });
@@ -1319,7 +1422,11 @@
           } else if (SLOT_ACTION_TYPES[nextType]) {
             macros[idx].widget = null;
             macros[idx].text = "";
-            macros[idx].targetApp = "";
+            if (APPROVAL_TARGET_TYPES[nextType]) {
+              macros[idx].targetApp = normalizeApprovalTarget(macros[idx].targetApp || "");
+            } else {
+              macros[idx].targetApp = "";
+            }
             macros[idx].submit = true;
             if (!macros[idx].label) macros[idx].label = SLOT_ACTION_DEFAULTS[nextType].label;
             if (!macros[idx].icon) macros[idx].icon = SLOT_ACTION_DEFAULTS[nextType].icon;
@@ -1566,7 +1673,7 @@
     // --- Add macro ---
     document.getElementById("btn-add").addEventListener("click", function () {
       if (macros.length < MAX_MACROS) {
-        macros.push({ label: "", text: "", icon: "", targetApp: "", submit: true, type: "macro", widget: null, colors: { bg: "", text: "", icon: "" } });
+        macros.push({ label: "", text: "", icon: "", fontSize: undefined, targetApp: "", submit: true, type: "macro", widget: null, colors: { bg: "", text: "", icon: "" } });
         selectedMacroIndex = macros.length - 1;
         showAllMacros = false;
         renderMacros();

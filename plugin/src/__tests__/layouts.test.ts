@@ -102,20 +102,19 @@ describe("layouts", () => {
       expect(config.svg).toContain("VeryLongM\u2026");
     });
 
-    it("renders checkmark icon with white background and green checkmark", () => {
+    it("normalizes legacy checkmark icon to SVG check", () => {
       const macros: MacroInput[] = [{ label: "Yes", text: "Yes", icon: "checkmark" }];
       const config = getSlotConfig("idle", 0, null, macros);
       expect(config.svg).toContain('fill="#ffffff"');
-      expect(config.svg).toContain('fill="#22c55e"');
-      expect(config.svg).toContain("\u2713");
+      expect(config.svg).toContain('stroke="#1e293b"');
+      expect(config.svg).toContain("M20 6 9 17");
     });
 
-    it("renders stop icon with white background and red stop sign", () => {
+    it("normalizes legacy stop icon to octagon stop-sign SVG", () => {
       const macros: MacroInput[] = [{ label: "No", text: "No", icon: "stop" }];
       const config = getSlotConfig("idle", 0, null, macros);
       expect(config.svg).toContain('fill="#ffffff"');
-      expect(config.svg).toContain('fill="#ef4444"');
-      expect(config.svg).toContain("\u2B23");
+      expect(config.svg).toContain("m7.86 2");
     });
 
     it("renders theme macro style when no icon specified", () => {
@@ -192,14 +191,22 @@ describe("layouts", () => {
     });
 
     it("slot 3 shows tool name when available", () => {
-      const config = getSlotConfig("awaiting-approval", 3, "Bash");
+      const config = getSlotConfig("awaiting-approval", 3, "Bash", undefined, {
+        pending: 2,
+        position: 1,
+        targetApp: "codex",
+        flow: "mirror",
+        requestId: "req-1",
+      });
       expect(config.title).toBe("Bash");
       expect(config.svg).toContain("Bash");
+      expect(config.svg).toContain("1/2");
     });
 
-    it("slot 3 is empty when no tool name", () => {
+    it("slot 3 shows approval info when no tool name", () => {
       const config = getSlotConfig("awaiting-approval", 3);
-      expect(config.title).toBe("");
+      expect(config.title).toBe("Tool Approval");
+      expect(config.svg).toContain("Info");
     });
   });
 
@@ -262,12 +269,12 @@ describe("layouts", () => {
   });
 
   describe("dark theme", () => {
-    it("renders checkmark macro with dark background", () => {
+    it("renders normalized checkmark macro with dark background", () => {
       setTheme("dark");
       const macros: MacroInput[] = [{ label: "Yes", text: "Yes", icon: "checkmark" }];
       const config = getSlotConfig("idle", 0, null, macros);
       expect(config.svg).toContain('fill="#0f172a"');
-      expect(config.svg).toContain('fill="#22c55e"');
+      expect(config.svg).toContain('stroke="#e2e8f0"');
       expect(config.svg).toContain('fill="#e2e8f0"');
     });
 

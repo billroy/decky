@@ -53,6 +53,7 @@ export interface MacroDef {
   label: string;
   text: string;
   icon?: string;
+  fontSize?: number;
   colors?: ColorOverrides;
   targetApp?: TargetApp;
   submit?: boolean;
@@ -104,16 +105,16 @@ const DEFAULT_EDITOR: EditorName = "bbedit";
 
 const DEFAULT_CONFIG: DeckyConfig = {
   macros: [
-    { label: "Continue", text: "Continue", icon: "checkmark" },
-    { label: "Yes", text: "Yes", icon: "checkmark" },
-    { label: "No", text: "No", icon: "stop" },
-    { label: "Stop", text: "Stop what you are doing.", icon: "stop" },
+    { label: "Continue", text: "Continue", icon: "check" },
+    { label: "Yes", text: "Yes", icon: "check" },
+    { label: "No", text: "No", icon: "octagon-x" },
+    { label: "Stop", text: "Stop what you are doing.", icon: "octagon-x" },
     { label: "Summarize", text: "Summarize what you've done so far." },
-    { label: "Make it so", text: "Make it so", icon: "checkmark" },
-    { label: "Commit", text: "Commit", icon: "exclamation" },
-    { label: "Deploy", text: "Deploy and monitor", icon: "exclamation" },
-    { label: "Usage", text: "Show usage", icon: "checkmark" },
-    { label: "Session?", text: "Is it time to move to a new session?", icon: "checkmark" },
+    { label: "Make it so", text: "Make it so", icon: "check" },
+    { label: "Commit", text: "Commit", icon: "triangle-alert" },
+    { label: "Deploy", text: "Deploy and monitor", icon: "triangle-alert" },
+    { label: "Usage", text: "Show usage", icon: "check" },
+    { label: "Session?", text: "Is it time to move to a new session?", icon: "check" },
   ],
   approvalTimeout: 30,
   theme: "light",
@@ -129,12 +130,20 @@ export const MAX_MACROS = 36;
 export const MAX_LABEL_LENGTH = 20;
 export const MAX_TEXT_LENGTH = 2000;
 export const MAX_ICON_LENGTH = 64;
+export const MIN_FONT_SIZE = 16;
+export const MAX_FONT_SIZE = 42;
 export const MIN_WIDGET_INTERVAL_MINUTES = 1;
 export const MAX_WIDGET_INTERVAL_MINUTES = 60;
 export const MAX_EDITOR_LENGTH = 128;
 export const MIN_APPROVAL_TIMEOUT = 5;
 export const MAX_APPROVAL_TIMEOUT = 300;
 const ALLOWED_EDITORS: readonly EditorName[] = ["bbedit", "code", "cursor", "windsurf", "textedit"];
+const ICON_ALIASES: Readonly<Record<string, string>> = {
+  checkmark: "check",
+  stop: "octagon-x",
+  exclamation: "triangle-alert",
+  "circle-stop": "octagon-x",
+};
 
 let currentConfig: DeckyConfig = { ...DEFAULT_CONFIG };
 
@@ -179,13 +188,30 @@ function normalizeEditor(value: unknown, fallback: EditorName): EditorName {
   return (ALLOWED_EDITORS as readonly string[]).includes(v) ? (v as EditorName) : fallback;
 }
 
+function normalizeIcon(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  return ICON_ALIASES[trimmed] ?? trimmed;
+}
+
+function normalizeFontSize(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  const size = Math.floor(value);
+  if (size < MIN_FONT_SIZE || size > MAX_FONT_SIZE) return undefined;
+  return size;
+}
+
 function normalizeMacro(value: unknown, fallbackTarget: TargetApp): MacroDef | null {
   if (!value || typeof value !== "object") return null;
   const macro = value as Record<string, unknown>;
   if (typeof macro.label !== "string" || typeof macro.text !== "string") return null;
 
   const normalized: MacroDef = { label: macro.label, text: macro.text };
-  if (typeof macro.icon === "string") normalized.icon = macro.icon;
+  const icon = normalizeIcon(macro.icon);
+  if (icon) normalized.icon = icon;
+  const fontSize = normalizeFontSize(macro.fontSize);
+  if (fontSize !== undefined) normalized.fontSize = fontSize;
   const normalizedColors = normalizeColorOverrides(macro.colors);
   if (normalizedColors) normalized.colors = normalizedColors;
   if (macro.targetApp !== undefined) {
@@ -238,7 +264,7 @@ function parseMacroStrict(value: unknown, fallbackTarget: TargetApp): MacroDef {
   if (typeof macro.text !== "string") throw new ConfigValidationError("Macro text must be a string");
   const label = macro.label.trim();
   const text = macro.text;
-  const macroIcon = typeof macro.icon === "string" ? macro.icon : "";
+  const macroIcon = normalizeIcon(macro.icon) ?? "";
   if (text.length > MAX_TEXT_LENGTH) {
     throw new ConfigValidationError(`Macro text exceeds ${MAX_TEXT_LENGTH} characters`);
   }
@@ -247,6 +273,15 @@ function parseMacroStrict(value: unknown, fallbackTarget: TargetApp): MacroDef {
   }
   if (macroIcon.length > MAX_ICON_LENGTH) {
     throw new ConfigValidationError(`Macro icon exceeds ${MAX_ICON_LENGTH} characters`);
+  }
+  if (macro.fontSize !== undefined) {
+    if (typeof macro.fontSize !== "number" || !Number.isFinite(macro.fontSize)) {
+      throw new ConfigValidationError("Macro fontSize must be a number");
+    }
+    const n = Math.floor(macro.fontSize);
+    if (n < MIN_FONT_SIZE || n > MAX_FONT_SIZE) {
+      throw new ConfigValidationError(`Macro fontSize must be between ${MIN_FONT_SIZE} and ${MAX_FONT_SIZE}`);
+    }
   }
 
   const isPlaceholder =
@@ -271,6 +306,7 @@ function parseMacroStrict(value: unknown, fallbackTarget: TargetApp): MacroDef {
   }
   const out: MacroDef = { label, text };
   if (macroIcon.length > 0) out.icon = macroIcon;
+  if (macro.fontSize !== undefined) out.fontSize = Math.floor(macro.fontSize);
   if (macro.targetApp !== undefined) out.targetApp = normalizeTargetApp(macro.targetApp, fallbackTarget);
   if (macro.submit !== undefined) {
     if (typeof macro.submit !== "boolean") throw new ConfigValidationError("Macro submit must be a boolean");
