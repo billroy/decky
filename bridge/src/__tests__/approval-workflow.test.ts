@@ -196,4 +196,23 @@ describe("approval workflow — full cycle", () => {
     expect(s2.state.state).toBe("idle");
     sock.disconnect();
   });
+
+  it("new PreToolUse after cancel re-enters awaiting-approval and accepts approve", async () => {
+    decky.sm.forceState("idle", "test reset");
+
+    await postHook({ event: "PreToolUse", tool: "Bash" });
+    const sock = await connectClient();
+    const stoppedPromise = waitForState(sock, "stopped");
+    sock.emit("action", { action: "cancel" });
+    await stoppedPromise;
+
+    const { data: s1 } = await postHook({ event: "PreToolUse", tool: "Bash" });
+    expect(s1.state.state).toBe("awaiting-approval");
+
+    const execPromise = waitForState(sock, "tool-executing");
+    sock.emit("action", { action: "approve" });
+    await execPromise;
+    expect(readFileSync(GATE_FILE_PATH, "utf-8")).toBe("approve");
+    sock.disconnect();
+  });
 });

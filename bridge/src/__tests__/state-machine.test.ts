@@ -112,10 +112,11 @@ describe("StateMachine", () => {
       expect(snap.state).toBe("idle");
     });
 
-    it("does not crash on unexpected state+event combo", () => {
+    it("stopped → awaiting-approval on PreToolUse", () => {
       sm.forceState("stopped");
       const snap = sm.processEvent({ event: "PreToolUse", tool: "Bash" });
-      expect(snap.state).toBe("stopped");
+      expect(snap.state).toBe("awaiting-approval");
+      expect(snap.previousState).toBe("stopped");
     });
   });
 
