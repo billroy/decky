@@ -118,6 +118,13 @@ describe("StateMachine", () => {
       expect(snap.state).toBe("awaiting-approval");
       expect(snap.previousState).toBe("stopped");
     });
+
+    it("tool-executing → awaiting-approval on PreToolUse", () => {
+      sm.forceState("tool-executing");
+      const snap = sm.processEvent({ event: "PreToolUse", tool: "Bash" });
+      expect(snap.state).toBe("awaiting-approval");
+      expect(snap.previousState).toBe("tool-executing");
+    });
   });
 
   describe("forceState", () => {
