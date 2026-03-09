@@ -101,6 +101,14 @@ export type ApprovalTargetApp = "claude" | "codex";
 
 const CODEX_BUNDLE_ID = "com.openai.codex";
 const CURSOR_BUNDLE_ID = "com.todesktop.230313mzl4w4u92";
+const CODEX_APPROVE_BUTTON_LABELS = [
+  "Yes",
+  "Allow",
+  "Approve",
+  "Continue",
+  "Run",
+  "OK",
+] as const;
 const CODEX_DISMISS_BUTTON_LABELS = ["Reject", "Deny", "Cancel", "Dismiss", "Decline"] as const;
 
 function runAppleScript(script: string): Promise<string> {
@@ -182,11 +190,19 @@ async function clickApprovalButtonInTargetApp(
             return "clicked"
           end try
           try
+            click (first button of front window whose name contains labelText)
+            return "clicked"
+          end try
+          try
             click button labelText of sheet 1 of front window
             return "clicked"
           end try
           try
             click (first button of sheet 1 of front window whose name is labelText)
+            return "clicked"
+          end try
+          try
+            click (first button of sheet 1 of front window whose name contains labelText)
             return "clicked"
           end try
         end repeat
@@ -212,6 +228,22 @@ async function runFrontmostCodexKeystroke(keystrokeScript: string): Promise<bool
 
 export async function approveInTargetApp(targetApp: ApprovalTargetApp): Promise<void> {
   if (targetApp === "codex") {
+    const frontmostBundleId = await getFrontmostBundleId();
+    const frontmostTarget =
+      frontmostBundleId === CODEX_BUNDLE_ID
+        ? "codex"
+        : frontmostBundleId === CURSOR_BUNDLE_ID
+          ? "cursor"
+          : null;
+    if (
+      frontmostTarget &&
+      (await clickApprovalButtonInTargetApp(frontmostTarget, CODEX_APPROVE_BUTTON_LABELS, false))
+    ) {
+      return;
+    }
+    if (await clickApprovalButtonInTargetApp("codex", CODEX_APPROVE_BUTTON_LABELS, true)) return;
+    if (await clickApprovalButtonInTargetApp("cursor", CODEX_APPROVE_BUTTON_LABELS, true)) return;
+
     try {
       // Only use frontmost when it is known to be Codex/Cursor.
       if (await runFrontmostCodexKeystroke("keystroke return")) return;
