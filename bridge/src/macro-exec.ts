@@ -99,6 +99,25 @@ export function approveOnceInClaude(): Promise<void> {
 
 export type ApprovalTargetApp = "claude" | "codex";
 
+const CODEX_BUNDLE_ID = "com.openai.codex";
+const CURSOR_BUNDLE_ID = "com.todesktop.230313mzl4w4u92";
+
+async function getFrontmostBundleId(): Promise<string | null> {
+  const script = `
+    tell application "System Events"
+      set frontApp to first application process whose frontmost is true
+      return bundle identifier of frontApp
+    end tell
+  `;
+  return new Promise((resolve) => {
+    execFile("osascript", ["-e", script], (asErr, stdout) => {
+      if (asErr) return resolve(null);
+      const id = stdout.trim();
+      resolve(id.length > 0 ? id : null);
+    });
+  });
+}
+
 function runFrontmostSystemKeystroke(keystrokeScript: string): Promise<void> {
   const script = `
     tell application "System Events"
@@ -130,13 +149,20 @@ function runSystemKeystroke(targetApp: TargetApp, keystrokeScript: string): Prom
   });
 }
 
+async function runFrontmostCodexKeystroke(keystrokeScript: string): Promise<boolean> {
+  const frontmostBundleId = await getFrontmostBundleId();
+  if (frontmostBundleId !== CODEX_BUNDLE_ID && frontmostBundleId !== CURSOR_BUNDLE_ID) {
+    return false;
+  }
+  await runFrontmostSystemKeystroke(keystrokeScript);
+  return true;
+}
+
 export async function approveInTargetApp(targetApp: ApprovalTargetApp): Promise<void> {
   if (targetApp === "codex") {
-    // Codex approvals may be surfaced in Codex.app or Cursor.app.
-    // Prefer the currently focused app to avoid stealing focus first.
     try {
-      await runFrontmostSystemKeystroke("keystroke return");
-      return;
+      // Only use frontmost when it is known to be Codex/Cursor.
+      if (await runFrontmostCodexKeystroke("keystroke return")) return;
     } catch {
       // Fall through to explicit app targeting.
     }
@@ -161,11 +187,9 @@ export async function dismissApprovalInTargetApp(targetApp: ApprovalTargetApp): 
       keystroke "." using command down`;
 
   if (targetApp === "codex") {
-    // Prefer dismissing in whichever app currently has focus.
-    // Escape handles most prompts; Cmd+. handles macOS cancel dialogs.
     try {
-      await runFrontmostSystemKeystroke(codexDismissSequence);
-      return;
+      // Only use frontmost when it is known to be Codex/Cursor.
+      if (await runFrontmostCodexKeystroke(codexDismissSequence)) return;
     } catch {
       // Fall through to explicit app targeting.
     }
