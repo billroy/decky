@@ -99,13 +99,13 @@ export function approveOnceInClaude(): Promise<void> {
 
 export type ApprovalTargetApp = "claude" | "codex";
 
-export function approveInTargetApp(targetApp: ApprovalTargetApp): Promise<void> {
+function runSystemKeystroke(targetApp: TargetApp, keystrokeScript: string): Promise<void> {
   const activation = activationScriptFor(targetApp);
   const script = `
     ${activation}
     delay 0.15
     tell application "System Events"
-      keystroke return
+      ${keystrokeScript}
     end tell
   `;
   return new Promise((resolve, reject) => {
@@ -114,27 +114,30 @@ export function approveInTargetApp(targetApp: ApprovalTargetApp): Promise<void> 
       resolve();
     });
   });
+}
+
+export async function approveInTargetApp(targetApp: ApprovalTargetApp): Promise<void> {
+  try {
+    await runSystemKeystroke(targetApp, "keystroke return");
+  } catch (err) {
+    // Codex approvals may be hosted inside Cursor.app; retry there.
+    if (targetApp !== "codex") throw err;
+    await runSystemKeystroke("cursor", "keystroke return");
+  }
 }
 
 export function dismissClaudeApproval(): Promise<void> {
   return dismissApprovalInTargetApp("claude");
 }
 
-export function dismissApprovalInTargetApp(targetApp: ApprovalTargetApp): Promise<void> {
-  const activation = activationScriptFor(targetApp);
-  const script = `
-    ${activation}
-    delay 0.15
-    tell application "System Events"
-      key code 53
-    end tell
-  `;
-  return new Promise((resolve, reject) => {
-    execFile("osascript", ["-e", script], (asErr) => {
-      if (asErr) return reject(asErr);
-      resolve();
-    });
-  });
+export async function dismissApprovalInTargetApp(targetApp: ApprovalTargetApp): Promise<void> {
+  try {
+    await runSystemKeystroke(targetApp, "key code 53");
+  } catch (err) {
+    // Codex approvals may be hosted inside Cursor.app; retry there.
+    if (targetApp !== "codex") throw err;
+    await runSystemKeystroke("cursor", "key code 53");
+  }
 }
 
 export function startDictationForClaude(): Promise<void> {

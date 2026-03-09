@@ -196,4 +196,31 @@ describe("approval workflow — mirror mode", () => {
     expect(data.state).toBe("idle");
     sock.disconnect();
   });
+
+  it("cancel action outside awaiting-approval transitions to stopped and dismisses target app", async () => {
+    const pre = await postHook(
+      { event: "PreToolUse", tool: "Write" },
+      {
+        "x-decky-approval-flow": "mirror",
+        "x-decky-target-app": "codex",
+      },
+    );
+    expect(pre.status).toBe(200);
+    const post = await postHook(
+      { event: "PostToolUse", tool: "Write" },
+      { "x-decky-approval-flow": "mirror" },
+    );
+    expect(post.status).toBe(200);
+
+    const sock = await connectClient();
+    sock.emit("action", { action: "cancel" });
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(macroMocks.dismiss).not.toHaveBeenCalled();
+    expect(macroMocks.dismissTarget).toHaveBeenCalledOnce();
+    expect(macroMocks.dismissTarget).toHaveBeenCalledWith("codex");
+    const { data } = await getStatus();
+    expect(data.state).toBe("stopped");
+    sock.disconnect();
+  });
 });
