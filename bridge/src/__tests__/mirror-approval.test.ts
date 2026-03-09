@@ -197,6 +197,24 @@ describe("approval workflow — mirror mode", () => {
     sock.disconnect();
   });
 
+  it("mirror cancel keeps awaiting-approval when Codex dismiss fails", async () => {
+    const { status } = await postHook(
+      { event: "PreToolUse", tool: "Write" },
+      { "x-decky-approval-flow": "mirror" },
+    );
+    expect(status).toBe(200);
+    macroMocks.dismissTarget.mockRejectedValueOnce(new Error("dismiss failed"));
+
+    const sock = await connectClient();
+    sock.emit("action", { action: "cancel", targetApp: "codex" });
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(macroMocks.dismissTarget).toHaveBeenCalledOnce();
+    const { data } = await getStatus();
+    expect(data.state).toBe("awaiting-approval");
+    sock.disconnect();
+  });
+
   it("cancel action outside awaiting-approval transitions to stopped and dismisses target app", async () => {
     const pre = await postHook(
       { event: "PreToolUse", tool: "Write" },
