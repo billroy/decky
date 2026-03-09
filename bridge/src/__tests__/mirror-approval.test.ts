@@ -139,7 +139,7 @@ describe("approval workflow — mirror mode", () => {
     sock.disconnect();
   });
 
-  it("deny action dismisses Codex approval when targetApp is codex", async () => {
+  it("deny action requests Codex dismissal and waits for monitor events to exit approval", async () => {
     const { status } = await postHook(
       { event: "PreToolUse", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
@@ -155,7 +155,7 @@ describe("approval workflow — mirror mode", () => {
     expect(macroMocks.dismissTarget).toHaveBeenCalledWith("codex");
     expect(gateFileExists()).toBe(false);
     const { data } = await getStatus();
-    expect(data.state).toBe("idle");
+    expect(data.state).toBe("awaiting-approval");
     sock.disconnect();
   });
 
@@ -177,7 +177,7 @@ describe("approval workflow — mirror mode", () => {
     sock.disconnect();
   });
 
-  it("cancel action dismisses Codex approval when targetApp is codex", async () => {
+  it("cancel action requests Codex dismissal and waits for monitor events to exit approval", async () => {
     const { status } = await postHook(
       { event: "PreToolUse", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
@@ -193,7 +193,7 @@ describe("approval workflow — mirror mode", () => {
     expect(macroMocks.dismissTarget).toHaveBeenCalledWith("codex");
     expect(gateFileExists()).toBe(false);
     const { data } = await getStatus();
-    expect(data.state).toBe("idle");
+    expect(data.state).toBe("awaiting-approval");
     sock.disconnect();
   });
 
