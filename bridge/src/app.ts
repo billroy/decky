@@ -18,6 +18,7 @@ import {
   reloadConfig,
   restoreConfigBackup,
   saveConfig,
+  type DeckyConfig,
   type Theme,
   ConfigValidationError,
 } from "./config.js";
@@ -25,7 +26,6 @@ import {
   executeMacro,
   approveOnceInClaude,
   dismissClaudeApproval,
-  approveInTargetApp,
   dismissApprovalInTargetApp,
   setApprovalAttemptLogger,
   startDictationForClaude,
@@ -98,6 +98,11 @@ function isTheme(value: unknown): value is Theme {
     value === "random";
 }
 
+export function needsCodexIntegration(cfg: DeckyConfig): boolean {
+  if (cfg.defaultTargetApp === "codex") return true;
+  return cfg.macros.some((m) => m.targetApp === "codex");
+}
+
 export interface DeckyApp {
   app: express.Express;
   httpServer: HttpServer;
@@ -108,7 +113,6 @@ export interface DeckyApp {
 type ApprovalFlow = "gate" | "mirror";
 type ApprovalTargetApp = "claude" | "codex";
 type HookSource = "hook" | "codex-monitor";
-type CodexIntegrationMode = "app-server";
 type CodexProviderState = CodexAppServerLifecycleState | "disabled";
 
 interface ApprovalQueueItem {
@@ -136,7 +140,7 @@ interface StatePayload {
     requestId: string;
   } | null;
   codex: {
-    mode: CodexIntegrationMode;
+    mode: "app-server";
     enabled: boolean;
     provider: {
       state: CodexProviderState;
@@ -187,11 +191,6 @@ function createActionId(prefix = "bridge"): string {
   const stamp = Date.now().toString(36);
   const rand = Math.random().toString(36).slice(2, 8);
   return `${prefix}-${stamp}-${rand}`;
-}
-
-function parseCodexIntegrationMode(value: unknown): CodexIntegrationMode {
-  void value;
-  return "app-server";
 }
 
 function parseOptionalEnvString(value: unknown): string | undefined {
@@ -285,7 +284,7 @@ export function createApp(): DeckyApp {
 
   function codexHealthSnapshot() {
     return {
-      mode: codexIntegrationMode,
+      mode: "app-server" as const,
       enabled: codexMonitorEnabled,
       provider: { ...codexProviderHealth },
       compatibility: { ...codexCompatibility },
@@ -640,10 +639,14 @@ export function createApp(): DeckyApp {
   }
 
   const isTestRuntime = process.env.VITEST === "true";
-  const codexMonitorEnabled = !isTestRuntime && process.env.DECKY_ENABLE_CODEX_MONITOR !== "0";
-  const codexIntegrationMode = parseCodexIntegrationMode(process.env.DECKY_CODEX_INTEGRATION);
+  const codexForceEnable = process.env.DECKY_ENABLE_CODEX_MONITOR === "1";
+  const codexForceDisable = process.env.DECKY_ENABLE_CODEX_MONITOR === "0";
+  const codexMonitorEnabled = !isTestRuntime && !codexForceDisable &&
+    (codexForceEnable || needsCodexIntegration(getConfig()));
   const codexAppServerCommand = parseOptionalEnvString(process.env.DECKY_CODEX_APP_SERVER_COMMAND);
-  const codexAutoResumeCwd = process.env.DECKY_CODEX_AUTO_RESUME === "0" ? null : process.cwd();
+  const codexAutoResumeCwd = process.env.DECKY_CODEX_AUTO_RESUME === "1"
+    ? (process.env.DECKY_CODEX_CWD || process.cwd())
+    : null;
   codexRestartMaxAttempts = parseNonNegativeIntEnv(
     process.env.DECKY_CODEX_RESTART_MAX_ATTEMPTS,
     CODEX_RESTART_MAX_ATTEMPTS_DEFAULT,
@@ -739,10 +742,15 @@ export function createApp(): DeckyApp {
     clearCodexOriginApprovals(reason);
   }
 
+  console.log("[bridge] Claude integration: always loaded");
   if (!codexMonitorEnabled && !isTestRuntime) {
-    console.warn(
-      `[codex] integration disabled (VITEST=${process.env.VITEST ?? ""}, DECKY_ENABLE_CODEX_MONITOR=${process.env.DECKY_ENABLE_CODEX_MONITOR ?? ""})`,
-    );
+    console.log("[bridge] Codex integration: disabled (no codex buttons configured)");
+  }
+  if (codexMonitorEnabled) {
+    const reason = codexForceEnable ? "DECKY_ENABLE_CODEX_MONITOR=1"
+      : getConfig().defaultTargetApp === "codex" ? `defaultTargetApp=codex`
+      : "codex buttons configured";
+    console.log(`[bridge] Codex integration: enabled (${reason})`);
   }
   if (codexMonitorEnabled) {
     const onCodexHookEvent = (event: HookPayload | CodexAppServerHookEvent) => {
@@ -901,7 +909,7 @@ export function createApp(): DeckyApp {
     const limit = Number.isFinite(raw) ? Math.max(1, Math.min(100, Math.floor(raw))) : 25;
     res.json({
       traces: approvalTrace.list(limit),
-      codexIntegrationMode,
+      codexIntegrationMode: "app-server",
       pendingMirrorSettlement: pendingMirrorSettlement
         ? { actionId: pendingMirrorSettlement.actionId, socketId: pendingMirrorSettlement.socketId }
         : null,
@@ -1093,16 +1101,11 @@ export function createApp(): DeckyApp {
                   console.error("[io] approve action failed in app-server flow:", err);
                   settleFailed("Failed to approve in Codex", "approve action failed in app-server flow");
                 });
-              } else if (codexIntegrationMode === "app-server") {
+              } else {
                 settleFailed(
                   "Failed to approve in Codex (missing app-server request ID)",
                   "approve action missing codex app-server request correlation",
                 );
-              } else {
-                withApprovalAttemptContext(actionId, () => approveInTargetApp(approvalTargetApp)).catch((err) => {
-                  console.error("[io] approve action failed in mirror flow:", err);
-                  settleFailed("Failed to approve in Codex", "approve action failed in mirror flow");
-                });
               }
             }
             approvalTrace.setStatus(actionId, "settling", "mirror approve dispatched");
@@ -1148,20 +1151,11 @@ export function createApp(): DeckyApp {
                   console.error("[io] deny/cancel action failed in app-server flow:", err);
                   settleFailed("Failed to dismiss Codex approval", "deny/cancel action failed in app-server flow");
                 });
-              } else if (codexIntegrationMode === "app-server") {
+              } else {
                 settleFailed(
                   "Failed to dismiss Codex approval (missing app-server request ID)",
                   "deny/cancel action missing codex app-server request correlation",
                 );
-              } else {
-                withApprovalAttemptContext(actionId, () => dismissApprovalInTargetApp(approvalTargetApp)).then(() => {
-                  approvalTrace.append(actionId, "bridge.dismiss.dispatched", "dismiss sent to codex host", {
-                    targetApp: approvalTargetApp,
-                  });
-                }).catch((err) => {
-                  console.error("[io] deny/cancel action failed in mirror flow:", err);
-                  settleFailed("Failed to dismiss Codex approval", "deny/cancel action failed in mirror flow");
-                });
               }
             }
           }
