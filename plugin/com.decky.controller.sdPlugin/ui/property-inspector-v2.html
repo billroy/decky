@@ -1640,7 +1640,7 @@
         var moved = macros.splice(dragSrcIndex, 1)[0];
         macros.splice(targetIndex, 0, moved);
         renderMacros();
-        markDirty();
+        scheduleAutoApply();
       }
     }
 

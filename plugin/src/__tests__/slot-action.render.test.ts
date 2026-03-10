@@ -101,6 +101,7 @@ function makeKeyAction(
     },
     setImage: vi.fn().mockResolvedValue(undefined),
     setTitle: vi.fn().mockResolvedValue(undefined),
+    setSettings: vi.fn().mockResolvedValue(undefined),
     isKey: () => true,
   };
 }
@@ -904,7 +905,7 @@ describe("approval slide-in animation", () => {
 });
 
 describe("SlotAction drag-swap", () => {
-  it("swaps macros when two actions exchange positions", async () => {
+  it("swaps macros when two instances exchange settings via canvas drag", async () => {
     const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
     resetSlots();
 
@@ -924,29 +925,33 @@ describe("SlotAction drag-swap", () => {
     const slot = new SlotAction();
     (slot as any).actions = [actionA, actionB];
 
-    // Place action A at slot 0, action B at slot 1
+    // Initial placement: A at slot 0, B at slot 1 (stores macroIndex in settings)
     await slot.onWillAppear({
       action: actionA,
-      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+      payload: { isInMultiAction: false, settings: {}, coordinates: { row: 0, column: 0 } },
     } as any);
     await slot.onWillAppear({
       action: actionB,
-      payload: { isInMultiAction: false, coordinates: { row: 0, column: 1 } },
+      payload: { isInMultiAction: false, settings: {}, coordinates: { row: 0, column: 1 } },
     } as any);
 
-    // Simulate drag: both disappear then reappear at swapped positions
+    bridge.sendAction.mockClear();
+
+    // Simulate canvas drag: StreamDeck swaps the instances' settings but
+    // action IDs stay at their original positions. Each instance gets the
+    // other's stored macroIndex.
     await slot.onWillDisappear({ action: actionA } as any);
     await slot.onWillDisappear({ action: actionB } as any);
 
-    // Action A reappears at slot 1
+    // A reappears at slot 0 carrying B's old settings (macroIndex: 1)
     await slot.onWillAppear({
       action: actionA,
-      payload: { isInMultiAction: false, coordinates: { row: 0, column: 1 } },
+      payload: { isInMultiAction: false, settings: { macroIndex: 1 }, coordinates: { row: 0, column: 0 } },
     } as any);
-    // Action B reappears at slot 0
+    // B reappears at slot 1 carrying A's old settings (macroIndex: 0)
     await slot.onWillAppear({
       action: actionB,
-      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+      payload: { isInMultiAction: false, settings: { macroIndex: 0 }, coordinates: { row: 0, column: 1 } },
     } as any);
 
     // Allow deferred check to fire
@@ -963,7 +968,7 @@ describe("SlotAction drag-swap", () => {
     expect(swappedMacros[2].label).toBe("Gamma");
   });
 
-  it("does not swap when a single action moves to an empty slot", async () => {
+  it("does not swap when settings match physical position", async () => {
     const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
     resetSlots();
 
@@ -981,19 +986,19 @@ describe("SlotAction drag-swap", () => {
     const slot = new SlotAction();
     (slot as any).actions = [actionA];
 
-    // Place at slot 0
+    // Place at slot 0 — stores macroIndex: 0
     await slot.onWillAppear({
       action: actionA,
-      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+      payload: { isInMultiAction: false, settings: {}, coordinates: { row: 0, column: 0 } },
     } as any);
 
     bridge.sendAction.mockClear();
 
-    // Simulate move: disappear from 0, appear at 2 (empty)
+    // Button refreshes at same position with matching macroIndex
     await slot.onWillDisappear({ action: actionA } as any);
     await slot.onWillAppear({
       action: actionA,
-      payload: { isInMultiAction: false, coordinates: { row: 0, column: 2 } },
+      payload: { isInMultiAction: false, settings: { macroIndex: 0 }, coordinates: { row: 0, column: 0 } },
     } as any);
 
     // Allow deferred check to fire

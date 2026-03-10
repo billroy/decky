@@ -83,8 +83,6 @@ const slotAssignments = new Map<string, number>();
 /** Map from action context ID to Stream Deck device key. */
 const actionDeviceKeys = new Map<string, string>();
 
-/** Tracks buttons that disappeared and may be part of a drag-swap. */
-const pendingMoves = new Map<string, { oldSlotIndex: number; timestamp: number }>();
 /** Tracks completed moves (appeared at new position) for swap detection. */
 const recentMoves = new Map<string, { from: number; to: number; timestamp: number }>();
 const SWAP_DEBOUNCE_MS = 300;
@@ -137,7 +135,6 @@ function resolveLayoutSlotIndex(state: string, physicalSlotIndex: number, device
 export function resetSlots(): void {
   slotAssignments.clear();
   actionDeviceKeys.clear();
-  pendingMoves.clear();
   recentMoves.clear();
 }
 
@@ -176,12 +173,18 @@ export class SlotAction extends SingletonAction {
       slotAssignments.set(ev.action.id, physicalIndex);
       pushDebug("willAppear", ev.action.id, getSlotIndex(ev.action.id), { slotIndex });
 
-      // Check for drag-swap: did this action move from a different position?
-      const pending = pendingMoves.get(ev.action.id);
-      pendingMoves.delete(ev.action.id);
-      if (pending && pending.oldSlotIndex !== physicalIndex && (Date.now() - pending.timestamp) < SWAP_DEBOUNCE_MS) {
-        this.recordMoveAndCheckSwap(ev.action.id, pending.oldSlotIndex, physicalIndex);
+      // Settings-based drag-swap detection: when the StreamDeck canvas swaps
+      // two instances, each instance's stored settings travel with it.  If the
+      // stored macroIndex differs from the physical position, this instance was
+      // dragged here from somewhere else.
+      const settings = ev.payload.settings as Record<string, unknown>;
+      const storedIndex = typeof settings?.macroIndex === "number" ? settings.macroIndex : -1;
+      if (storedIndex >= 0 && storedIndex !== physicalIndex) {
+        this.recordMoveAndCheckSwap(ev.action.id, storedIndex, physicalIndex);
       }
+
+      // Persist current physical position so future drags are detected.
+      ev.action.setSettings({ macroIndex: physicalIndex } as JsonObject).catch(() => {});
     }
 
     if (!bridgeRef) return;
@@ -247,11 +250,6 @@ export class SlotAction extends SingletonAction {
   override async onWillDisappear(ev: WillDisappearEvent): Promise<void> {
     const oldSlotIndex = getSlotIndex(ev.action.id);
     pushDebug("willDisappear", ev.action.id, oldSlotIndex, {});
-
-    // Save old position for drag-swap detection
-    if (oldSlotIndex !== -1) {
-      pendingMoves.set(ev.action.id, { oldSlotIndex, timestamp: Date.now() });
-    }
 
     activeKeyActions.delete(ev.action.id);
     slotAssignments.delete(ev.action.id);
