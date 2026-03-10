@@ -51,13 +51,37 @@ export async function surfaceTargetApp(targetApp: TargetApp): Promise<void> {
 }
 
 /**
+ * Re-activate an app by bundle ID. Best-effort — errors are silently ignored
+ * so that macro execution still resolves even if focus restoration fails.
+ */
+async function reactivateApp(bundleId: string): Promise<void> {
+  const script = `
+    try
+      tell application id "${bundleId}" to activate
+    end try
+  `;
+  try {
+    await runAppleScript(script);
+  } catch {
+    // Best-effort — don't propagate.
+  }
+}
+
+/**
  * Inject text into the selected app by copying to clipboard and pasting.
+ *
+ * Quick-focus-steal: captures the frontmost app before activating the target,
+ * then restores it after paste+submit so the user's window isn't left behind.
+ *
  * Returns a promise that resolves when the AppleScript completes.
  */
-export function executeMacro(text: string, options: MacroExecutionOptions = {}): Promise<void> {
+export async function executeMacro(text: string, options: MacroExecutionOptions = {}): Promise<void> {
   const targetApp = options.targetApp ?? "claude";
   const submit = options.submit !== false;
   const activation = activationScriptFor(targetApp);
+
+  // Capture the currently focused app *before* we steal focus.
+  const previousBundleId = await getFrontmostBundleId();
 
   // Use pbcopy + AppleScript for reliable injection:
   // 1. Copy text to clipboard via pbcopy (handles all characters safely)
@@ -74,7 +98,7 @@ export function executeMacro(text: string, options: MacroExecutionOptions = {}):
     end tell
   `;
 
-  return new Promise((resolve, reject) => {
+  await new Promise<void>((resolve, reject) => {
     // First, copy text to clipboard
     const pbcopy = execFile("pbcopy", (err) => {
       if (err) {
@@ -100,6 +124,16 @@ export function executeMacro(text: string, options: MacroExecutionOptions = {}):
     pbcopy.stdin?.write(text);
     pbcopy.stdin?.end();
   });
+
+  // Restore focus to the app the user was in before we stole it.
+  // Skip if we were already in the target app (no steal happened).
+  const targetBundleId = TARGET_APP_SPECS[targetApp]?.bundleId;
+  if (previousBundleId && previousBundleId !== targetBundleId) {
+    // Small delay so the paste + submit lands before we switch away.
+    await new Promise((r) => setTimeout(r, 150));
+    await reactivateApp(previousBundleId);
+    console.log(`[macro] restored focus to ${previousBundleId}`);
+  }
 }
 
 export function approveOnceInClaude(): Promise<void> {
