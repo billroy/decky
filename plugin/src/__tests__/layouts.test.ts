@@ -3,6 +3,7 @@ import {
   getSlotConfig,
   getLayout,
   getLayoutStates,
+  getLucideIconNames,
   slideInFrame,
   slideOutFrame,
   blackSVG,
@@ -118,6 +119,27 @@ describe("layouts", () => {
       const config = getSlotConfig("idle", 0, null, macros);
       expect(config.svg).toContain('fill="#ffffff"');
       expect(config.svg).toContain("m7.86 2");
+    });
+
+    it("renders thumbs-down icon", () => {
+      const macros: MacroInput[] = [{ label: "Down", text: "d", icon: "thumbs-down" }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.svg).toContain("M9 18.12");
+      expect(config.svg).toContain("M17 14V2");
+    });
+
+    it("renders circle-help icon", () => {
+      const macros: MacroInput[] = [{ label: "Help", text: "h", icon: "circle-help" }];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.svg).toContain("M9.09 9a3");
+      expect(config.svg).toContain("M12 17h.01");
+    });
+
+    it("getLucideIconNames includes thumbs-down and circle-help", () => {
+      const names = getLucideIconNames();
+      expect(names).toContain("thumbs-down");
+      expect(names).toContain("circle-help");
+      expect(names).toContain("thumbs-up");
     });
 
     it("renders theme macro style when no icon specified", () => {
