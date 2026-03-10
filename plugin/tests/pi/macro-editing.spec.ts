@@ -11,6 +11,12 @@ async function clickColor(page: import("@playwright/test").Page, root: string, r
   await row.locator(`.swatch[title="${title}"]`).click();
 }
 
+/** Select an icon via the custom icon picker widget. */
+async function pickIcon(page: import("@playwright/test").Page, index: number, value: string) {
+  await page.click(`#macro-list [data-picker-toggle="${index}"]`);
+  await page.click(`#macro-list [data-picker-dropdown="${index}"] .icon-picker-option[data-picker-value="${value}"]`);
+}
+
 test.describe("PI macro editing", () => {
   test("uses Prompt wording and includes font-size control", async ({ piHarness }) => {
     const { page } = piHarness;
@@ -26,7 +32,7 @@ test.describe("PI macro editing", () => {
 
     await page.fill('#macro-list input[data-field="label"][data-index="0"]', "Affirm");
     await page.fill('#macro-list textarea[data-field="text"][data-index="0"]', "/affirm");
-    await page.selectOption('#macro-list select[data-field="icon"][data-index="0"]', "star");
+    await pickIcon(page, 0, "star");
 
     await page.click("#btn-save");
     const update = await piHarness.waitForUpdateConfig();

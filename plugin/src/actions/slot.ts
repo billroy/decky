@@ -349,7 +349,14 @@ export class SlotAction extends SingletonAction {
       labelB: macros[indexB]?.label ?? "",
     });
 
+    // Optimistically update the local config cache so immediate renders
+    // (onWillAppear, PI snapshots) use swapped macros before bridge round-trip.
+    cfg.macros = macros;
+
     bridgeRef.sendAction("updateConfig", { macros });
+
+    // Re-render all buttons immediately with the swapped macros.
+    this.renderAll(bridgeRef.getConnectionStatus(), bridgeRef.getLastSnapshot()).catch(() => {});
   }
 
   override async onPropertyInspectorDidAppear(ev: PropertyInspectorDidAppearEvent): Promise<void> {

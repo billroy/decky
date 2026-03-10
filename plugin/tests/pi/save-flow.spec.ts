@@ -1,5 +1,11 @@
 import { test, expect } from "./fixtures/pi-fixture";
 
+/** Select an icon via the custom icon picker widget. */
+async function pickIcon(page: import("@playwright/test").Page, index: number, value: string) {
+  await page.click(`#macro-list [data-picker-toggle="${index}"]`);
+  await page.click(`#macro-list [data-picker-dropdown="${index}"] .icon-picker-option[data-picker-value="${value}"]`);
+}
+
 test.describe("PI save flow", () => {
   test("enables Apply on target app change and sends correlated updateConfig", async ({ piHarness }) => {
     const { page } = piHarness;
@@ -112,7 +118,7 @@ test.describe("PI save flow", () => {
     const first = await piHarness.waitForUpdateConfig();
     await piHarness.ackWithSnapshot(first);
 
-    await page.selectOption('#macro-list select[data-field="icon"][data-index="0"]', "terminal");
+    await pickIcon(page, 0, "terminal");
     await page.click("#btn-save");
     const second = await piHarness.waitForUpdateConfig();
     const macros = second.macros as Array<Record<string, unknown>>;
@@ -130,7 +136,7 @@ test.describe("PI save flow", () => {
     const first = await piHarness.waitForUpdateConfig();
     await piHarness.ackWithSnapshot(first);
 
-    await page.selectOption('#macro-list select[data-field="icon"][data-index="0"]', "terminal");
+    await pickIcon(page, 0, "terminal");
     await page.click("#btn-save");
     const second = await piHarness.waitForUpdateConfig();
     const macros = second.macros as Array<Record<string, unknown>>;
