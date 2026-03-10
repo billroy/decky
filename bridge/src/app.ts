@@ -523,16 +523,18 @@ export function createApp(): DeckyApp {
     return snapshot;
   }
 
-  const isTestRuntime =
-    process.env.VITEST === "true" ||
-    process.env.NODE_ENV === "test" ||
-    (process.env.DECKY_HOME ?? "").includes(".decky-test");
+  const isTestRuntime = process.env.VITEST === "true";
   const codexMonitorEnabled = !isTestRuntime && process.env.DECKY_ENABLE_CODEX_MONITOR !== "0";
   const codexIntegrationMode = parseCodexIntegrationMode(process.env.DECKY_CODEX_INTEGRATION);
   const codexCompareEnabled = false;
   const codexAppServerCommand = parseOptionalEnvString(process.env.DECKY_CODEX_APP_SERVER_COMMAND);
   let codexMonitor: { start: () => Promise<boolean>; stop: () => void } | null = null;
   let resolveCodexApproval: ((requestId: string, decision: CodexApprovalDecision) => Promise<void>) | null = null;
+  if (!codexMonitorEnabled && !isTestRuntime) {
+    console.warn(
+      `[codex] integration disabled (VITEST=${process.env.VITEST ?? ""}, DECKY_ENABLE_CODEX_MONITOR=${process.env.DECKY_ENABLE_CODEX_MONITOR ?? ""})`,
+    );
+  }
   if (codexMonitorEnabled) {
     const onCodexHookEvent = (event: HookPayload | CodexAppServerHookEvent) => {
       const payload = isCodexAppServerHookEvent(event) ? event.payload : event;
