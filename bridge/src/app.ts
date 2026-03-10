@@ -51,6 +51,7 @@ const CODEX_RESTART_MAX_DELAY_MS_DEFAULT = 4000;
 
 const VALID_EVENTS: Set<string> = new Set([
   "PreToolUse",
+  "PermissionRequest",
   "PostToolUse",
   "Notification",
   "Stop",
@@ -68,6 +69,7 @@ function normalizeHookEvent(value: unknown): HookEvent | undefined {
   if (key === "notification") return "Notification";
   if (key === "stop") return "Stop";
   if (key === "subagentstop" || key === "subagent_stop" || key === "subagent-stop") return "SubagentStop";
+  if (key === "permissionrequest" || key === "permission_request" || key === "permission-request") return "PermissionRequest";
   return undefined;
 }
 
@@ -544,10 +546,22 @@ export function createApp(): DeckyApp {
   ) {
     const source = options?.source ?? "hook";
     const requestId = options?.requestId ?? null;
-    if (payload.event === "PreToolUse") {
-      const flow = options?.approvalFlow ?? "mirror";
-      // Only touch the gate file in legacy gate flow
-      if (flow === "gate") {
+    const flow = options?.approvalFlow ?? "mirror";
+
+    // Mirror-flow hooks use PermissionRequest for approval, not PreToolUse.
+    // Skip PreToolUse entirely for hook source in mirror flow — it's informational.
+    if (payload.event === "PreToolUse" && source === "hook" && flow === "mirror") {
+      console.log(
+        `[hook] PreToolUse (mirror, skip) tool=${payload.tool ?? "?"}`,
+      );
+      return sm.getSnapshot();
+    }
+
+    // Enqueue approval for events that trigger the approval UI:
+    // - PermissionRequest (mirror flow from hooks — only fires when dialog appears)
+    // - PreToolUse (gate flow from hooks, or codex source)
+    if (payload.event === "PermissionRequest" || payload.event === "PreToolUse") {
+      if (payload.event === "PreToolUse" && flow === "gate") {
         clearGateFile();
       }
       const targetApp = options?.targetApp ?? "claude";
@@ -631,9 +645,10 @@ export function createApp(): DeckyApp {
       }
     }
 
-    if (payload.event === "PreToolUse" && approvalQueue.length > 1) {
-      // State may remain "awaiting-approval" with no transition callback, but
-      // queue metadata changed and the plugin should reflect it.
+    if (
+      (payload.event === "PreToolUse" || payload.event === "PermissionRequest") &&
+      approvalQueue.length > 1
+    ) {
       emitState(snapshot);
     }
 
@@ -891,7 +906,7 @@ export function createApp(): DeckyApp {
         ? nonceHeader.trim()
         : null;
     const targetApp =
-      payload.event === "PreToolUse"
+      (payload.event === "PreToolUse" || payload.event === "PermissionRequest")
         ? parseApprovalTargetApp(
             typeof targetHeader === "string" && targetHeader.trim().length > 0
               ? targetHeader.trim()

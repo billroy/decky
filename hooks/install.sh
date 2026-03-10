@@ -9,7 +9,7 @@ SETTINGS="$HOME/.claude/settings.local.json"
 echo "Installing Decky hooks to $DEST ..."
 mkdir -p "$DEST"
 
-for hook in pre-tool-use.sh post-tool-use.sh stop.sh notification.sh; do
+for hook in pre-tool-use.sh permission-request.sh post-tool-use.sh stop.sh notification.sh; do
   cp "$SCRIPT_DIR/$hook" "$DEST/$hook"
   chmod +x "$DEST/$hook"
   echo "  installed $hook"
@@ -20,6 +20,9 @@ done
 HOOKS_JSON='{
   "PreToolUse": [
     { "matcher": "*", "hooks": [{ "type": "command", "command": "~/.decky/hooks/pre-tool-use.sh" }] }
+  ],
+  "PermissionRequest": [
+    { "matcher": "*", "hooks": [{ "type": "command", "command": "~/.decky/hooks/permission-request.sh" }] }
   ],
   "PostToolUse": [
     { "matcher": "*", "hooks": [{ "type": "command", "command": "~/.decky/hooks/post-tool-use.sh" }] }

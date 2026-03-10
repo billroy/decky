@@ -14,6 +14,7 @@ export type State =
 
 export type HookEvent =
   | "PreToolUse"
+  | "PermissionRequest"
   | "PostToolUse"
   | "Notification"
   | "Stop"
@@ -46,19 +47,30 @@ export class StateMachine {
 
   /** Transition table: maps (currentState, event) → nextState */
   private static transitions: Record<string, State | undefined> = {
-    // PreToolUse → awaiting-approval (from thinking or idle)
+    // PreToolUse → awaiting-approval (used by gate flow and codex source)
+    // In mirror flow from hooks, PreToolUse is skipped — PermissionRequest
+    // is used instead (see applyHookPayload in app.ts).
     "idle:PreToolUse": "awaiting-approval",
     "thinking:PreToolUse": "awaiting-approval",
     "tool-executing:PreToolUse": "awaiting-approval",
-    // If a new tool request arrives after a prior cancel/stop cycle,
-    // re-enter approval flow without requiring a manual restart tap.
     "stopped:PreToolUse": "awaiting-approval",
+
+    // PermissionRequest → awaiting-approval (only fires when Claude's
+    // permission dialog is about to appear — not for auto-approved tools)
+    "idle:PermissionRequest": "awaiting-approval",
+    "thinking:PermissionRequest": "awaiting-approval",
+    "tool-executing:PermissionRequest": "awaiting-approval",
+    "stopped:PermissionRequest": "awaiting-approval",
 
     // PostToolUse → thinking (tool finished, Claude resumes)
     "tool-executing:PostToolUse": "thinking",
-    // PostToolUse can also arrive in awaiting-approval if approval was
+    // PostToolUse can arrive in awaiting-approval if approval was
     // handled outside decky (e.g. user clicked in Claude.app directly)
     "awaiting-approval:PostToolUse": "thinking",
+    // PostToolUse can arrive in idle/thinking when PreToolUse was skipped
+    // (mirror flow auto-approved tools)
+    "idle:PostToolUse": "thinking",
+    "thinking:PostToolUse": "thinking",
 
     // Stop → idle (Claude finished responding)
     "thinking:Stop": "idle",

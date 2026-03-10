@@ -69,15 +69,23 @@ describe("GET /debug/codex-provider", () => {
 });
 
 describe("POST /hook", () => {
-  it("accepts PreToolUse and transitions to awaiting-approval", async () => {
-    const { status, data } = await postHook({ event: "PreToolUse", tool: "Bash" });
+  it("accepts PermissionRequest and transitions to awaiting-approval", async () => {
+    const { status, data } = await postHook({ event: "PermissionRequest", tool: "Bash" });
     expect(status).toBe(200);
     expect(data.ok).toBe(true);
     expect(data.state.state).toBe("awaiting-approval");
     expect(data.state.tool).toBe("Bash");
   });
 
+  it("PreToolUse in mirror flow stays idle (informational only)", async () => {
+    decky.sm.forceState("idle", "test reset");
+    const { status, data } = await postHook({ event: "PreToolUse", tool: "Bash" });
+    expect(status).toBe(200);
+    expect(data.state.state).toBe("idle");
+  });
+
   it("state persists — status reflects awaiting-approval", async () => {
+    await postHook({ event: "PermissionRequest", tool: "Bash" });
     const { data } = await getStatus();
     expect(data.state).toBe("awaiting-approval");
   });
@@ -112,13 +120,13 @@ describe("POST /hook", () => {
   });
 
   it("handles missing tool gracefully", async () => {
-    const { status, data } = await postHook({ event: "PreToolUse" });
+    const { status, data } = await postHook({ event: "PermissionRequest" });
     expect(status).toBe(200);
     expect(data.state.state).toBe("awaiting-approval");
   });
 
   it("accepts hook_event_name fallback", async () => {
-    const { status, data } = await postHook({ hook_event_name: "PreToolUse", tool_name: "Bash" });
+    const { status, data } = await postHook({ hook_event_name: "PermissionRequest", tool_name: "Bash" });
     expect(status).toBe(200);
     expect(data.state.state).toBe("awaiting-approval");
     expect(data.state.tool).toBe("Bash");
@@ -131,11 +139,10 @@ describe("POST /hook", () => {
   });
 
   it("drains hook mirror queue on PostToolUse even when tool labels differ", async () => {
-    await postHook({ event: "PreToolUse", tool: "Reset" });
-    await postHook({ event: "Stop" });
+    decky.sm.forceState("idle", "test reset");
 
     const pre = await postHook(
-      { event: "PreToolUse", tool: "Agent" },
+      { event: "PermissionRequest", tool: "Agent" },
       { "x-decky-approval-flow": "mirror" },
     );
     expect(pre.status).toBe(200);

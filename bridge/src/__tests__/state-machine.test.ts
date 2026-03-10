@@ -107,9 +107,9 @@ describe("StateMachine", () => {
   });
 
   describe("invalid/unexpected transitions", () => {
-    it("PostToolUse while idle — stays idle", () => {
+    it("PostToolUse while idle — transitions to thinking", () => {
       const snap = sm.processEvent({ event: "PostToolUse", tool: "Bash" });
-      expect(snap.state).toBe("idle");
+      expect(snap.state).toBe("thinking");
     });
 
     it("stopped → awaiting-approval on PreToolUse", () => {

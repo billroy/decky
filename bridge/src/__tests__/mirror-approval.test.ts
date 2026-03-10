@@ -110,7 +110,7 @@ function waitForSocketEvent<T>(
 describe("approval workflow — mirror mode", () => {
   it("approve action forwards to Claude and does not write gate/force state", async () => {
     const { status } = await postHook(
-      { event: "PreToolUse", tool: "Write" },
+      { event: "PermissionRequest", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
     );
     expect(status).toBe(200);
@@ -128,7 +128,7 @@ describe("approval workflow — mirror mode", () => {
 
   it("approve action fails fast for Codex when app-server request id is missing", async () => {
     const { status } = await postHook(
-      { event: "PreToolUse", tool: "Write" },
+      { event: "PermissionRequest", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
     );
     expect(status).toBe(200);
@@ -149,7 +149,7 @@ describe("approval workflow — mirror mode", () => {
 
   it("approve action does not attempt Codex UI fallback when app-server request id is missing", async () => {
     const { status } = await postHook(
-      { event: "PreToolUse", tool: "Write" },
+      { event: "PermissionRequest", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
     );
     expect(status).toBe(200);
@@ -168,7 +168,7 @@ describe("approval workflow — mirror mode", () => {
 
   it("deny action dismisses Claude approval, clears approval UI, and does not write gate", async () => {
     const { status } = await postHook(
-      { event: "PreToolUse", tool: "Write" },
+      { event: "PermissionRequest", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
     );
     expect(status).toBe(200);
@@ -186,7 +186,7 @@ describe("approval workflow — mirror mode", () => {
 
   it("deny action fails fast for Codex when app-server request id is missing", async () => {
     const { status } = await postHook(
-      { event: "PreToolUse", tool: "Write" },
+      { event: "PermissionRequest", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
     );
     expect(status).toBe(200);
@@ -207,7 +207,7 @@ describe("approval workflow — mirror mode", () => {
 
   it("cancel action dismisses Claude approval, clears approval UI, and does not write gate", async () => {
     const { status } = await postHook(
-      { event: "PreToolUse", tool: "Write" },
+      { event: "PermissionRequest", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
     );
     expect(status).toBe(200);
@@ -225,7 +225,7 @@ describe("approval workflow — mirror mode", () => {
 
   it("cancel action fails fast for Codex when app-server request id is missing", async () => {
     const { status } = await postHook(
-      { event: "PreToolUse", tool: "Write" },
+      { event: "PermissionRequest", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
     );
     expect(status).toBe(200);
@@ -246,7 +246,7 @@ describe("approval workflow — mirror mode", () => {
 
   it("records action-level trace entries for codex mirror cancel", async () => {
     const { status } = await postHook(
-      { event: "PreToolUse", tool: "Write" },
+      { event: "PermissionRequest", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
     );
     expect(status).toBe(200);
@@ -269,7 +269,7 @@ describe("approval workflow — mirror mode", () => {
 
   it("mirror cancel keeps awaiting-approval when Codex request id is missing", async () => {
     const { status } = await postHook(
-      { event: "PreToolUse", tool: "Write" },
+      { event: "PermissionRequest", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
     );
     expect(status).toBe(200);
@@ -288,7 +288,7 @@ describe("approval workflow — mirror mode", () => {
 
   it("cancel action outside awaiting-approval transitions to stopped and dismisses target app", async () => {
     const pre = await postHook(
-      { event: "PreToolUse", tool: "Write" },
+      { event: "PermissionRequest", tool: "Write" },
       {
         "x-decky-approval-flow": "mirror",
         "x-decky-target-app": "codex",

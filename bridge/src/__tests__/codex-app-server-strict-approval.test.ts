@@ -101,7 +101,7 @@ function waitForSocketEvent<T>(socket: ClientSocket, event: string, timeoutMs = 
 describe("codex app-server strict approval routing", () => {
   it("deny in mirror codex flow fails fast when app-server request id is missing", async () => {
     const pre = await postHook(
-      { event: "PreToolUse", tool: "Write" },
+      { event: "PermissionRequest", tool: "Write" },
       { "x-decky-approval-flow": "mirror", "x-decky-target-app": "codex" },
     );
     expect(pre.status).toBe(200);
@@ -121,7 +121,7 @@ describe("codex app-server strict approval routing", () => {
 
   it("cancel in mirror codex flow fails fast when app-server request id is missing", async () => {
     const pre = await postHook(
-      { event: "PreToolUse", tool: "Write" },
+      { event: "PermissionRequest", tool: "Write" },
       { "x-decky-approval-flow": "mirror", "x-decky-target-app": "codex" },
     );
     expect(pre.status).toBe(200);
