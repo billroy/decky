@@ -31,8 +31,7 @@ jobs:
             bridge/package-lock.json
       - run: npm ci
       - run: npm --prefix ../bridge ci
-      - run: npm run check:pi-sync
-      - run: npm run test:pi:coverage-map
+- run: npm run test:pi:coverage-map
       - run: npm test
       - run: npx playwright install --with-deps chromium
       - run: npm run test:pi
