@@ -33,6 +33,11 @@ import {
 } from "./macro-exec.js";
 import { getBridgeToken, readRequestToken, redactActionForLog } from "./security.js";
 import { CodexMonitor } from "./codex-monitor.js";
+import {
+  CodexAppServerProvider,
+  type CodexApprovalDecision,
+  type CodexAppServerHookEvent,
+} from "./codex-app-server-provider.js";
 import { ApprovalTraceStore } from "./approval-trace.js";
 
 const MAX_MACRO_ACTION_TEXT = 2000;
@@ -97,9 +102,11 @@ export interface DeckyApp {
 type ApprovalFlow = "gate" | "mirror";
 type ApprovalTargetApp = "claude" | "codex";
 type HookSource = "hook" | "codex-monitor";
+type CodexIntegrationMode = "sqlite" | "app-server";
 
 interface ApprovalQueueItem {
   id: string;
+  requestId: string | null;
   flow: ApprovalFlow;
   targetApp: ApprovalTargetApp;
   nonce: string | null;
@@ -123,6 +130,23 @@ interface StatePayload {
   } | null;
 }
 
+interface CodexCompareEvent {
+  seq: number;
+  source: "primary" | "shadow";
+  event: HookEvent;
+  tool: string | null;
+  requestId: string | null;
+  timestamp: number;
+}
+
+interface CodexCompareDivergence {
+  seq: number;
+  index: number;
+  primary: string;
+  shadow: string;
+  timestamp: number;
+}
+
 function parseApprovalTargetApp(value: unknown): ApprovalTargetApp {
   return value === "codex" ? "codex" : "claude";
 }
@@ -140,6 +164,18 @@ function createActionId(prefix = "bridge"): string {
   return `${prefix}-${stamp}-${rand}`;
 }
 
+function parseCodexIntegrationMode(value: unknown): CodexIntegrationMode {
+  if (typeof value !== "string") return "sqlite";
+  return value.trim().toLowerCase() === "app-server" ? "app-server" : "sqlite";
+}
+
+function isCodexAppServerHookEvent(event: HookPayload | CodexAppServerHookEvent): event is CodexAppServerHookEvent {
+  const candidate = event as Record<string, unknown>;
+  const payload = candidate.payload;
+  if (!payload || typeof payload !== "object") return false;
+  return typeof (payload as Record<string, unknown>).event === "string";
+}
+
 export function createApp(): DeckyApp {
   const app = express();
   const httpServer = createServer(app);
@@ -152,6 +188,10 @@ export function createApp(): DeckyApp {
   let pendingMirrorSettlement:
     | { actionId: string; socketId: string; timer: NodeJS.Timeout; reason: "approve" | "dismiss" }
     | null = null;
+  let codexCompareSeq = 0;
+  const codexComparePrimary: CodexCompareEvent[] = [];
+  const codexCompareShadow: CodexCompareEvent[] = [];
+  const codexCompareDivergences: CodexCompareDivergence[] = [];
 
   const io = new SocketIOServer(httpServer, {
     cors: {
@@ -165,6 +205,55 @@ export function createApp(): DeckyApp {
   });
 
   const sm = new StateMachine();
+
+  function trimCompareBuffers(): void {
+    const maxEvents = 200;
+    const maxDivergences = 120;
+    if (codexComparePrimary.length > maxEvents) {
+      codexComparePrimary.splice(0, codexComparePrimary.length - maxEvents);
+    }
+    if (codexCompareShadow.length > maxEvents) {
+      codexCompareShadow.splice(0, codexCompareShadow.length - maxEvents);
+    }
+    if (codexCompareDivergences.length > maxDivergences) {
+      codexCompareDivergences.splice(0, codexCompareDivergences.length - maxDivergences);
+    }
+  }
+
+  function compareSignature(event: CodexCompareEvent): string {
+    return `${event.event}:${event.tool ?? ""}`;
+  }
+
+  function recordCodexCompareEvent(source: "primary" | "shadow", payload: HookPayload, requestId: string | null): void {
+    const event: CodexCompareEvent = {
+      seq: ++codexCompareSeq,
+      source,
+      event: payload.event,
+      tool: payload.tool ?? null,
+      requestId,
+      timestamp: Date.now(),
+    };
+    const own = source === "primary" ? codexComparePrimary : codexCompareShadow;
+    const other = source === "primary" ? codexCompareShadow : codexComparePrimary;
+    own.push(event);
+
+    const index = own.length - 1;
+    const counterpart = other[index];
+    if (counterpart) {
+      const ownSig = compareSignature(event);
+      const otherSig = compareSignature(counterpart);
+      if (ownSig !== otherSig) {
+        codexCompareDivergences.push({
+          seq: event.seq,
+          index,
+          primary: source === "primary" ? ownSig : otherSig,
+          shadow: source === "shadow" ? ownSig : otherSig,
+          timestamp: Date.now(),
+        });
+      }
+    }
+    trimCompareBuffers();
+  }
 
   setApprovalAttemptLogger((attempt) => {
     if (!attempt.contextId) return;
@@ -211,12 +300,16 @@ export function createApp(): DeckyApp {
     return queued;
   }
 
-  function shiftApprovalRequest(): ApprovalQueueItem | null {
-    if (approvalQueue.length === 0) {
+  function shiftApprovalRequest(requestId: string | null = null): ApprovalQueueItem | null {
+    if (approvalQueue.length === 0) return null;
+    if (!requestId) {
+      const removed = approvalQueue.shift() ?? null;
       applyPendingFromQueue();
-      return null;
+      return removed;
     }
-    const removed = approvalQueue.shift() ?? null;
+    const idx = approvalQueue.findIndex((entry) => entry.requestId === requestId);
+    if (idx < 0) return null;
+    const [removed] = approvalQueue.splice(idx, 1);
     applyPendingFromQueue();
     return removed;
   }
@@ -231,7 +324,7 @@ export function createApp(): DeckyApp {
           position: 1,
           targetApp: active.targetApp,
           flow: active.flow,
-          requestId: active.id,
+          requestId: active.requestId ?? active.id,
         }
         : null,
     };
@@ -319,9 +412,11 @@ export function createApp(): DeckyApp {
       nonce?: string | null;
       targetApp?: ApprovalTargetApp;
       source?: HookSource;
+      requestId?: string | null;
     },
   ) {
     const source = options?.source ?? "hook";
+    const requestId = options?.requestId ?? null;
     // Clear any stale gate file when a new tool-approval cycle starts
     if (payload.event === "PreToolUse") {
       clearGateFile();
@@ -330,8 +425,13 @@ export function createApp(): DeckyApp {
       const nonce = options?.nonce ?? null;
       const current = sm.getSnapshot();
       const duplicateHookPre = source === "hook" && current.state === "awaiting-approval";
-      if (!duplicateHookPre) {
+      const duplicateMonitorPre =
+        source === "codex-monitor" &&
+        requestId !== null &&
+        approvalQueue.some((entry) => entry.requestId === requestId);
+      if (!duplicateHookPre && !duplicateMonitorPre) {
         enqueueApprovalRequest({
+          requestId,
           flow,
           targetApp,
           nonce,
@@ -354,7 +454,7 @@ export function createApp(): DeckyApp {
         },
       );
       if (payload.event !== "PreToolUse") {
-        shiftApprovalRequest();
+        shiftApprovalRequest(requestId);
         const next = currentApproval();
         if (next && snapshot.state !== "awaiting-approval") {
           snapshot = sm.forceState("awaiting-approval", "queued approval pending", next.tool);
@@ -368,6 +468,22 @@ export function createApp(): DeckyApp {
           finalReason: `codex monitor ${payload.event}`,
         });
         clearPendingMirrorSettlement("settled by monitor event");
+      }
+    }
+
+    if (
+      source === "codex-monitor" &&
+      !pendingMirrorSettlement &&
+      (payload.event === "PostToolUse" || payload.event === "Stop" || payload.event === "SubagentStop")
+    ) {
+      const shifted = shiftApprovalRequest(requestId);
+      if (shifted) {
+        const next = currentApproval();
+        if (next && snapshot.state !== "awaiting-approval") {
+          snapshot = sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+        } else {
+          emitState(snapshot);
+        }
       }
     }
 
@@ -404,32 +520,85 @@ export function createApp(): DeckyApp {
     process.env.NODE_ENV === "test" ||
     (process.env.DECKY_HOME ?? "").includes(".decky-test");
   const codexMonitorEnabled = !isTestRuntime && process.env.DECKY_ENABLE_CODEX_MONITOR !== "0";
-  let codexMonitor: CodexMonitor | null = null;
+  const codexIntegrationMode = parseCodexIntegrationMode(process.env.DECKY_CODEX_INTEGRATION);
+  const codexCompareEnabled = codexIntegrationMode === "app-server" && process.env.DECKY_CODEX_COMPARE_MODE === "1";
+  let codexMonitor: { start: () => Promise<boolean>; stop: () => void } | null = null;
+  let codexShadowMonitor: CodexMonitor | null = null;
+  let resolveCodexApproval: ((requestId: string, decision: CodexApprovalDecision) => Promise<void>) | null = null;
   if (codexMonitorEnabled) {
-    codexMonitor = new CodexMonitor({
-      onHookEvent: (payload) => {
-        const opts =
-          payload.event === "PreToolUse"
-            ? {
-              approvalFlow: "mirror" as const,
-              nonce: null,
-              targetApp: "codex" as const,
-              source: "codex-monitor" as const,
-            }
-            : { source: "codex-monitor" as const };
-        applyHookPayload(payload, opts);
-      },
-      onError: (error) => {
-        console.warn("[codex-monitor] poll error:", error);
-      },
-    });
+    const onCodexHookEvent = (event: HookPayload | CodexAppServerHookEvent) => {
+      const payload = isCodexAppServerHookEvent(event) ? event.payload : event;
+      const requestId = isCodexAppServerHookEvent(event) ? event.requestId : null;
+      if (codexCompareEnabled) {
+        recordCodexCompareEvent("primary", payload, requestId ?? null);
+      }
+      const opts =
+        payload.event === "PreToolUse"
+          ? {
+            approvalFlow: "mirror" as const,
+            nonce: null,
+            targetApp: "codex" as const,
+            source: "codex-monitor" as const,
+            requestId: requestId ?? null,
+          }
+          : {
+            source: "codex-monitor" as const,
+            requestId: requestId ?? null,
+          };
+      applyHookPayload(payload, opts);
+    };
+
+    if (codexIntegrationMode === "app-server") {
+      const codexAppServer = new CodexAppServerProvider({
+        onHookEvent: (event) => onCodexHookEvent(event),
+        onError: (error) => {
+          console.warn("[codex-app-server] error:", error);
+        },
+        onDebugLog: (message) => {
+          console.log(`[codex-app-server] ${message}`);
+        },
+      });
+      codexMonitor = codexAppServer;
+      resolveCodexApproval = (requestId, decision) => codexAppServer.resolveApproval(requestId, decision);
+      if (codexCompareEnabled) {
+        codexShadowMonitor = new CodexMonitor({
+          onHookEvent: (payload) => {
+            recordCodexCompareEvent("shadow", payload, null);
+          },
+          onError: (error) => {
+            console.warn("[codex-monitor-shadow] poll error:", error);
+          },
+        });
+      }
+    } else {
+      codexMonitor = new CodexMonitor({
+        onHookEvent: (payload) => onCodexHookEvent(payload),
+        onError: (error) => {
+          console.warn("[codex-monitor] poll error:", error);
+        },
+      });
+    }
+
     void codexMonitor.start().then((started) => {
-      if (started) {
+      if (!started) return;
+      if (codexIntegrationMode === "app-server") {
+        console.log("[codex-app-server] connected using app-server stdio transport");
+        if (codexCompareEnabled && codexShadowMonitor) {
+          void codexShadowMonitor.start().then((shadowStarted) => {
+            if (shadowStarted) {
+              console.log("[codex-monitor-shadow] sqlite compare mode enabled");
+            } else {
+              console.warn("[codex-monitor-shadow] compare mode requested, sqlite source unavailable");
+            }
+          });
+        }
+      } else {
         console.log("[codex-monitor] mirroring Codex approval events from state DB");
       }
     });
     httpServer.on("close", () => {
       codexMonitor?.stop();
+      codexShadowMonitor?.stop();
     });
   }
   httpServer.on("close", () => {
@@ -506,11 +675,13 @@ export function createApp(): DeckyApp {
     const limit = Number.isFinite(raw) ? Math.max(1, Math.min(100, Math.floor(raw))) : 25;
     res.json({
       traces: approvalTrace.list(limit),
+      codexIntegrationMode,
       pendingMirrorSettlement: pendingMirrorSettlement
         ? { actionId: pendingMirrorSettlement.actionId, socketId: pendingMirrorSettlement.socketId }
         : null,
       approvalQueue: approvalQueue.map((entry, idx) => ({
         id: entry.id,
+        requestId: entry.requestId,
         index: idx + 1,
         flow: entry.flow,
         targetApp: entry.targetApp,
@@ -518,6 +689,22 @@ export function createApp(): DeckyApp {
         source: entry.source,
         createdAt: entry.createdAt,
       })),
+      now: Date.now(),
+    });
+  });
+
+  app.get("/debug/codex-compare", (_req, res) => {
+    res.json({
+      enabled: codexCompareEnabled,
+      mode: codexIntegrationMode,
+      primaryEvents: codexComparePrimary,
+      shadowEvents: codexCompareShadow,
+      divergences: codexCompareDivergences,
+      counts: {
+        primary: codexComparePrimary.length,
+        shadow: codexCompareShadow.length,
+        divergences: codexCompareDivergences.length,
+      },
       now: Date.now(),
     });
   });
@@ -601,6 +788,7 @@ export function createApp(): DeckyApp {
         const currentState = sm.getSnapshot().state;
         const activeApproval = currentApproval();
         const activeFlow = activeApproval?.flow ?? pendingApprovalFlow;
+        const activeRequestId = activeApproval?.requestId ?? null;
         const approvalTargetApp =
           activeApproval?.targetApp === "codex" || pendingApprovalTargetApp === "codex"
             ? "codex"
@@ -677,10 +865,20 @@ export function createApp(): DeckyApp {
               });
             } else {
               startMirrorSettlement(actionId, socket.id, "approve");
-              withApprovalAttemptContext(actionId, () => approveInTargetApp(approvalTargetApp)).catch((err) => {
-                console.error("[io] approve action failed in mirror flow:", err);
-                settleFailed("Failed to approve in Codex", "approve action failed in mirror flow");
-              });
+              if (resolveCodexApproval && activeRequestId) {
+                withApprovalAttemptContext(
+                  actionId,
+                  () => resolveCodexApproval(activeRequestId, "approve"),
+                ).catch((err) => {
+                  console.error("[io] approve action failed in app-server flow:", err);
+                  settleFailed("Failed to approve in Codex", "approve action failed in app-server flow");
+                });
+              } else {
+                withApprovalAttemptContext(actionId, () => approveInTargetApp(approvalTargetApp)).catch((err) => {
+                  console.error("[io] approve action failed in mirror flow:", err);
+                  settleFailed("Failed to approve in Codex", "approve action failed in mirror flow");
+                });
+              }
             }
             approvalTrace.setStatus(actionId, "settling", "mirror approve dispatched");
           } else {
@@ -712,14 +910,29 @@ export function createApp(): DeckyApp {
               // For Codex mirror flow, rely on mirrored Codex events to advance state
               // so the Deck never reports idle before the host app actually settles.
               startMirrorSettlement(actionId, socket.id, "dismiss");
-              withApprovalAttemptContext(actionId, () => dismissApprovalInTargetApp(approvalTargetApp)).then(() => {
-                approvalTrace.append(actionId, "bridge.dismiss.dispatched", "dismiss sent to codex host", {
-                  targetApp: approvalTargetApp,
+              if (resolveCodexApproval && activeRequestId) {
+                withApprovalAttemptContext(
+                  actionId,
+                  () => resolveCodexApproval(activeRequestId, entry.result === "cancel" ? "cancel" : "deny"),
+                ).then(() => {
+                  approvalTrace.append(actionId, "bridge.dismiss.dispatched", "dismiss sent to codex app-server", {
+                    targetApp: approvalTargetApp,
+                    requestId: activeRequestId,
+                  });
+                }).catch((err) => {
+                  console.error("[io] deny/cancel action failed in app-server flow:", err);
+                  settleFailed("Failed to dismiss Codex approval", "deny/cancel action failed in app-server flow");
                 });
-              }).catch((err) => {
-                console.error("[io] deny/cancel action failed in mirror flow:", err);
-                settleFailed("Failed to dismiss Codex approval", "deny/cancel action failed in mirror flow");
-              });
+              } else {
+                withApprovalAttemptContext(actionId, () => dismissApprovalInTargetApp(approvalTargetApp)).then(() => {
+                  approvalTrace.append(actionId, "bridge.dismiss.dispatched", "dismiss sent to codex host", {
+                    targetApp: approvalTargetApp,
+                  });
+                }).catch((err) => {
+                  console.error("[io] deny/cancel action failed in mirror flow:", err);
+                  settleFailed("Failed to dismiss Codex approval", "deny/cancel action failed in mirror flow");
+                });
+              }
             }
           }
           return;
