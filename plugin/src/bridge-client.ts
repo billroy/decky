@@ -110,6 +110,7 @@ export class BridgeClient {
   private bridgeEventListeners: BridgeEventListener[] = [];
   private lastConfig: DeckyConfig | null = null;
   private authToken: string = "";
+  private serverReconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private url: string = "http://localhost:9130") {
     this.authToken = this.loadAuthToken();
@@ -127,6 +128,7 @@ export class BridgeClient {
   connect(): void {
     if (this.socket) return;
 
+    this.refreshAuthToken();
     this.setConnectionStatus("connecting");
 
     this.socket = io(this.url, {
@@ -134,22 +136,47 @@ export class BridgeClient {
       reconnectionDelay: 2000,
       reconnectionDelayMax: 10000,
       timeout: 5000,
-      auth: { token: this.authToken },
-      extraHeaders: this.authToken ? { "x-decky-token": this.authToken } : {},
+      auth: (cb) => {
+        this.refreshAuthToken();
+        cb({ token: this.authToken });
+      },
     });
 
     this.socket.on("connect", () => {
       console.log("[bridge] connected");
+      this.clearServerReconnectTimer();
       this.setConnectionStatus("connected");
     });
 
-    this.socket.on("disconnect", () => {
-      console.log("[bridge] disconnected");
+    this.socket.on("disconnect", (reason) => {
+      console.log(`[bridge] disconnected (${reason})`);
+      this.setConnectionStatus("disconnected");
+      // Server-side disconnects (for example Unauthorized) do not auto-reconnect.
+      // Retry manually so startup races around bridge-token creation can recover.
+      if (reason === "io server disconnect") {
+        this.scheduleServerReconnect(1000);
+      }
+    });
+
+    this.socket.on("connect_error", (error) => {
+      if (error instanceof Error) {
+        console.log(`[bridge] connect_error: ${error.message}`);
+      }
       this.setConnectionStatus("disconnected");
     });
 
-    this.socket.on("connect_error", () => {
-      this.setConnectionStatus("disconnected");
+    this.socket.on("error", (payload: unknown) => {
+      const payloadObj = payload && typeof payload === "object" ? payload as Record<string, unknown> : null;
+      const message = payloadObj && typeof payloadObj.error === "string" ? payloadObj.error : "";
+      if (message) {
+        console.log(`[bridge] socket error: ${message}`);
+      }
+      for (const listener of this.bridgeEventListeners) {
+        try { listener("error", payload); } catch { /* listener errors must not crash the client */ }
+      }
+      if (message.toLowerCase().includes("unauthorized")) {
+        this.scheduleServerReconnect(1000);
+      }
     });
 
     this.socket.on("stateChange", (snapshot: StateSnapshot) => {
@@ -195,6 +222,7 @@ export class BridgeClient {
   }
 
   disconnect(): void {
+    this.clearServerReconnectTimer();
     if (this.socket) {
       this.socket.disconnect();
       this.socket = null;
@@ -263,5 +291,26 @@ export class BridgeClient {
         try { listener(status); } catch { /* listener errors must not crash the client */ }
       }
     }
+  }
+
+  private refreshAuthToken(): void {
+    this.authToken = this.loadAuthToken();
+  }
+
+  private clearServerReconnectTimer(): void {
+    if (!this.serverReconnectTimer) return;
+    clearTimeout(this.serverReconnectTimer);
+    this.serverReconnectTimer = null;
+  }
+
+  private scheduleServerReconnect(delayMs: number): void {
+    if (!this.socket || this.serverReconnectTimer) return;
+    this.serverReconnectTimer = setTimeout(() => {
+      this.serverReconnectTimer = null;
+      if (!this.socket) return;
+      this.refreshAuthToken();
+      this.setConnectionStatus("connecting");
+      this.socket.connect();
+    }, delayMs);
   }
 }
