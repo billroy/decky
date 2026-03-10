@@ -286,6 +286,21 @@ describe("approval workflow — mirror mode", () => {
     sock.disconnect();
   });
 
+  it("ignores approval actions when awaiting-approval has no active queue context", async () => {
+    decky.sm.forceState("awaiting-approval", "desync test", "Write");
+
+    const sock = await connectClient();
+    const errorPromise = waitForSocketEvent<{ error: string }>(sock, "error");
+    sock.emit("action", { action: "approve" });
+    const err = await errorPromise;
+
+    expect(err.error).toContain("no active approval context");
+    const { data } = await getStatus();
+    expect(data.state).toBe("awaiting-approval");
+    expect(data.approval).toBeNull();
+    sock.disconnect();
+  });
+
   it("cancel action outside awaiting-approval transitions to stopped and dismisses target app", async () => {
     const pre = await postHook(
       { event: "PermissionRequest", tool: "Write" },
