@@ -85,6 +85,7 @@ export interface CodexAppServerProviderOptions extends CodexAppServerSessionOpti
   onDebugLog?: (message: string) => void;
   autoResumeCwd?: string | null;
   onLifecycle?: (event: CodexAppServerLifecycleEvent) => void;
+  handshakeTimeoutMs?: number;
 }
 
 const COMMAND_APPROVAL_METHOD = "item/commandExecution/requestApproval";
@@ -92,6 +93,7 @@ const FILE_CHANGE_APPROVAL_METHOD = "item/fileChange/requestApproval";
 const LEGACY_COMMAND_APPROVAL_METHOD = "execCommandApproval";
 const LEGACY_PATCH_APPROVAL_METHOD = "applyPatchApproval";
 const DEFAULT_CODEX_APP_PATH = "/Applications/Codex.app/Contents/Resources/codex";
+const DEFAULT_HANDSHAKE_TIMEOUT_MS = 5_000;
 
 const APPROVAL_METHODS = new Set<string>([
   COMMAND_APPROVAL_METHOD,
@@ -499,11 +501,16 @@ export class CodexAppServerProvider {
   private readonly command: string;
   private readonly args: string[];
   private readonly env: NodeJS.ProcessEnv;
+  private readonly handshakeTimeoutMs: number;
   private readonly session: CodexAppServerSession;
 
   private process: ChildProcessWithoutNullStreams | null = null;
   private stdoutBuffer = "";
   private stopping = false;
+  private ready = false;
+  private startPromise: Promise<boolean> | null = null;
+  private resolveStartPromise: ((started: boolean) => void) | null = null;
+  private handshakeTimer: NodeJS.Timeout | null = null;
 
   constructor(options: CodexAppServerProviderOptions) {
     this.onError = options.onError ?? ((error) => console.warn("[codex-app-server] provider error:", error));
@@ -512,11 +519,15 @@ export class CodexAppServerProvider {
     this.command = options.command ?? resolveDefaultCodexAppServerCommand();
     this.args = options.args ?? ["app-server", "--listen", "stdio://"];
     this.env = options.env ?? process.env;
+    this.handshakeTimeoutMs =
+      typeof options.handshakeTimeoutMs === "number" && Number.isFinite(options.handshakeTimeoutMs) && options.handshakeTimeoutMs > 0
+        ? Math.floor(options.handshakeTimeoutMs)
+        : DEFAULT_HANDSHAKE_TIMEOUT_MS;
     this.session = new CodexAppServerSession({
       onHookEvent: options.onHookEvent,
       onOutgoingMessage: (msg) => this.sendMessage(msg),
       onDebugLog: this.onDebugLog,
-      onHandshakeReady: () => this.emitLifecycle({ state: "ready", at: Date.now() }),
+      onHandshakeReady: () => this.handleHandshakeReady(),
       onError: this.onError,
       clientInfo: options.clientInfo,
       autoResumeCwd: options.autoResumeCwd,
@@ -524,10 +535,16 @@ export class CodexAppServerProvider {
   }
 
   async start(): Promise<boolean> {
-    if (this.process) return true;
+    if (this.ready && this.process) return true;
+    if (this.startPromise) return this.startPromise;
+    this.startPromise = new Promise<boolean>((resolve) => {
+      this.resolveStartPromise = resolve;
+    });
+    const startupPromise = this.startPromise;
     try {
       this.emitLifecycle({ state: "starting", at: Date.now() });
       this.stopping = false;
+      this.ready = false;
       const child = spawn(this.command, this.args, {
         stdio: ["pipe", "pipe", "pipe"],
         env: this.env,
@@ -553,6 +570,7 @@ export class CodexAppServerProvider {
         }
         this.onError(error);
         this.emitLifecycle({ state: "error", at: Date.now(), detail: errorMessage });
+        this.failStartup(errorMessage, { killProcess: false, preserveSession: false });
       });
 
       child.stdout.setEncoding("utf8");
@@ -570,10 +588,21 @@ export class CodexAppServerProvider {
       child.on("exit", (code, signal) => {
         this.process = null;
         this.stdoutBuffer = "";
+        this.ready = false;
+        this.clearHandshakeTimeout();
+        const exitedDuringStartup = this.startPromise !== null;
         this.session.stop();
         this.emitLifecycle({ state: "exit", at: Date.now(), code, signal });
         if (this.stopping) {
           this.stopping = false;
+          if (exitedDuringStartup) this.finishStartup(false);
+          return;
+        }
+        if (exitedDuringStartup) {
+          this.failStartup(`codex app-server exited before initialize (code=${code ?? "null"}, signal=${signal ?? "null"})`, {
+            killProcess: false,
+            preserveSession: true,
+          });
           return;
         }
         this.onError(new Error(`codex app-server exited (code=${code ?? "null"}, signal=${signal ?? "null"})`));
@@ -581,23 +610,23 @@ export class CodexAppServerProvider {
 
       this.session.startHandshake();
       this.emitLifecycle({ state: "handshake-sent", at: Date.now() });
-      return true;
+      this.armHandshakeTimeout();
+      return await startupPromise;
     } catch (error) {
       this.onError(error);
-      this.emitLifecycle({
-        state: "start-failed",
-        at: Date.now(),
-        detail: error instanceof Error ? error.message : String(error),
+      this.failStartup(error instanceof Error ? error.message : String(error), {
+        killProcess: true,
+        preserveSession: false,
       });
-      this.process = null;
-      this.stdoutBuffer = "";
-      this.session.stop();
-      return false;
+      return await startupPromise;
     }
   }
 
   stop(): void {
     this.stopping = true;
+    this.ready = false;
+    this.clearHandshakeTimeout();
+    this.finishStartup(false);
     this.session.stop();
     if (this.process) {
       this.process.kill();
@@ -637,6 +666,57 @@ export class CodexAppServerProvider {
     const payload = `${JSON.stringify(message)}\n`;
     if (!this.process || this.process.stdin.destroyed) return;
     this.process.stdin.write(payload);
+  }
+
+  private handleHandshakeReady(): void {
+    this.ready = true;
+    this.clearHandshakeTimeout();
+    this.emitLifecycle({ state: "ready", at: Date.now() });
+    this.finishStartup(true);
+  }
+
+  private armHandshakeTimeout(): void {
+    this.clearHandshakeTimeout();
+    this.handshakeTimer = setTimeout(() => {
+      this.handshakeTimer = null;
+      const detail = `initialize handshake timed out after ${this.handshakeTimeoutMs}ms`;
+      this.onError(new Error(detail));
+      this.failStartup(detail, { killProcess: true, preserveSession: false });
+    }, this.handshakeTimeoutMs);
+  }
+
+  private clearHandshakeTimeout(): void {
+    if (this.handshakeTimer) {
+      clearTimeout(this.handshakeTimer);
+      this.handshakeTimer = null;
+    }
+  }
+
+  private failStartup(
+    detail: string,
+    options: { killProcess: boolean; preserveSession: boolean },
+  ): void {
+    if (this.startPromise) {
+      this.emitLifecycle({ state: "start-failed", at: Date.now(), detail });
+    }
+    this.clearHandshakeTimeout();
+    this.ready = false;
+    this.stdoutBuffer = "";
+    if (!options.preserveSession) this.session.stop();
+    if (options.killProcess && this.process) {
+      this.stopping = true;
+      this.process.kill();
+      this.process = null;
+    }
+    this.finishStartup(false);
+  }
+
+  private finishStartup(started: boolean): void {
+    const resolve = this.resolveStartPromise;
+    if (!resolve) return;
+    this.resolveStartPromise = null;
+    this.startPromise = null;
+    resolve(started);
   }
 
   private emitLifecycle(event: CodexAppServerLifecycleEvent): void {
