@@ -79,6 +79,7 @@ export interface DeckyConfig {
   colors?: ColorOverrides;
   defaultTargetApp: TargetApp;
   showTargetBadge: boolean;
+  popUpApp: boolean;
   enableApproveOnce: boolean;
   enableDictation: boolean;
 }
@@ -122,6 +123,7 @@ const DEFAULT_CONFIG: DeckyConfig = {
   editor: DEFAULT_EDITOR,
   defaultTargetApp: "claude",
   showTargetBadge: false,
+  popUpApp: false,
   enableApproveOnce: true,
   enableDictation: true,
 };
@@ -481,6 +483,10 @@ export function loadConfig(): DeckyConfig {
         typeof raw_obj.showTargetBadge === "boolean"
           ? raw_obj.showTargetBadge
           : DEFAULT_CONFIG.showTargetBadge,
+      popUpApp:
+        typeof raw_obj.popUpApp === "boolean"
+          ? raw_obj.popUpApp
+          : DEFAULT_CONFIG.popUpApp,
       enableApproveOnce:
         typeof raw_obj.enableApproveOnce === "boolean"
           ? raw_obj.enableApproveOnce
@@ -552,6 +558,9 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
   if (update_obj.showTargetBadge !== undefined && typeof update_obj.showTargetBadge !== "boolean") {
     throw new ConfigValidationError("showTargetBadge must be a boolean");
   }
+  if (update_obj.popUpApp !== undefined && typeof update_obj.popUpApp !== "boolean") {
+    throw new ConfigValidationError("popUpApp must be a boolean");
+  }
   if (update_obj.enableApproveOnce !== undefined && typeof update_obj.enableApproveOnce !== "boolean") {
     throw new ConfigValidationError("enableApproveOnce must be a boolean");
   }
@@ -605,6 +614,10 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
       typeof update_obj.showTargetBadge === "boolean"
         ? update_obj.showTargetBadge
         : currentConfig.showTargetBadge,
+    popUpApp:
+      typeof update_obj.popUpApp === "boolean"
+        ? update_obj.popUpApp
+        : currentConfig.popUpApp,
     enableApproveOnce:
       typeof update_obj.enableApproveOnce === "boolean"
         ? update_obj.enableApproveOnce

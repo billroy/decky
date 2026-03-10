@@ -443,25 +443,6 @@
       margin-top: 2px;
       line-height: 1.3;
     }
-    .state-legend {
-      margin: 0 0 12px 0;
-      padding: 8px;
-      border-radius: 6px;
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.1);
-      font-size: 10px;
-      color: #b7c0d2;
-      line-height: 1.35;
-    }
-    .state-legend-title {
-      font-size: 11px;
-      color: #9fb1cf;
-      margin-bottom: 4px;
-      font-weight: 600;
-    }
-    .state-legend-line {
-      margin: 2px 0;
-    }
     .field-group.font-size-group {
       flex: 0 0 92px;
     }
@@ -474,13 +455,6 @@
     <span id="conn-dot" class="conn-dot disconnected"></span>
     <span id="conn-status">Connecting...</span>
     <span id="pi-build" class="pi-build">PI build: unknown</span>
-  </div>
-
-  <div class="state-legend">
-    <div class="state-legend-title">State Legend</div>
-    <div class="state-legend-line"><strong>••• Thinking</strong>: Codex is running; key is informational only.</div>
-    <div class="state-legend-line"><strong>■ Stop</strong>: Sends cancel/stop action.</div>
-    <div class="state-legend-line"><strong>↻ Restart</strong>: Returns Deck from stopped to idle.</div>
   </div>
 
   <!-- Settings -->
@@ -527,6 +501,10 @@
     <div class="setting-row">
       <label>Target badge <span class="scope-chip inline">Global</span></label>
       <input type="checkbox" id="show-target-badge" />
+    </div>
+    <div class="setting-row">
+      <label>Pop up app <span class="scope-chip inline">Global</span></label>
+      <input type="checkbox" id="pop-up-app" />
     </div>
   </div>
 
@@ -744,7 +722,8 @@
     let settings = {
       theme: "light",
       approvalTimeout: 30,
-      showTargetBadge: false
+      showTargetBadge: false,
+      popUpApp: false
     };
     let defaultColors = { bg: "", text: "", icon: "" };
     let configLoaded = false;
@@ -758,6 +737,7 @@
     let pendingThemeChange = false;
     let savedThemeSeed = 0;
     let savedShowTargetBadge = false;
+    let savedPopUpApp = false;
     let pendingThemeSeed = null;
     let awaitingConfigAck = false;
     let pendingApplyRequestId = "";
@@ -860,6 +840,10 @@
       var showTargetBadge = document.getElementById("show-target-badge").checked;
       if (showTargetBadge !== savedShowTargetBadge) {
         payload.showTargetBadge = showTargetBadge;
+      }
+      var popUpApp = document.getElementById("pop-up-app").checked;
+      if (popUpApp !== savedPopUpApp) {
+        payload.popUpApp = popUpApp;
       }
       if (forceIncludeColorsField || defaultColors.bg || defaultColors.text || defaultColors.icon) {
         payload.colors = defaultColors;
@@ -1074,6 +1058,8 @@
         if (msg.approvalTimeout !== undefined) settings.approvalTimeout = msg.approvalTimeout;
         if (msg.showTargetBadge !== undefined) settings.showTargetBadge = !!msg.showTargetBadge;
         savedShowTargetBadge = settings.showTargetBadge;
+        if (msg.popUpApp !== undefined) settings.popUpApp = !!msg.popUpApp;
+        savedPopUpApp = settings.popUpApp;
         if (msg.colors) {
           defaultColors.bg = msg.colors.bg || "";
           defaultColors.text = msg.colors.text || "";
@@ -1112,6 +1098,7 @@
         document.getElementById("theme").value = settings.theme;
         document.getElementById("timeout").value = settings.approvalTimeout;
         document.getElementById("show-target-badge").checked = settings.showTargetBadge;
+        document.getElementById("pop-up-app").checked = settings.popUpApp;
         baselinePayload = JSON.stringify(buildPayload(""));
         forceIncludeColorsField = false;
         pendingThemeApplyMode = "";
@@ -1599,7 +1586,7 @@
 
     // --- Save ---
     document.getElementById("btn-save").disabled = true;
-    ["timeout", "show-target-badge"].forEach(function (id) {
+    ["timeout", "show-target-badge", "pop-up-app"].forEach(function (id) {
       var el = document.getElementById(id);
       el.addEventListener("input", markDirty);
       el.addEventListener("change", markDirty);

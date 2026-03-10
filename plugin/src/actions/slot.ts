@@ -81,6 +81,12 @@ export function setSlotClient(client: BridgeClient): void {
 /** Map from action context ID to position index (row * columns + column). */
 const slotAssignments = new Map<string, number>();
 
+/** Tracks buttons that disappeared and may be part of a drag-swap. */
+const pendingMoves = new Map<string, { oldSlotIndex: number; timestamp: number }>();
+/** Tracks completed moves (appeared at new position) for swap detection. */
+const recentMoves = new Map<string, { from: number; to: number; timestamp: number }>();
+const SWAP_DEBOUNCE_MS = 300;
+
 /** Get physical slot index for an action (row * columns + column). */
 function getSlotIndex(actionId: string): number {
   return slotAssignments.get(actionId) ?? -1;
@@ -89,6 +95,8 @@ function getSlotIndex(actionId: string): number {
 /** Exported for testing. */
 export function resetSlots(): void {
   slotAssignments.clear();
+  pendingMoves.clear();
+  recentMoves.clear();
 }
 
 @action({ UUID: "com.decky.controller.slot" })
@@ -124,6 +132,13 @@ export class SlotAction extends SingletonAction {
       slotIndex = physicalIndex;
       slotAssignments.set(ev.action.id, physicalIndex);
       pushDebug("willAppear", ev.action.id, getSlotIndex(ev.action.id), { slotIndex });
+
+      // Check for drag-swap: did this action move from a different position?
+      const pending = pendingMoves.get(ev.action.id);
+      pendingMoves.delete(ev.action.id);
+      if (pending && pending.oldSlotIndex !== physicalIndex && (Date.now() - pending.timestamp) < SWAP_DEBOUNCE_MS) {
+        this.recordMoveAndCheckSwap(ev.action.id, pending.oldSlotIndex, physicalIndex);
+      }
     }
 
     if (!bridgeRef) return;
@@ -182,7 +197,14 @@ export class SlotAction extends SingletonAction {
   }
 
   override async onWillDisappear(ev: WillDisappearEvent): Promise<void> {
-    pushDebug("willDisappear", ev.action.id, getSlotIndex(ev.action.id), {});
+    const oldSlotIndex = getSlotIndex(ev.action.id);
+    pushDebug("willDisappear", ev.action.id, oldSlotIndex, {});
+
+    // Save old position for drag-swap detection
+    if (oldSlotIndex !== -1) {
+      pendingMoves.set(ev.action.id, { oldSlotIndex, timestamp: Date.now() });
+    }
+
     activeKeyActions.delete(ev.action.id);
     slotAssignments.delete(ev.action.id);
 
@@ -228,6 +250,56 @@ export class SlotAction extends SingletonAction {
     }
   }
 
+  /**
+   * Record a completed move and check if it forms a swap with a prior move.
+   * A swap is detected when action A moved from→to and action B moved to→from.
+   */
+  private recordMoveAndCheckSwap(actionId: string, from: number, to: number): void {
+    const now = Date.now();
+    // Check if there's a complementary move already recorded
+    for (const [otherId, move] of recentMoves) {
+      if (move.from === to && move.to === from && (now - move.timestamp) < SWAP_DEBOUNCE_MS) {
+        recentMoves.delete(otherId);
+        this.performMacroSwap(from, to);
+        return;
+      }
+    }
+    // Record this move for future matching; clean up expired entries
+    recentMoves.set(actionId, { from, to, timestamp: now });
+    for (const [id, m] of recentMoves) {
+      if (now - m.timestamp > SWAP_DEBOUNCE_MS * 2) recentMoves.delete(id);
+    }
+  }
+
+  /** Swap two macros in the config array and send the update to the bridge. */
+  private performMacroSwap(indexA: number, indexB: number): void {
+    if (!bridgeRef) return;
+    const cfg = bridgeRef.getLastConfig();
+    if (!cfg?.macros) return;
+
+    const macros = [...cfg.macros];
+    // Pad with empty macros if needed
+    const maxIndex = Math.max(indexA, indexB);
+    while (macros.length <= maxIndex) {
+      macros.push({ label: "", text: "" });
+    }
+    if (indexA < 0 || indexB < 0) return;
+
+    // Swap
+    const temp = macros[indexA];
+    macros[indexA] = macros[indexB];
+    macros[indexB] = temp;
+
+    pushDebug("macroSwap", undefined, undefined, {
+      indexA,
+      indexB,
+      labelA: macros[indexA]?.label ?? "",
+      labelB: macros[indexB]?.label ?? "",
+    });
+
+    bridgeRef.sendAction("updateConfig", { macros });
+  }
+
   override async onPropertyInspectorDidAppear(ev: PropertyInspectorDidAppearEvent): Promise<void> {
     this.activePiActionId = ev.action.id;
     pushDebug("piAppear", ev.action.id, getSlotIndex(ev.action.id), {});
@@ -268,6 +340,7 @@ export class SlotAction extends SingletonAction {
       approvalTimeout: cfg?.approvalTimeout ?? 30,
       defaultTargetApp: cfg?.defaultTargetApp ?? "claude",
       showTargetBadge: cfg?.showTargetBadge ?? false,
+      popUpApp: cfg?.popUpApp ?? false,
       enableApproveOnce: cfg?.enableApproveOnce ?? true,
       enableDictation: cfg?.enableDictation ?? true,
     };
@@ -340,6 +413,7 @@ export class SlotAction extends SingletonAction {
       if (typeof payload.approvalTimeout === "number") update.approvalTimeout = payload.approvalTimeout;
       if (typeof payload.defaultTargetApp === "string") update.defaultTargetApp = payload.defaultTargetApp;
       if (typeof payload.showTargetBadge === "boolean") update.showTargetBadge = payload.showTargetBadge;
+      if (typeof payload.popUpApp === "boolean") update.popUpApp = payload.popUpApp;
       if (typeof payload.enableApproveOnce === "boolean") update.enableApproveOnce = payload.enableApproveOnce;
       if (typeof payload.enableDictation === "boolean") update.enableDictation = payload.enableDictation;
       if (payload.colors && typeof payload.colors === "object") update.colors = payload.colors;

@@ -1280,6 +1280,8 @@ export function createApp(): DeckyApp {
             : undefined;
         const showTargetBadge =
           typeof data.showTargetBadge === "boolean" ? data.showTargetBadge : undefined;
+        const popUpApp =
+          typeof data.popUpApp === "boolean" ? data.popUpApp : undefined;
         const enableApproveOnce =
           typeof data.enableApproveOnce === "boolean" ? data.enableApproveOnce : undefined;
         const enableDictation =
@@ -1320,6 +1322,7 @@ export function createApp(): DeckyApp {
         if (colors) update.colors = colors;
         if (defaultTargetApp) update.defaultTargetApp = defaultTargetApp;
         if (showTargetBadge !== undefined) update.showTargetBadge = showTargetBadge;
+        if (popUpApp !== undefined) update.popUpApp = popUpApp;
         if (enableApproveOnce !== undefined) update.enableApproveOnce = enableApproveOnce;
         if (enableDictation !== undefined) update.enableDictation = enableDictation;
         if (Object.keys(update).length > 0) {

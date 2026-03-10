@@ -118,6 +118,7 @@ function baseConfig(): any {
     themeSeed: 1,
     defaultTargetApp: "claude",
     showTargetBadge: false,
+    popUpApp: false,
   };
 }
 
@@ -787,5 +788,109 @@ describe("approval slide-in animation", () => {
     // Final SVG should be the idle state macro, not approval
     const finalSvg = latestSvg(actions[0]);
     expect(finalSvg).not.toContain("Approve");
+  });
+});
+
+describe("SlotAction drag-swap", () => {
+  it("swaps macros when two actions exchange positions", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const config = {
+      ...baseConfig(),
+      macros: [
+        { label: "Alpha", text: "Alpha text" },
+        { label: "Beta", text: "Beta text" },
+        { label: "Gamma", text: "Gamma text" },
+      ],
+    };
+    const bridge = new FakeBridge(config);
+    setSlotClient(bridge as any);
+
+    const actionA = makeKeyAction("action-A");
+    const actionB = makeKeyAction("action-B");
+    const slot = new SlotAction();
+    (slot as any).actions = [actionA, actionB];
+
+    // Place action A at slot 0, action B at slot 1
+    await slot.onWillAppear({
+      action: actionA,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+    await slot.onWillAppear({
+      action: actionB,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 1 } },
+    } as any);
+
+    // Simulate drag: both disappear then reappear at swapped positions
+    await slot.onWillDisappear({ action: actionA } as any);
+    await slot.onWillDisappear({ action: actionB } as any);
+
+    // Action A reappears at slot 1
+    await slot.onWillAppear({
+      action: actionA,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 1 } },
+    } as any);
+    // Action B reappears at slot 0
+    await slot.onWillAppear({
+      action: actionB,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+
+    // Allow deferred check to fire
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Verify sendAction was called with swapped macros
+    const swapCall = bridge.sendAction.mock.calls.find(
+      (c: any[]) => c[0] === "updateConfig" && c[1]?.macros
+    );
+    expect(swapCall).toBeDefined();
+    const swappedMacros = swapCall![1].macros;
+    expect(swappedMacros[0].label).toBe("Beta");
+    expect(swappedMacros[1].label).toBe("Alpha");
+    expect(swappedMacros[2].label).toBe("Gamma");
+  });
+
+  it("does not swap when a single action moves to an empty slot", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const config = {
+      ...baseConfig(),
+      macros: [
+        { label: "Alpha", text: "Alpha text" },
+        { label: "Beta", text: "Beta text" },
+      ],
+    };
+    const bridge = new FakeBridge(config);
+    setSlotClient(bridge as any);
+
+    const actionA = makeKeyAction("action-solo");
+    const slot = new SlotAction();
+    (slot as any).actions = [actionA];
+
+    // Place at slot 0
+    await slot.onWillAppear({
+      action: actionA,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+
+    bridge.sendAction.mockClear();
+
+    // Simulate move: disappear from 0, appear at 2 (empty)
+    await slot.onWillDisappear({ action: actionA } as any);
+    await slot.onWillAppear({
+      action: actionA,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 2 } },
+    } as any);
+
+    // Allow deferred check to fire
+    await new Promise((r) => setTimeout(r, 200));
+
+    // No swap should have occurred
+    const swapCall = bridge.sendAction.mock.calls.find(
+      (c: any[]) => c[0] === "updateConfig" && c[1]?.macros
+    );
+    expect(swapCall).toBeUndefined();
   });
 });

@@ -10,6 +10,7 @@ function makeConfig(overrides: Partial<DeckyConfig> = {}): DeckyConfig {
     editor: "bbedit",
     defaultTargetApp: "claude",
     showTargetBadge: false,
+    popUpApp: false,
     enableApproveOnce: true,
     enableDictation: true,
     ...overrides,

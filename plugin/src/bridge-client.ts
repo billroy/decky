@@ -86,6 +86,7 @@ export interface DeckyConfig {
   colors?: ColorOverrides;
   defaultTargetApp: TargetApp;
   showTargetBadge: boolean;
+  popUpApp?: boolean;
   enableApproveOnce?: boolean;
   enableDictation?: boolean;
 }

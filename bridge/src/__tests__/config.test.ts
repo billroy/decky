@@ -47,6 +47,7 @@ describe("config endpoints", () => {
     expect(data).toHaveProperty("approvalTimeout");
     expect(data).toHaveProperty("defaultTargetApp");
     expect(data).toHaveProperty("showTargetBadge");
+    expect(data).toHaveProperty("popUpApp");
   });
 
   it("each macro has label and text fields", async () => {
@@ -116,6 +117,7 @@ describe("config endpoints", () => {
       body: JSON.stringify({
         defaultTargetApp: "codex",
         showTargetBadge: true,
+        popUpApp: true,
         enableApproveOnce: false,
         enableDictation: false,
         macros: [{ label: "Ship", text: "Ship it", targetApp: "chatgpt" }],
@@ -124,6 +126,7 @@ describe("config endpoints", () => {
     const data = await res.json();
     expect(data.config.defaultTargetApp).toBe("codex");
     expect(data.config.showTargetBadge).toBe(true);
+    expect(data.config.popUpApp).toBe(true);
     expect(data.config.enableApproveOnce).toBe(false);
     expect(data.config.enableDictation).toBe(false);
     expect(data.config.macros[0].targetApp).toBe("chatgpt");
