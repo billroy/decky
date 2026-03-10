@@ -521,7 +521,7 @@ function resolveLabelFontSize(displayLabel: string, fontSize?: number): number {
   if (typeof fontSize === "number" && Number.isFinite(fontSize)) {
     return Math.max(16, Math.min(42, Math.floor(fontSize)));
   }
-  return displayLabel.length > 6 ? 26 : 32;
+  return displayLabel.length > 7 ? 26 : 32;
 }
 
 function macroSVG(
