@@ -85,7 +85,7 @@ describe("codex app-server session", () => {
     expect(readyCount).toBe(1);
   });
 
-  it("reports incompatible initialize method capabilities and blocks ready handshake", () => {
+  it("reports incompatible initialize method capabilities but still continues handshake", () => {
     const outgoing: Record<string, unknown>[] = [];
     const compatibilityReports: Array<{ status: string; missing: string[] }> = [];
     const errors: string[] = [];
@@ -115,12 +115,13 @@ describe("codex app-server session", () => {
       },
     });
 
-    expect(readyCount).toBe(0);
-    expect(outgoing).toHaveLength(1);
+    expect(readyCount).toBe(1);
+    expect(outgoing).toHaveLength(2);
+    expect(outgoing[1]).toEqual({ method: "initialized" });
     expect(compatibilityReports).toHaveLength(1);
     expect(compatibilityReports[0].status).toBe("incompatible");
     expect(compatibilityReports[0].missing).toContain("thread/resume");
-    expect(errors.some((entry) => entry.includes("compatibility check failed"))).toBe(true);
+    expect(errors.some((entry) => entry.includes("compatibility warning"))).toBe(true);
   });
 
   it("auto-resumes most recent thread for matching cwd after initialize", () => {
@@ -281,6 +282,33 @@ describe("codex app-server session", () => {
       { event: "PreToolUse", requestId: toPublicRequestId("file-approve-1"), tool: "Write" },
       { event: "PostToolUse", requestId: toPublicRequestId("file-approve-1"), tool: "Write" },
     ]);
+  });
+
+  it("accepts unknown requestApproval method variants and resolves with modern decisions", async () => {
+    const outgoing: Record<string, unknown>[] = [];
+    const events: Array<{ event: string; requestId: string | null; tool?: string | undefined }> = [];
+    const session = new CodexAppServerSession({
+      onOutgoingMessage: (msg) => outgoing.push(msg),
+      onHookEvent: (e) => events.push({ event: e.payload.event, requestId: e.requestId, tool: e.payload.tool }),
+    });
+
+    session.ingestMessage({
+      id: "generic-approve-1",
+      method: "item/shell/requestApproval",
+      params: {
+        itemId: "shell-1",
+        commandActions: [{ type: "search" }],
+      },
+    });
+
+    const requestId = toPublicRequestId("generic-approve-1");
+    expect(events).toEqual([{ event: "PreToolUse", requestId, tool: "Search" }]);
+
+    await session.resolveApproval(requestId, "deny");
+    expect(outgoing[outgoing.length - 1]).toEqual({
+      id: "generic-approve-1",
+      result: { decision: "decline" },
+    });
   });
 });
 
