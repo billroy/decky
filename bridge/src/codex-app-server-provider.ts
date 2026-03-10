@@ -849,6 +849,9 @@ export class CodexAppServerProvider {
               `codex app-server command not found: '${this.command}' (looked for app bundle path and PATH binary)`,
             ),
           );
+          this.emitLifecycle({ state: "error", at: Date.now(), detail: errorMessage });
+          this.failStartup(errorMessage, { killProcess: false, preserveSession: false });
+          return;
         }
         this.onError(error);
         this.emitLifecycle({ state: "error", at: Date.now(), detail: errorMessage });

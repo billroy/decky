@@ -112,7 +112,7 @@ export interface DeckyApp {
 
 type ApprovalFlow = "gate" | "mirror";
 type ApprovalTargetApp = "claude" | "codex";
-type HookSource = "hook" | "codex-monitor";
+type HookSource = "hook" | "codex";
 type CodexProviderState = CodexAppServerLifecycleState | "disabled";
 
 interface ApprovalQueueItem {
@@ -405,7 +405,7 @@ export function createApp(): DeckyApp {
       approval: active
         ? {
           pending: approvalQueue.length,
-          position: 1,
+          position: approvalQueue.findIndex((item) => item.id === active.id) + 1,
           targetApp: active.targetApp,
           flow: active.flow,
           requestId: active.requestId ?? active.id,
@@ -463,7 +463,7 @@ export function createApp(): DeckyApp {
     if (approvalQueue.length === 0) return 0;
     let removed = 0;
     for (let idx = approvalQueue.length - 1; idx >= 0; idx -= 1) {
-      if (approvalQueue[idx].source !== "codex-monitor") continue;
+      if (approvalQueue[idx].source !== "codex") continue;
       approvalQueue.splice(idx, 1);
       removed += 1;
     }
@@ -555,7 +555,7 @@ export function createApp(): DeckyApp {
       const current = sm.getSnapshot();
       const duplicateHookPre = source === "hook" && current.state === "awaiting-approval";
       const duplicateMonitorPre =
-        source === "codex-monitor" &&
+        source === "codex" &&
         requestId !== null &&
         approvalQueue.some((entry) => entry.requestId === requestId);
       if (!duplicateHookPre && !duplicateMonitorPre) {
@@ -571,7 +571,7 @@ export function createApp(): DeckyApp {
     }
     let snapshot = sm.processEvent(payload);
 
-    if (pendingMirrorSettlement && source === "codex-monitor") {
+    if (pendingMirrorSettlement && source === "codex") {
       approvalTrace.append(
         pendingMirrorSettlement.actionId,
         "codex.monitor",
@@ -583,7 +583,7 @@ export function createApp(): DeckyApp {
         },
       );
       if (payload.event !== "PreToolUse") {
-        shiftApprovalRequestForSource("codex-monitor", requestId);
+        shiftApprovalRequestForSource("codex", requestId);
         const next = currentApproval();
         if (next && snapshot.state !== "awaiting-approval") {
           snapshot = sm.forceState("awaiting-approval", "queued approval pending", next.tool);
@@ -601,11 +601,11 @@ export function createApp(): DeckyApp {
     }
 
     if (
-      source === "codex-monitor" &&
+      source === "codex" &&
       !pendingMirrorSettlement &&
       (payload.event === "PostToolUse" || payload.event === "Stop" || payload.event === "SubagentStop")
     ) {
-      const shifted = shiftApprovalRequestForSource("codex-monitor", requestId);
+      const shifted = shiftApprovalRequestForSource("codex", requestId);
       if (shifted) {
         const next = currentApproval();
         if (next && snapshot.state !== "awaiting-approval") {
@@ -764,11 +764,11 @@ export function createApp(): DeckyApp {
             approvalFlow: "mirror" as const,
             nonce: null,
             targetApp: "codex" as const,
-            source: "codex-monitor" as const,
+            source: "codex" as const,
             requestId: requestId ?? null,
           }
           : {
-            source: "codex-monitor" as const,
+            source: "codex" as const,
             requestId: requestId ?? null,
           };
       applyHookPayload(payload, opts);
