@@ -12,10 +12,10 @@
 set -euo pipefail
 
 BRIDGE_URL="${DECKY_BRIDGE_URL:-http://localhost:9130}"
-APPROVAL_FLOW_RAW="${DECKY_APPROVAL_FLOW:-mirror}"
+APPROVAL_FLOW_RAW="${DECKY_APPROVAL_FLOW:-gate}"
 APPROVAL_FLOW="$(printf '%s' "$APPROVAL_FLOW_RAW" | tr '[:upper:]' '[:lower:]')"
-if [ "$APPROVAL_FLOW" != "gate" ]; then
-  APPROVAL_FLOW="mirror"
+if [ "$APPROVAL_FLOW" != "mirror" ]; then
+  APPROVAL_FLOW="gate"
 fi
 GATE_FILE="$HOME/.decky/approval-gate"
 TOKEN_FILE="$HOME/.decky/bridge-token"
@@ -23,6 +23,10 @@ TIMEOUT="${DECKY_TIMEOUT:-30}"
 NONCE="$(LC_ALL=C tr -dc 'a-f0-9' </dev/urandom | head -c 24 || true)"
 if [ -z "$NONCE" ]; then
   NONCE="$(date +%s)-$$"
+fi
+
+if [ "${DECKY_HOOK_DEBUG:-0}" = "1" ]; then
+  echo "[decky-hook] pre-tool approval_flow=$APPROVAL_FLOW" >&2
 fi
 
 # Read JSON payload from stdin
