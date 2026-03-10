@@ -96,9 +96,21 @@ function waitForBridgeEvent(
 }
 
 async function postHook(event: string, tool?: string) {
+  await postHookWithFlow(event, tool);
+}
+
+async function postHookWithFlow(
+  event: string,
+  tool?: string,
+  approvalFlow: "mirror" | "gate" = "mirror",
+) {
   await fetch(`${bridgeUrl}/hook`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-decky-token": token },
+    headers: {
+      "Content-Type": "application/json",
+      "x-decky-token": token,
+      "x-decky-approval-flow": approvalFlow,
+    },
     body: JSON.stringify({ event, tool }),
   });
 }
@@ -136,7 +148,7 @@ describe("BridgeClient", () => {
 
     // Now trigger a state change via the bridge HTTP API
     const approvalPromise = waitForState(client, (s) => s.state === "awaiting-approval");
-    await postHook("PreToolUse", "Bash");
+    await postHookWithFlow("PreToolUse", "Bash", "gate");
     const snap = await approvalPromise;
 
     expect(snap.state).toBe("awaiting-approval");
@@ -157,7 +169,7 @@ describe("BridgeClient", () => {
 
     // Put bridge into awaiting-approval
     const approvalPromise = waitForState(client, (s) => s.state === "awaiting-approval");
-    await postHook("PreToolUse", "Read");
+    await postHookWithFlow("PreToolUse", "Read", "gate");
     await approvalPromise;
 
     // Send approve action
