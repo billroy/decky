@@ -80,6 +80,8 @@ export function setSlotClient(client: BridgeClient): void {
 
 /** Map from action context ID to position index (row * columns + column). */
 const slotAssignments = new Map<string, number>();
+/** Map from action context ID to Stream Deck device key. */
+const actionDeviceKeys = new Map<string, string>();
 
 /** Tracks buttons that disappeared and may be part of a drag-swap. */
 const pendingMoves = new Map<string, { oldSlotIndex: number; timestamp: number }>();
@@ -92,9 +94,49 @@ function getSlotIndex(actionId: string): number {
   return slotAssignments.get(actionId) ?? -1;
 }
 
+function resolveDeviceKey(action: { device?: unknown }): string {
+  const device = action.device;
+  if (!device || typeof device !== "object") return "unknown";
+  const record = device as Record<string, unknown>;
+  const id = typeof record.id === "string" ? record.id.trim() : "";
+  if (id.length > 0) return `id:${id}`;
+  const sizeObj = record.size;
+  const size = sizeObj && typeof sizeObj === "object" ? (sizeObj as Record<string, unknown>) : null;
+  const columns = size && typeof size.columns === "number" ? size.columns : null;
+  const rows = size && typeof size.rows === "number" ? size.rows : null;
+  const rawType = record.type;
+  const typeLabel = typeof rawType === "number" || typeof rawType === "string" ? String(rawType) : "unknown";
+  if (columns !== null || rows !== null) {
+    return `shape:${typeLabel}:${columns ?? "?"}x${rows ?? "?"}`;
+  }
+  return `shape:${typeLabel}`;
+}
+
+function getDeviceKey(actionId: string): string {
+  return actionDeviceKeys.get(actionId) ?? "unknown";
+}
+
+function getApprovalAnchorSlot(deviceKey: string): number | null {
+  let anchor: number | null = null;
+  for (const [actionId, slotIndex] of slotAssignments.entries()) {
+    if (slotIndex < 0) continue;
+    if (getDeviceKey(actionId) !== deviceKey) continue;
+    if (anchor === null || slotIndex < anchor) anchor = slotIndex;
+  }
+  return anchor;
+}
+
+function resolveLayoutSlotIndex(state: string, physicalSlotIndex: number, deviceKey: string): number {
+  if (state !== "awaiting-approval") return physicalSlotIndex;
+  const anchor = getApprovalAnchorSlot(deviceKey);
+  if (anchor === null) return physicalSlotIndex;
+  return physicalSlotIndex - anchor;
+}
+
 /** Exported for testing. */
 export function resetSlots(): void {
   slotAssignments.clear();
+  actionDeviceKeys.clear();
   pendingMoves.clear();
   recentMoves.clear();
 }
@@ -122,6 +164,7 @@ export class SlotAction extends SingletonAction {
 
   override async onWillAppear(ev: WillAppearEvent): Promise<void> {
     activeKeyActions.set(ev.action.id, ev.action);
+    actionDeviceKeys.set(ev.action.id, resolveDeviceKey(ev.action));
 
     // Compute slot index from physical position on the deck
     let slotIndex: number | undefined;
@@ -149,11 +192,16 @@ export class SlotAction extends SingletonAction {
       const connStatus = bridgeRef.getConnectionStatus();
       const snapshot = bridgeRef.getLastSnapshot();
       const state = connStatus === "connected" ? (snapshot?.state ?? "idle") : "stopped";
+      const deviceKey = getDeviceKey(ev.action.id);
+      const layoutSlotIndex = resolveLayoutSlotIndex(state, assignedSlot, deviceKey);
+      const anchorSlot = state === "awaiting-approval" ? getApprovalAnchorSlot(deviceKey) : null;
       const macros = this.getMacros();
-      const config = getSlotConfig(state, assignedSlot, snapshot?.tool, macros, snapshot?.approval ?? null);
+      const config = getSlotConfig(state, layoutSlotIndex, snapshot?.tool, macros, snapshot?.approval ?? null);
       const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
       pushDebug("initialRender", ev.action.id, assignedSlot, {
         state,
+        anchorSlot,
+        layoutSlotIndex,
         tool: snapshot?.tool ?? null,
         title: config.title,
         action: config.action ?? null,
@@ -207,6 +255,7 @@ export class SlotAction extends SingletonAction {
 
     activeKeyActions.delete(ev.action.id);
     slotAssignments.delete(ev.action.id);
+    actionDeviceKeys.delete(ev.action.id);
 
     // If no more instances, clean up listeners
     if (activeKeyActions.size === 0) {
@@ -233,8 +282,10 @@ export class SlotAction extends SingletonAction {
 
     const snapshot = bridgeRef.getLastSnapshot();
     const state = snapshot?.state ?? "idle";
+    const deviceKey = getDeviceKey(ev.action.id);
+    const layoutSlotIndex = resolveLayoutSlotIndex(state, slotIndex, deviceKey);
     const macros = this.getMacros();
-    const config = getSlotConfig(state, slotIndex, snapshot?.tool, macros, snapshot?.approval ?? null);
+    const config = getSlotConfig(state, layoutSlotIndex, snapshot?.tool, macros, snapshot?.approval ?? null);
 
     if (config.action === "widget-refresh") {
       await this.renderAll(bridgeRef.getConnectionStatus(), snapshot);
@@ -244,6 +295,7 @@ export class SlotAction extends SingletonAction {
     if (config.action && bridgeRef.getConnectionStatus() === "connected") {
       const actionId = bridgeRef.sendAction(config.action, config.data);
       pushDebug("slotActionDispatched", ev.action.id, slotIndex, {
+        layoutSlotIndex,
         action: config.action,
         actionId,
       });
@@ -526,12 +578,17 @@ export class SlotAction extends SingletonAction {
       const slotIndex = getSlotIndex(instance.id);
       if (slotIndex === -1) continue;
 
-      const config = getSlotConfig(state, slotIndex, toolName, macros, snapshot?.approval ?? null);
+      const deviceKey = getDeviceKey(instance.id);
+      const layoutSlotIndex = resolveLayoutSlotIndex(state, slotIndex, deviceKey);
+      const anchorSlot = state === "awaiting-approval" ? getApprovalAnchorSlot(deviceKey) : null;
+      const config = getSlotConfig(state, layoutSlotIndex, toolName, macros, snapshot?.approval ?? null);
       const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
 
       try {
         pushDebug("renderAll:setImage", instance.id, slotIndex, {
           state,
+          anchorSlot,
+          layoutSlotIndex,
           title: config.title,
           action: config.action ?? null,
           svg: summarizeSvg(config.svg),
