@@ -1100,6 +1100,22 @@ export function createApp(): DeckyApp {
           socket.emit("error", { error: "Approval action ignored: not awaiting approval" });
           return;
         }
+        if (!activeApproval) {
+          approvalTrace.append(
+            actionId,
+            "bridge.action.ignored",
+            "awaiting approval without active queue context",
+            { state: currentState, pendingApprovalFlow, pendingApprovalTargetApp },
+          );
+          approvalTrace.settle({
+            actionId,
+            status: "failed",
+            finalState: currentState,
+            finalReason: "Approval action ignored: no active approval context",
+          });
+          socket.emit("error", { error: "Approval action ignored: no active approval context" });
+          return;
+        }
         if (activeFlow === "mirror") {
           pendingGateNonce = null;
           if (entry.result === "approve") {
