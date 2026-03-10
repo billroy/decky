@@ -21,9 +21,6 @@ vi.mock("../macro-exec.js", () => ({
   startDictationForClaude: vi.fn().mockResolvedValue(undefined),
 }));
 
-process.env.DECKY_CODEX_INTEGRATION = "sqlite";
-process.env.DECKY_ENABLE_CODEX_SQLITE = "1";
-
 const { createApp } = await import("../app.js");
 
 let baseUrl: string;
@@ -129,7 +126,7 @@ describe("approval workflow — mirror mode", () => {
     sock.disconnect();
   });
 
-  it("approve action forwards to Codex when targetApp is codex", async () => {
+  it("approve action fails fast for Codex when app-server request id is missing", async () => {
     const { status } = await postHook(
       { event: "PreToolUse", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
@@ -137,33 +134,33 @@ describe("approval workflow — mirror mode", () => {
     expect(status).toBe(200);
 
     const sock = await connectClient();
+    const errorPromise = waitForSocketEvent<{ error: string }>(sock, "error");
     sock.emit("action", { action: "approve", targetApp: "codex" });
-    await new Promise((r) => setTimeout(r, 100));
+    const err = await errorPromise;
 
+    expect(err.error).toContain("missing app-server request ID");
     expect(macroMocks.approve).not.toHaveBeenCalled();
-    expect(macroMocks.approveTarget).toHaveBeenCalledOnce();
-    expect(macroMocks.approveTarget).toHaveBeenCalledWith("codex");
+    expect(macroMocks.approveTarget).not.toHaveBeenCalled();
     expect(gateFileExists()).toBe(false);
     const { data } = await getStatus();
     expect(data.state).toBe("awaiting-approval");
     sock.disconnect();
   });
 
-  it("approve action surfaces Codex automation errors and keeps awaiting-approval", async () => {
+  it("approve action does not attempt Codex UI fallback when app-server request id is missing", async () => {
     const { status } = await postHook(
       { event: "PreToolUse", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
     );
     expect(status).toBe(200);
-    macroMocks.approveTarget.mockRejectedValueOnce(new Error("approve failed"));
 
     const sock = await connectClient();
     const errorPromise = waitForSocketEvent<{ error: string }>(sock, "error");
     sock.emit("action", { action: "approve", targetApp: "codex" });
 
     const err = await errorPromise;
-    expect(err.error).toBe("Failed to approve in Codex");
-    expect(macroMocks.approveTarget).toHaveBeenCalledOnce();
+    expect(err.error).toContain("missing app-server request ID");
+    expect(macroMocks.approveTarget).not.toHaveBeenCalled();
     const { data } = await getStatus();
     expect(data.state).toBe("awaiting-approval");
     sock.disconnect();
@@ -187,7 +184,7 @@ describe("approval workflow — mirror mode", () => {
     sock.disconnect();
   });
 
-  it("deny action requests Codex dismissal and waits for monitor events to exit approval", async () => {
+  it("deny action fails fast for Codex when app-server request id is missing", async () => {
     const { status } = await postHook(
       { event: "PreToolUse", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
@@ -195,12 +192,13 @@ describe("approval workflow — mirror mode", () => {
     expect(status).toBe(200);
 
     const sock = await connectClient();
+    const errorPromise = waitForSocketEvent<{ error: string }>(sock, "error");
     sock.emit("action", { action: "deny", targetApp: "codex" });
-    await new Promise((r) => setTimeout(r, 100));
+    const err = await errorPromise;
 
+    expect(err.error).toContain("missing app-server request ID");
     expect(macroMocks.dismiss).not.toHaveBeenCalled();
-    expect(macroMocks.dismissTarget).toHaveBeenCalledOnce();
-    expect(macroMocks.dismissTarget).toHaveBeenCalledWith("codex");
+    expect(macroMocks.dismissTarget).not.toHaveBeenCalled();
     expect(gateFileExists()).toBe(false);
     const { data } = await getStatus();
     expect(data.state).toBe("awaiting-approval");
@@ -225,7 +223,7 @@ describe("approval workflow — mirror mode", () => {
     sock.disconnect();
   });
 
-  it("cancel action requests Codex dismissal and waits for monitor events to exit approval", async () => {
+  it("cancel action fails fast for Codex when app-server request id is missing", async () => {
     const { status } = await postHook(
       { event: "PreToolUse", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
@@ -233,12 +231,13 @@ describe("approval workflow — mirror mode", () => {
     expect(status).toBe(200);
 
     const sock = await connectClient();
+    const errorPromise = waitForSocketEvent<{ error: string }>(sock, "error");
     sock.emit("action", { action: "cancel", targetApp: "codex" });
-    await new Promise((r) => setTimeout(r, 100));
+    const err = await errorPromise;
 
+    expect(err.error).toContain("missing app-server request ID");
     expect(macroMocks.dismiss).not.toHaveBeenCalled();
-    expect(macroMocks.dismissTarget).toHaveBeenCalledOnce();
-    expect(macroMocks.dismissTarget).toHaveBeenCalledWith("codex");
+    expect(macroMocks.dismissTarget).not.toHaveBeenCalled();
     expect(gateFileExists()).toBe(false);
     const { data } = await getStatus();
     expect(data.state).toBe("awaiting-approval");
@@ -268,19 +267,20 @@ describe("approval workflow — mirror mode", () => {
     sock.disconnect();
   });
 
-  it("mirror cancel keeps awaiting-approval when Codex dismiss fails", async () => {
+  it("mirror cancel keeps awaiting-approval when Codex request id is missing", async () => {
     const { status } = await postHook(
       { event: "PreToolUse", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
     );
     expect(status).toBe(200);
-    macroMocks.dismissTarget.mockRejectedValueOnce(new Error("dismiss failed"));
 
     const sock = await connectClient();
+    const errorPromise = waitForSocketEvent<{ error: string }>(sock, "error");
     sock.emit("action", { action: "cancel", targetApp: "codex" });
-    await new Promise((r) => setTimeout(r, 100));
+    const err = await errorPromise;
 
-    expect(macroMocks.dismissTarget).toHaveBeenCalledOnce();
+    expect(err.error).toContain("missing app-server request ID");
+    expect(macroMocks.dismissTarget).not.toHaveBeenCalled();
     const { data } = await getStatus();
     expect(data.state).toBe("awaiting-approval");
     sock.disconnect();

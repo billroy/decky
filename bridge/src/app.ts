@@ -32,7 +32,6 @@ import {
   withApprovalAttemptContext,
 } from "./macro-exec.js";
 import { getBridgeToken, readRequestToken, redactActionForLog } from "./security.js";
-import { CodexMonitor } from "./codex-monitor.js";
 import {
   CodexAppServerProvider,
   type CodexApprovalDecision,
@@ -102,7 +101,7 @@ export interface DeckyApp {
 type ApprovalFlow = "gate" | "mirror";
 type ApprovalTargetApp = "claude" | "codex";
 type HookSource = "hook" | "codex-monitor";
-type CodexIntegrationMode = "sqlite" | "app-server";
+type CodexIntegrationMode = "app-server";
 
 interface ApprovalQueueItem {
   id: string;
@@ -167,12 +166,15 @@ function createActionId(prefix = "bridge"): string {
 function parseCodexIntegrationMode(value: unknown): CodexIntegrationMode {
   const requested = typeof value === "string" ? value.trim().toLowerCase() : "";
   if (requested === "sqlite") {
-    if (process.env.DECKY_ENABLE_CODEX_SQLITE === "1") return "sqlite";
-    console.warn(
-      "[codex] sqlite integration is disabled by default; set DECKY_ENABLE_CODEX_SQLITE=1 to re-enable",
-    );
+    console.warn("[codex] sqlite integration is disabled; forcing app-server mode");
   }
   return "app-server";
+}
+
+function parseOptionalEnvString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function isCodexAppServerHookEvent(event: HookPayload | CodexAppServerHookEvent): event is CodexAppServerHookEvent {
@@ -527,12 +529,9 @@ export function createApp(): DeckyApp {
     (process.env.DECKY_HOME ?? "").includes(".decky-test");
   const codexMonitorEnabled = !isTestRuntime && process.env.DECKY_ENABLE_CODEX_MONITOR !== "0";
   const codexIntegrationMode = parseCodexIntegrationMode(process.env.DECKY_CODEX_INTEGRATION);
-  const codexCompareEnabled =
-    codexIntegrationMode === "app-server" &&
-    process.env.DECKY_CODEX_COMPARE_MODE === "1" &&
-    process.env.DECKY_ENABLE_CODEX_SQLITE === "1";
+  const codexCompareEnabled = false;
+  const codexAppServerCommand = parseOptionalEnvString(process.env.DECKY_CODEX_APP_SERVER_COMMAND);
   let codexMonitor: { start: () => Promise<boolean>; stop: () => void } | null = null;
-  let codexShadowMonitor: CodexMonitor | null = null;
   let resolveCodexApproval: ((requestId: string, decision: CodexApprovalDecision) => Promise<void>) | null = null;
   if (codexMonitorEnabled) {
     const onCodexHookEvent = (event: HookPayload | CodexAppServerHookEvent) => {
@@ -557,60 +556,28 @@ export function createApp(): DeckyApp {
       applyHookPayload(payload, opts);
     };
 
-    if (codexIntegrationMode === "app-server") {
-      const codexAppServer = new CodexAppServerProvider({
-        onHookEvent: (event) => onCodexHookEvent(event),
-        onError: (error) => {
-          console.warn("[codex-app-server] error:", error);
-        },
-        onDebugLog: (message) => {
-          console.log(`[codex-app-server] ${message}`);
-        },
-      });
-      codexMonitor = codexAppServer;
-      resolveCodexApproval = (requestId, decision) => codexAppServer.resolveApproval(requestId, decision);
-      if (codexCompareEnabled) {
-        codexShadowMonitor = new CodexMonitor({
-          onHookEvent: (payload) => {
-            recordCodexCompareEvent("shadow", payload, null);
-          },
-          onError: (error) => {
-            console.warn("[codex-monitor-shadow] poll error:", error);
-          },
-        });
-      }
-    } else {
-      codexMonitor = new CodexMonitor({
-        onHookEvent: (payload) => onCodexHookEvent(payload),
-        onError: (error) => {
-          console.warn("[codex-monitor] poll error:", error);
-        },
-      });
-    }
+    const codexAppServer = new CodexAppServerProvider({
+      command: codexAppServerCommand,
+      onHookEvent: (event) => onCodexHookEvent(event),
+      onError: (error) => {
+        console.warn("[codex-app-server] error:", error);
+      },
+      onDebugLog: (message) => {
+        console.log(`[codex-app-server] ${message}`);
+      },
+    });
+    codexMonitor = codexAppServer;
+    resolveCodexApproval = (requestId, decision) => codexAppServer.resolveApproval(requestId, decision);
 
     void codexMonitor.start().then((started) => {
       if (!started) {
         console.warn(`[codex] failed to start integration provider (mode=${codexIntegrationMode})`);
         return;
       }
-      if (codexIntegrationMode === "app-server") {
-        console.log("[codex-app-server] connected using app-server stdio transport");
-        if (codexCompareEnabled && codexShadowMonitor) {
-          void codexShadowMonitor.start().then((shadowStarted) => {
-            if (shadowStarted) {
-              console.log("[codex-monitor-shadow] sqlite compare mode enabled");
-            } else {
-              console.warn("[codex-monitor-shadow] compare mode requested, sqlite source unavailable");
-            }
-          });
-        }
-      } else {
-        console.log("[codex-monitor] mirroring Codex approval events from state DB");
-      }
+      console.log("[codex-app-server] connected using app-server stdio transport");
     });
     httpServer.on("close", () => {
       codexMonitor?.stop();
-      codexShadowMonitor?.stop();
     });
   }
   httpServer.on("close", () => {

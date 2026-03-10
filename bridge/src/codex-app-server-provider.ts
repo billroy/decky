@@ -1,4 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
+import { existsSync } from "node:fs";
 import type { HookPayload } from "./state-machine.js";
 
 export type CodexApprovalDecision = "approve" | "deny" | "cancel";
@@ -58,6 +59,7 @@ const COMMAND_APPROVAL_METHOD = "item/commandExecution/requestApproval";
 const FILE_CHANGE_APPROVAL_METHOD = "item/fileChange/requestApproval";
 const LEGACY_COMMAND_APPROVAL_METHOD = "execCommandApproval";
 const LEGACY_PATCH_APPROVAL_METHOD = "applyPatchApproval";
+const DEFAULT_CODEX_APP_PATH = "/Applications/Codex.app/Contents/Resources/codex";
 
 const APPROVAL_METHODS = new Set<string>([
   COMMAND_APPROVAL_METHOD,
@@ -65,6 +67,13 @@ const APPROVAL_METHODS = new Set<string>([
   LEGACY_COMMAND_APPROVAL_METHOD,
   LEGACY_PATCH_APPROVAL_METHOD,
 ]);
+
+export function resolveDefaultCodexAppServerCommand(
+  pathExists: (path: string) => boolean = existsSync,
+): string {
+  if (pathExists(DEFAULT_CODEX_APP_PATH)) return DEFAULT_CODEX_APP_PATH;
+  return "codex";
+}
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
@@ -311,7 +320,7 @@ export class CodexAppServerProvider {
   constructor(options: CodexAppServerProviderOptions) {
     this.onError = options.onError ?? ((error) => console.warn("[codex-app-server] provider error:", error));
     this.onDebugLog = options.onDebugLog ?? (() => undefined);
-    this.command = options.command ?? "codex";
+    this.command = options.command ?? resolveDefaultCodexAppServerCommand();
     this.args = options.args ?? ["app-server", "--listen", "stdio://"];
     this.env = options.env ?? process.env;
     this.session = new CodexAppServerSession({
@@ -332,8 +341,21 @@ export class CodexAppServerProvider {
       });
       this.process = child;
       this.stdoutBuffer = "";
+      this.onDebugLog(`launching: ${this.command} ${this.args.join(" ")}`);
 
       child.on("error", (error) => {
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          (error as { code?: string }).code === "ENOENT"
+        ) {
+          this.onError(
+            new Error(
+              `codex app-server command not found: '${this.command}' (looked for app bundle path and PATH binary)`,
+            ),
+          );
+        }
         this.onError(error);
       });
 
