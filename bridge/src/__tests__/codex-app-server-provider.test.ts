@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  CodexAppServerProvider,
   CodexAppServerSession,
   inferToolFromApprovalRequest,
   mapApprovalDecisionToResult,
@@ -234,5 +235,76 @@ describe("codex app-server session", () => {
       { event: "PreToolUse", requestId: toPublicRequestId("file-approve-1"), tool: "Write" },
       { event: "PostToolUse", requestId: toPublicRequestId("file-approve-1"), tool: "Write" },
     ]);
+  });
+});
+
+describe("codex app-server provider startup gate", () => {
+  it("returns false when command is missing", async () => {
+    const lifecycleStates: string[] = [];
+    const provider = new CodexAppServerProvider({
+      command: "__decky_missing_codex_binary__",
+      args: [],
+      handshakeTimeoutMs: 200,
+      onHookEvent: () => undefined,
+      onLifecycle: (event) => lifecycleStates.push(event.state),
+    });
+
+    const started = await provider.start();
+    provider.stop();
+
+    expect(started).toBe(false);
+    expect(lifecycleStates).toContain("start-failed");
+  });
+
+  it("returns false when initialize handshake times out", async () => {
+    const provider = new CodexAppServerProvider({
+      command: process.execPath,
+      args: ["-e", "setInterval(() => {}, 1000)"],
+      handshakeTimeoutMs: 80,
+      onHookEvent: () => undefined,
+    });
+
+    const started = await provider.start();
+    provider.stop();
+
+    expect(started).toBe(false);
+  });
+
+  it("returns true only after initialize response is received", async () => {
+    const lifecycleStates: string[] = [];
+    const provider = new CodexAppServerProvider({
+      command: process.execPath,
+      args: [
+        "-e",
+        `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  while (true) {
+    const newline = buffer.indexOf("\\n");
+    if (newline < 0) break;
+    const line = buffer.slice(0, newline).trim();
+    buffer = buffer.slice(newline + 1);
+    if (!line) continue;
+    const msg = JSON.parse(line);
+    if (msg.id === "decky-init" && msg.method === "initialize") {
+      process.stdout.write(JSON.stringify({ id: "decky-init", result: { protocolVersion: "1.0" } }) + "\\n");
+    }
+  }
+});
+setInterval(() => {}, 1000);
+`,
+      ],
+      handshakeTimeoutMs: 500,
+      onHookEvent: () => undefined,
+      onLifecycle: (event) => lifecycleStates.push(event.state),
+    });
+
+    const started = await provider.start();
+    provider.stop();
+
+    expect(started).toBe(true);
+    expect(lifecycleStates).toContain("ready");
   });
 });
