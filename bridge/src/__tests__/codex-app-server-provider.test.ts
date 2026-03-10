@@ -85,13 +85,53 @@ describe("codex app-server session", () => {
     expect(readyCount).toBe(1);
   });
 
+  it("reports incompatible initialize method capabilities and blocks ready handshake", () => {
+    const outgoing: Record<string, unknown>[] = [];
+    const compatibilityReports: Array<{ status: string; missing: string[] }> = [];
+    const errors: string[] = [];
+    let readyCount = 0;
+
+    const session = new CodexAppServerSession({
+      onOutgoingMessage: (msg) => outgoing.push(msg),
+      onHookEvent: () => undefined,
+      onHandshakeReady: () => {
+        readyCount += 1;
+      },
+      onCompatibility: (report) => {
+        compatibilityReports.push({
+          status: report.status,
+          missing: report.missingRequiredMethods,
+        });
+      },
+      onError: (error) => errors.push(String(error)),
+    });
+
+    session.startHandshake();
+    session.ingestMessage({
+      id: "decky-init",
+      result: {
+        protocolVersion: "1.0",
+        capabilities: { methods: ["thread/list"] },
+      },
+    });
+
+    expect(readyCount).toBe(0);
+    expect(outgoing).toHaveLength(1);
+    expect(compatibilityReports).toHaveLength(1);
+    expect(compatibilityReports[0].status).toBe("incompatible");
+    expect(compatibilityReports[0].missing).toContain("thread/resume");
+    expect(errors.some((entry) => entry.includes("compatibility check failed"))).toBe(true);
+  });
+
   it("auto-resumes most recent thread for matching cwd after initialize", () => {
     const outgoing: Record<string, unknown>[] = [];
     const debug: string[] = [];
+    const diagnostics: string[] = [];
     const session = new CodexAppServerSession({
       onOutgoingMessage: (msg) => outgoing.push(msg),
       onHookEvent: () => undefined,
       onDebugLog: (message) => debug.push(message),
+      onAutoResumeDiagnostics: (diag) => diagnostics.push(diag.state),
       autoResumeCwd: "/repo",
     });
 
@@ -134,7 +174,13 @@ describe("codex app-server session", () => {
       method: "thread/resume",
       params: { threadId: "thread-b" },
     });
+    session.ingestMessage({
+      id: "decky-thread-resume:thread-b",
+      result: {},
+    });
     expect(debug.some((entry) => entry.includes("auto-resume selecting thread thread-b"))).toBe(true);
+    expect(diagnostics).toContain("resume-requested");
+    expect(diagnostics).toContain("resumed");
   });
 
   it("falls back to first loaded thread id when thread/list has no overlap", () => {

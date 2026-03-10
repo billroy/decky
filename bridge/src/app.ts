@@ -34,8 +34,10 @@ import {
 import { getBridgeToken, readRequestToken, redactActionForLog } from "./security.js";
 import {
   CodexAppServerProvider,
+  type CodexAppServerCompatibilityReport,
   type CodexAppServerLifecycleEvent,
   type CodexAppServerLifecycleState,
+  type CodexAutoResumeDiagnostics,
   type CodexApprovalDecision,
   type CodexAppServerHookEvent,
 } from "./codex-app-server-provider.js";
@@ -147,6 +149,8 @@ interface StatePayload {
       lastExitCode: number | null;
       lastExitSignal: string | null;
     };
+    compatibility: CodexAppServerCompatibilityReport;
+    autoResume: CodexAutoResumeDiagnostics;
     supervisor: {
       retries: number;
       maxRetries: number;
@@ -261,6 +265,25 @@ export function createApp(): DeckyApp {
     lastExitCode: null,
     lastExitSignal: null,
   };
+  let codexCompatibility: CodexAppServerCompatibilityReport = {
+    status: "unknown",
+    checkedAt: Date.now(),
+    protocolVersion: null,
+    advertisedMethods: null,
+    missingRequiredMethods: [],
+    detail: "not yet evaluated",
+  };
+  let codexAutoResumeDiagnostics: CodexAutoResumeDiagnostics = {
+    state: "disabled",
+    at: Date.now(),
+    cwd: null,
+    selectedThreadId: null,
+    strategy: null,
+    loadedCount: null,
+    listedCount: null,
+    reason: "not yet evaluated",
+    error: null,
+  };
   let codexRestartAttempts = 0;
   let codexRestartMaxAttempts = CODEX_RESTART_MAX_ATTEMPTS_DEFAULT;
   let codexNextRetryAt: number | null = null;
@@ -289,6 +312,8 @@ export function createApp(): DeckyApp {
       mode: codexIntegrationMode,
       enabled: codexMonitorEnabled,
       provider: { ...codexProviderHealth },
+      compatibility: { ...codexCompatibility },
+      autoResume: { ...codexAutoResumeDiagnostics },
       supervisor: {
         retries: codexRestartAttempts,
         maxRetries: codexRestartMaxAttempts,
@@ -707,6 +732,27 @@ export function createApp(): DeckyApp {
   );
   codexProviderHealth.state = codexMonitorEnabled ? "starting" : "disabled";
   codexProviderHealth.lastStateAt = codexMonitorEnabled ? Date.now() : null;
+  codexCompatibility = {
+    status: "unknown",
+    checkedAt: Date.now(),
+    protocolVersion: null,
+    advertisedMethods: null,
+    missingRequiredMethods: [],
+    detail: codexMonitorEnabled ? "awaiting initialize response" : "provider disabled",
+  };
+  codexAutoResumeDiagnostics = {
+    state: codexMonitorEnabled ? (codexAutoResumeCwd ? "skipped" : "disabled") : "disabled",
+    at: Date.now(),
+    cwd: codexAutoResumeCwd,
+    selectedThreadId: null,
+    strategy: null,
+    loadedCount: null,
+    listedCount: null,
+    reason: codexMonitorEnabled
+      ? (codexAutoResumeCwd ? "awaiting initialize" : "auto-resume disabled by configuration")
+      : "provider disabled",
+    error: null,
+  };
 
   function clearCodexRestartTimer(reason?: string): void {
     if (!codexRestartTimer) return;
@@ -808,6 +854,20 @@ export function createApp(): DeckyApp {
       },
       onDebugLog: (message) => {
         console.log(`[codex-app-server] ${message}`);
+      },
+      onCompatibility: (report) => {
+        codexCompatibility = report;
+        console.log(
+          `[codex-app-server] compatibility status=${report.status} detail=${report.detail}`,
+        );
+        emitState();
+      },
+      onAutoResumeDiagnostics: (diagnostics) => {
+        codexAutoResumeDiagnostics = diagnostics;
+        const selected = diagnostics.selectedThreadId ? ` thread=${diagnostics.selectedThreadId}` : "";
+        const reason = diagnostics.reason ? ` reason=${diagnostics.reason}` : "";
+        console.log(`[codex-app-server] auto-resume state=${diagnostics.state}${selected}${reason}`);
+        emitState();
       },
       onLifecycle: (event) => {
         updateCodexHealthFromLifecycle(event);

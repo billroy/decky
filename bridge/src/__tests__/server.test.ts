@@ -45,6 +45,9 @@ describe("GET /status", () => {
     expect(data.codex).toHaveProperty("mode", "app-server");
     expect(data.codex).toHaveProperty("enabled", false);
     expect(data.codex.provider).toHaveProperty("state", "disabled");
+    expect(data.codex.compatibility).toBeDefined();
+    expect(data.codex.autoResume).toBeDefined();
+    expect(data.codex.supervisor).toBeDefined();
   });
 });
 
@@ -59,6 +62,8 @@ describe("GET /debug/codex-provider", () => {
     expect(data.codexProvider.mode).toBe("app-server");
     expect(data.codexProvider.enabled).toBe(false);
     expect(data.codexProvider.provider.state).toBe("disabled");
+    expect(data.codexProvider.compatibility).toBeDefined();
+    expect(data.codexProvider.autoResume).toBeDefined();
     expect(Array.isArray(data.lifecycle)).toBe(true);
   });
 });
