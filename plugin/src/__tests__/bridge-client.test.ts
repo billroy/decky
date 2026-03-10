@@ -207,4 +207,27 @@ describe("BridgeClient", () => {
     expect(onConfig).toHaveBeenCalled();
     client.disconnect();
   });
+
+  it("recovers when token becomes available after an initial unauthorized disconnect", async () => {
+    const savedDeckyHome = process.env.DECKY_HOME;
+    const missingHome = join(process.cwd(), `.decky-missing-${Date.now()}`);
+    try {
+      process.env.DECKY_HOME = missingHome;
+      const client = new BridgeClient(bridgeUrl);
+      client.connect();
+
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      process.env.DECKY_HOME = TEST_DECKY_HOME;
+
+      await waitForConnection(client, (s) => s === "connected", 6000);
+      expect(client.getConnectionStatus()).toBe("connected");
+      client.disconnect();
+    } finally {
+      if (savedDeckyHome === undefined) {
+        delete process.env.DECKY_HOME;
+      } else {
+        process.env.DECKY_HOME = savedDeckyHome;
+      }
+    }
+  });
 });
