@@ -175,6 +175,12 @@ function parseCodexIntegrationMode(value: unknown): CodexIntegrationMode {
   return "app-server";
 }
 
+function parseOptionalEnvString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 function isCodexAppServerHookEvent(event: HookPayload | CodexAppServerHookEvent): event is CodexAppServerHookEvent {
   const candidate = event as Record<string, unknown>;
   const payload = candidate.payload;
@@ -531,6 +537,7 @@ export function createApp(): DeckyApp {
     codexIntegrationMode === "app-server" &&
     process.env.DECKY_CODEX_COMPARE_MODE === "1" &&
     process.env.DECKY_ENABLE_CODEX_SQLITE === "1";
+  const codexAppServerCommand = parseOptionalEnvString(process.env.DECKY_CODEX_APP_SERVER_COMMAND);
   let codexMonitor: { start: () => Promise<boolean>; stop: () => void } | null = null;
   let codexShadowMonitor: CodexMonitor | null = null;
   let resolveCodexApproval: ((requestId: string, decision: CodexApprovalDecision) => Promise<void>) | null = null;
@@ -559,6 +566,7 @@ export function createApp(): DeckyApp {
 
     if (codexIntegrationMode === "app-server") {
       const codexAppServer = new CodexAppServerProvider({
+        command: codexAppServerCommand,
         onHookEvent: (event) => onCodexHookEvent(event),
         onError: (error) => {
           console.warn("[codex-app-server] error:", error);

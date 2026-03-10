@@ -334,6 +334,18 @@ export class CodexAppServerProvider {
       this.stdoutBuffer = "";
 
       child.on("error", (error) => {
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          (error as { code?: string }).code === "ENOENT"
+        ) {
+          this.onError(
+            new Error(
+              `codex app-server command not found: '${this.command}' (set DECKY_CODEX_APP_SERVER_COMMAND to an absolute executable path)`,
+            ),
+          );
+        }
         this.onError(error);
       });
 
