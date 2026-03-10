@@ -3,6 +3,7 @@ import {
   CodexAppServerSession,
   inferToolFromApprovalRequest,
   mapApprovalDecisionToResult,
+  resolveDefaultCodexAppServerCommand,
   toPublicRequestId,
 } from "../codex-app-server-provider.js";
 
@@ -40,6 +41,18 @@ describe("codex app-server provider helpers", () => {
     expect(mapApprovalDecisionToResult("applyPatchApproval", "cancel")).toEqual({
       decision: "abort",
     });
+  });
+
+  it("prefers bundled Codex app binary path when present", () => {
+    const resolved = resolveDefaultCodexAppServerCommand((path) => {
+      return path === "/Applications/Codex.app/Contents/Resources/codex";
+    });
+    expect(resolved).toBe("/Applications/Codex.app/Contents/Resources/codex");
+  });
+
+  it("falls back to codex PATH command when bundled binary path is absent", () => {
+    const resolved = resolveDefaultCodexAppServerCommand(() => false);
+    expect(resolved).toBe("codex");
   });
 });
 
@@ -143,4 +156,3 @@ describe("codex app-server session", () => {
     ]);
   });
 });
-

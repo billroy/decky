@@ -10,8 +10,8 @@ Implemented in this branch:
 - App Server provider/session scaffolding (`CodexAppServerProvider`, `CodexAppServerSession`).
 - JSON-RPC request correlation by request ID with queue-safe public request IDs.
 - Decision routing primitives for approve/deny/cancel responses (v2 + legacy request methods).
-- Bridge integration switch via `DECKY_CODEX_INTEGRATION=app-server|sqlite`, with `app-server` default.
-- SQLite mode is now legacy/opt-in only (`DECKY_ENABLE_CODEX_SQLITE=1` required).
+- Bridge integration now runs App Server only in runtime; SQLite integration path is disabled.
+- App Server command defaults to bundled Codex app binary path when present, then falls back to `codex` on PATH.
 - Mirror-flow action routing now requires App Server request correlation in `app-server` mode; missing request IDs fail fast instead of falling back to UI automation.
 - Unit tests for App Server helper/session behavior.
 
@@ -19,7 +19,7 @@ Still open before full cutover:
 - Production validation against real Codex App Server runtime and lifecycle edge cases.
 - Session ownership policy (`single active` enforced behavior and multi-session handling).
 - Final fail-open/fail-closed behavior confirmation for provider disconnect scenarios.
-- Soak validation before removing legacy SQLite opt-in path.
+- Soak validation before deleting remaining unused SQLite code/modules.
 
 ## Context
 
@@ -65,9 +65,9 @@ Replace SQLite log polling with the official Codex App Server event/approval cha
    - Continue emitting normalized state snapshots to plugin.
    - Internally map App Server events into existing bridge lifecycle transitions.
 
-4. Add explicit integration mode switch:
-   - `DECKY_CODEX_INTEGRATION=app-server|sqlite`
-   - Default initially `sqlite` during bake-in; promote to `app-server` after acceptance gates.
+4. Runtime mode is App Server only:
+   - SQLite runtime path is disabled.
+   - `DECKY_CODEX_INTEGRATION=sqlite` is ignored with a warning.
 
 ## Implementation Plan
 
@@ -86,9 +86,7 @@ Exit criteria:
 Deliverables:
 - Implement `CodexAppServerProvider` receive path only.
 - Mirror App Server events into debug endpoints without driving approval actions yet.
-- Add comparison mode:
-  - Run SQLite + App Server in parallel in dev/test.
-  - Log divergence between inferred SQLite state and App Server state.
+- Compare mode remains optional diagnostics only and is not part of runtime decision flow.
 
 Exit criteria:
 - No unexplained divergences in targeted scenarios:
@@ -102,17 +100,16 @@ Exit criteria:
 Deliverables:
 - Route Stream Deck approve/deny/cancel for Codex to App Server decision API using request IDs.
 - Keep existing mirror-settlement timeout safeguards while App Server path is proving out.
-- Retain SQLite provider as fallback if App Server is unavailable.
+- Fail fast when App Server request correlation is missing (no UI/sqlite fallback).
 
 Exit criteria:
 - End-to-end Codex approval flows pass via App Server without SQLite participation.
 - No stuck `awaiting-approval` in repeated stress runs.
 
-### Phase 3: Cutover + Fallback Policy
+### Phase 3: Hardening + Diagnostics
 
 Deliverables:
-- Switch default integration mode to `app-server`.
-- Keep `sqlite` behind explicit fallback flag for one release window.
+- Keep runtime App Server-only and improve operator visibility.
 - Expand diagnostics:
   - active request IDs
   - queue depth
@@ -126,7 +123,7 @@ Exit criteria:
 
 Deliverables:
 - Remove SQLite-specific parser/polling code and associated tests.
-- Remove related env flags/docs once fallback window closes.
+- Remove related env flags/docs.
 
 Exit criteria:
 - Single supported Codex integration path (App Server) with stable tests and docs.
