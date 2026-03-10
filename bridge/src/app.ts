@@ -544,10 +544,12 @@ export function createApp(): DeckyApp {
   ) {
     const source = options?.source ?? "hook";
     const requestId = options?.requestId ?? null;
-    // Clear any stale gate file when a new tool-approval cycle starts
     if (payload.event === "PreToolUse") {
-      clearGateFile();
-      const flow = options?.approvalFlow ?? "gate";
+      const flow = options?.approvalFlow ?? "mirror";
+      // Only touch the gate file in legacy gate flow
+      if (flow === "gate") {
+        clearGateFile();
+      }
       const targetApp = options?.targetApp ?? "claude";
       const nonce = options?.nonce ?? null;
       const current = sm.getSnapshot();
@@ -881,9 +883,9 @@ export function createApp(): DeckyApp {
     const nonceHeader = req.header("x-decky-nonce");
     const targetHeader = req.header("x-decky-target-app");
     const approvalFlow =
-      typeof flowHeader === "string" && flowHeader.trim().toLowerCase() === "mirror"
-        ? "mirror"
-        : "gate";
+      typeof flowHeader === "string" && flowHeader.trim().toLowerCase() === "gate"
+        ? "gate"
+        : "mirror";
     const nonce =
       typeof nonceHeader === "string" && nonceHeader.trim().length > 0
         ? nonceHeader.trim()

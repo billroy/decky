@@ -21,7 +21,10 @@ function ensureDir(): void {
   mkdirSync(DECKY_DIR, { recursive: true, mode: 0o700 });
 }
 
-/** Write the approval result so the polling hook script can read it. */
+/**
+ * Write the approval result so the polling hook script can read it.
+ * @deprecated Gate flow is legacy. Default is mirror. Set DECKY_APPROVAL_FLOW=gate to use.
+ */
 export function writeGateFile(result: ApprovalResult, nonce?: string): void {
   ensureDir();
   const payload = nonce ? `${nonce}:${result}` : result;
@@ -30,7 +33,10 @@ export function writeGateFile(result: ApprovalResult, nonce?: string): void {
   renameSync(tmp, GATE_FILE);
 }
 
-/** Remove the gate file (idempotent). */
+/**
+ * Remove the gate file (idempotent).
+ * @deprecated Gate flow is legacy. Default is mirror. Set DECKY_APPROVAL_FLOW=gate to use.
+ */
 export function clearGateFile(): void {
   try {
     unlinkSync(GATE_FILE);

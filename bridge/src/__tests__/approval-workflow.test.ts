@@ -2,8 +2,8 @@
  * End-to-end approval workflow tests.
  *
  * Validates that:
- *   1. PreToolUse hook clears the gate file
- *   2. Socket.io approve/deny/cancel actions write the gate file
+ *   1. Gate flow: PreToolUse hook clears the gate file, approve/deny/cancel write it
+ *   2. Mirror flow (default): PreToolUse does NOT touch the gate file
  *   3. State transitions match the expected approval flow
  */
 
@@ -47,13 +47,18 @@ afterEach(() => {
   saveConfig({ enableApproveOnce: true, enableDictation: true });
 });
 
-async function postHook(body: Record<string, unknown>) {
+async function postHook(body: Record<string, unknown>, headers: Record<string, string> = {}) {
   const res = await fetch(`${baseUrl}/hook`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "x-decky-token": token },
+    headers: { "Content-Type": "application/json", "x-decky-token": token, ...headers },
     body: JSON.stringify(body),
   });
   return { status: res.status, data: await res.json() };
+}
+
+/** Post a hook event using the legacy gate approval flow. */
+async function postHookGate(body: Record<string, unknown>) {
+  return postHook(body, { "x-decky-approval-flow": "gate" });
 }
 
 function connectClient(): Promise<ClientSocket> {
@@ -75,21 +80,18 @@ function waitForState(sock: ClientSocket, targetState: string): Promise<void> {
   });
 }
 
-describe("approval workflow — gate file", () => {
-  it("PreToolUse clears any stale gate file", async () => {
-    // Create a stale gate file
+describe("approval workflow — gate file (legacy, explicit header)", () => {
+  it("PreToolUse with gate flow clears any stale gate file", async () => {
     const { writeGateFile: write } = await import("../approval-gate.js");
     write("approve");
     expect(gateFileExists()).toBe(true);
 
-    // POST PreToolUse — should clear it
-    await postHook({ event: "PreToolUse", tool: "Bash" });
+    await postHookGate({ event: "PreToolUse", tool: "Bash" });
     expect(gateFileExists()).toBe(false);
   });
 
   it("approve action writes 'approve' to gate file", async () => {
-    // Enter awaiting-approval state
-    await postHook({ event: "PreToolUse", tool: "Bash" });
+    await postHookGate({ event: "PreToolUse", tool: "Bash" });
 
     const sock = await connectClient();
     const statePromise = waitForState(sock, "tool-executing");
@@ -103,8 +105,7 @@ describe("approval workflow — gate file", () => {
   });
 
   it("deny action writes 'deny' to gate file", async () => {
-    // Enter awaiting-approval state
-    await postHook({ event: "PreToolUse", tool: "Bash" });
+    await postHookGate({ event: "PreToolUse", tool: "Bash" });
 
     const sock = await connectClient();
     const statePromise = waitForState(sock, "thinking");
@@ -118,8 +119,7 @@ describe("approval workflow — gate file", () => {
   });
 
   it("cancel action writes 'cancel' to gate file", async () => {
-    // Enter awaiting-approval state
-    await postHook({ event: "PreToolUse", tool: "Bash" });
+    await postHookGate({ event: "PreToolUse", tool: "Bash" });
 
     const sock = await connectClient();
     const statePromise = waitForState(sock, "stopped");
@@ -133,7 +133,7 @@ describe("approval workflow — gate file", () => {
   });
 
   it("approveOnceInClaude writes 'approve' and transitions to tool-executing", async () => {
-    await postHook({ event: "PreToolUse", tool: "Bash" });
+    await postHookGate({ event: "PreToolUse", tool: "Bash" });
 
     const sock = await connectClient();
     const statePromise = waitForState(sock, "tool-executing");
@@ -155,12 +155,42 @@ describe("approval workflow — gate file", () => {
   });
 });
 
-describe("approval workflow — full cycle", () => {
+describe("approval workflow — mirror flow (default)", () => {
+  it("PreToolUse with mirror flow does NOT clear gate file", async () => {
+    const { writeGateFile: write } = await import("../approval-gate.js");
+    write("approve");
+    expect(gateFileExists()).toBe(true);
+
+    // Default (no header) is now mirror
+    await postHook({ event: "PreToolUse", tool: "Bash" });
+    // Gate file should still exist — mirror flow doesn't touch it
+    expect(gateFileExists()).toBe(true);
+  });
+
+  it("default flow without header is mirror", async () => {
+    const { data } = await postHook({ event: "PreToolUse", tool: "Bash" });
+    expect(data.state.approval?.flow).toBe("mirror");
+  });
+
+  it("explicit mirror header sets mirror flow", async () => {
+    const { data } = await postHook(
+      { event: "PreToolUse", tool: "Bash" },
+      { "x-decky-approval-flow": "mirror" },
+    );
+    expect(data.state.approval?.flow).toBe("mirror");
+  });
+
+  it("explicit gate header still works for legacy flow", async () => {
+    const { data } = await postHookGate({ event: "PreToolUse", tool: "Bash" });
+    expect(data.state.approval?.flow).toBe("gate");
+  });
+});
+
+describe("approval workflow — full cycle (gate flow)", () => {
   it("approve: idle → awaiting-approval → tool-executing → thinking → idle", async () => {
-    // Force reset to idle (previous tests may leave state as stopped)
     decky.sm.forceState("idle", "test reset");
 
-    const { data: s0 } = await postHook({ event: "PreToolUse", tool: "Write" });
+    const { data: s0 } = await postHookGate({ event: "PreToolUse", tool: "Write" });
     expect(s0.state.state).toBe("awaiting-approval");
 
     const sock = await connectClient();
@@ -168,12 +198,10 @@ describe("approval workflow — full cycle", () => {
     sock.emit("action", { action: "approve" });
     await execPromise;
 
-    // Tool completes
-    const { data: s2 } = await postHook({ event: "PostToolUse", tool: "Write" });
+    const { data: s2 } = await postHookGate({ event: "PostToolUse", tool: "Write" });
     expect(s2.state.state).toBe("thinking");
 
-    // Session ends
-    const { data: s3 } = await postHook({ event: "Stop" });
+    const { data: s3 } = await postHookGate({ event: "Stop" });
     expect(s3.state.state).toBe("idle");
     sock.disconnect();
   });
@@ -181,7 +209,7 @@ describe("approval workflow — full cycle", () => {
   it("deny: idle → awaiting-approval → thinking → idle", async () => {
     decky.sm.forceState("idle", "test reset");
 
-    const { data: s0 } = await postHook({ event: "PreToolUse", tool: "Bash" });
+    const { data: s0 } = await postHookGate({ event: "PreToolUse", tool: "Bash" });
     expect(s0.state.state).toBe("awaiting-approval");
 
     const sock = await connectClient();
@@ -189,10 +217,9 @@ describe("approval workflow — full cycle", () => {
     sock.emit("action", { action: "deny" });
     await thinkPromise;
 
-    // Gate file should show deny
     expect(readFileSync(GATE_FILE_PATH, "utf-8")).toBe("deny");
 
-    const { data: s2 } = await postHook({ event: "Stop" });
+    const { data: s2 } = await postHookGate({ event: "Stop" });
     expect(s2.state.state).toBe("idle");
     sock.disconnect();
   });
@@ -200,13 +227,13 @@ describe("approval workflow — full cycle", () => {
   it("new PreToolUse after cancel re-enters awaiting-approval and accepts approve", async () => {
     decky.sm.forceState("idle", "test reset");
 
-    await postHook({ event: "PreToolUse", tool: "Bash" });
+    await postHookGate({ event: "PreToolUse", tool: "Bash" });
     const sock = await connectClient();
     const stoppedPromise = waitForState(sock, "stopped");
     sock.emit("action", { action: "cancel" });
     await stoppedPromise;
 
-    const { data: s1 } = await postHook({ event: "PreToolUse", tool: "Bash" });
+    const { data: s1 } = await postHookGate({ event: "PreToolUse", tool: "Bash" });
     expect(s1.state.state).toBe("awaiting-approval");
 
     const execPromise = waitForState(sock, "tool-executing");
@@ -219,7 +246,7 @@ describe("approval workflow — full cycle", () => {
   it("new PreToolUse from tool-executing re-enters awaiting-approval and accepts approve", async () => {
     decky.sm.forceState("tool-executing", "test reset");
 
-    const { data: s1 } = await postHook({ event: "PreToolUse", tool: "Bash" });
+    const { data: s1 } = await postHookGate({ event: "PreToolUse", tool: "Bash" });
     expect(s1.state.state).toBe("awaiting-approval");
     expect(s1.state.previousState).toBe("tool-executing");
 
