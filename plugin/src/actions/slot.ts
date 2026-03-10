@@ -644,9 +644,12 @@ export class SlotAction extends SingletonAction {
 
     for (const [actionId, instance] of allActions) {
       const slotIndex = getSlotIndex(actionId);
-      if (slotIndex >= 0 && slotIndex <= 3) {
-        const config = getSlotConfig("awaiting-approval", slotIndex, toolName, macros, approval);
-        approvalSlots.push({ instance, finalSvg: config.svg, slotIndex });
+      if (slotIndex < 0) continue;
+      const deviceKey = getDeviceKey(actionId);
+      const layoutSlotIndex = resolveLayoutSlotIndex("awaiting-approval", slotIndex, deviceKey);
+      if (layoutSlotIndex >= 0 && layoutSlotIndex <= 3) {
+        const config = getSlotConfig("awaiting-approval", layoutSlotIndex, toolName, macros, approval);
+        approvalSlots.push({ instance, finalSvg: config.svg, slotIndex: layoutSlotIndex });
       }
     }
 
@@ -690,10 +693,17 @@ export class SlotAction extends SingletonAction {
     // --- Restore non-approval slots (4+) to their proper state ---
     await Promise.all(
       [...allActions.entries()]
-        .filter(([id]) => getSlotIndex(id) > 3)
+        .filter(([id]) => {
+          const si = getSlotIndex(id);
+          if (si < 0) return false;
+          const dk = getDeviceKey(id);
+          return resolveLayoutSlotIndex("awaiting-approval", si, dk) > 3;
+        })
         .map(async ([id, instance]) => {
           const slotIndex = getSlotIndex(id);
-          const config = getSlotConfig("awaiting-approval", slotIndex, toolName, macros, approval);
+          const deviceKey = getDeviceKey(id);
+          const layoutSlotIndex = resolveLayoutSlotIndex("awaiting-approval", slotIndex, deviceKey);
+          const config = getSlotConfig("awaiting-approval", layoutSlotIndex, toolName, macros, approval);
           const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
           try { await instance.setImage(imageData); } catch { /* */ }
         }),
@@ -730,9 +740,12 @@ export class SlotAction extends SingletonAction {
 
     for (const [actionId, instance] of allActions) {
       const slotIndex = getSlotIndex(actionId);
-      if (slotIndex >= 0 && slotIndex <= 3) {
-        const config = getSlotConfig("awaiting-approval", slotIndex, toolName, macros, approval);
-        approvalSlots.push({ instance, currentSvg: config.svg, slotIndex });
+      if (slotIndex < 0) continue;
+      const deviceKey = getDeviceKey(actionId);
+      const layoutSlotIndex = resolveLayoutSlotIndex("awaiting-approval", slotIndex, deviceKey);
+      if (layoutSlotIndex >= 0 && layoutSlotIndex <= 3) {
+        const config = getSlotConfig("awaiting-approval", layoutSlotIndex, toolName, macros, approval);
+        approvalSlots.push({ instance, currentSvg: config.svg, slotIndex: layoutSlotIndex });
       }
     }
 
