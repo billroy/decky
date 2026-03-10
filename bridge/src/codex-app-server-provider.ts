@@ -7,6 +7,9 @@ export type JsonRpcRequestId = string | number;
 
 const PUBLIC_REQUEST_PREFIX = "jsonrpc:";
 const INIT_REQUEST_ID = "decky-init";
+const AUTO_RESUME_LOADED_LIST_REQUEST_ID = "decky-thread-loaded-list";
+const AUTO_RESUME_LIST_REQUEST_ID = "decky-thread-list";
+const AUTO_RESUME_RESUME_REQUEST_PREFIX = "decky-thread-resume:";
 
 interface JsonRpcRequest {
   id: JsonRpcRequestId;
@@ -33,6 +36,13 @@ interface PendingApproval {
   itemId: string | null;
 }
 
+interface AutoResumeThread {
+  id: string;
+  cwd: string | null;
+  statusType: string | null;
+  activeFlags: Set<string>;
+}
+
 export interface CodexAppServerHookEvent {
   payload: HookPayload;
   requestId: string | null;
@@ -41,11 +51,13 @@ export interface CodexAppServerHookEvent {
 export interface CodexAppServerSessionOptions {
   onHookEvent: (event: CodexAppServerHookEvent) => void;
   onOutgoingMessage?: (message: Record<string, unknown>) => void;
+  onDebugLog?: (message: string) => void;
   onError?: (error: unknown) => void;
   clientInfo?: {
     name: string;
     version: string;
   };
+  autoResumeCwd?: string | null;
 }
 
 export interface CodexAppServerProviderOptions extends CodexAppServerSessionOptions {
@@ -53,6 +65,7 @@ export interface CodexAppServerProviderOptions extends CodexAppServerSessionOpti
   args?: string[];
   env?: NodeJS.ProcessEnv;
   onDebugLog?: (message: string) => void;
+  autoResumeCwd?: string | null;
 }
 
 const COMMAND_APPROVAL_METHOD = "item/commandExecution/requestApproval";
@@ -112,6 +125,38 @@ function parseItemId(params: unknown): string | null {
   return typeof obj.itemId === "string" ? obj.itemId : null;
 }
 
+function parseAutoResumeThread(value: unknown): AutoResumeThread | null {
+  const obj = asRecord(value);
+  if (!obj || typeof obj.id !== "string" || obj.id.trim().length === 0) return null;
+  const statusObj = asRecord(obj.status);
+  const activeFlags = new Set<string>();
+  if (statusObj && Array.isArray(statusObj.activeFlags)) {
+    for (const flag of statusObj.activeFlags) {
+      if (typeof flag === "string" && flag.trim().length > 0) activeFlags.add(flag);
+    }
+  }
+  return {
+    id: obj.id,
+    cwd: typeof obj.cwd === "string" ? obj.cwd : null,
+    statusType: statusObj && typeof statusObj.type === "string" ? statusObj.type : null,
+    activeFlags,
+  };
+}
+
+function selectPreferredAutoResumeThread(threads: AutoResumeThread[], cwd: string | null): AutoResumeThread | null {
+  if (threads.length === 0) return null;
+  let best: { thread: AutoResumeThread; score: number } | null = null;
+  for (const thread of threads) {
+    let score = 0;
+    if (cwd && thread.cwd === cwd) score += 100;
+    if (thread.statusType === "active") score += 30;
+    if (thread.activeFlags.has("waitingOnApproval")) score += 20;
+    if (thread.activeFlags.has("waitingOnUserInput")) score += 10;
+    if (!best || score > best.score) best = { thread, score };
+  }
+  return best?.thread ?? threads[0];
+}
+
 function titleCase(value: string): string {
   return value
     .split(/[_\s-]+/g)
@@ -159,18 +204,25 @@ export function mapApprovalDecisionToResult(method: string, decision: CodexAppro
 export class CodexAppServerSession {
   private readonly onHookEvent: (event: CodexAppServerHookEvent) => void;
   private readonly onOutgoingMessage: (message: Record<string, unknown>) => void;
+  private readonly onDebugLog: (message: string) => void;
   private readonly onError: (error: unknown) => void;
   private readonly clientInfo: { name: string; version: string };
+  private readonly autoResumeCwd: string | null;
 
   private handshakeInitializedSent = false;
   private pendingByRequestId = new Map<string, PendingApproval>();
   private pendingByItemId = new Map<string, string>();
+  private autoResumeLoadedThreadIds: Set<string> | null = null;
 
   constructor(options: CodexAppServerSessionOptions) {
     this.onHookEvent = options.onHookEvent;
     this.onOutgoingMessage = options.onOutgoingMessage ?? (() => undefined);
+    this.onDebugLog = options.onDebugLog ?? (() => undefined);
     this.onError = options.onError ?? ((error) => console.warn("[codex-app-server] session error:", error));
     this.clientInfo = options.clientInfo ?? { name: "decky-bridge", version: "0.1.0" };
+    this.autoResumeCwd = typeof options.autoResumeCwd === "string" && options.autoResumeCwd.trim().length > 0
+      ? options.autoResumeCwd.trim()
+      : null;
   }
 
   startHandshake(): void {
@@ -189,6 +241,7 @@ export class CodexAppServerSession {
   stop(): void {
     this.pendingByRequestId.clear();
     this.pendingByItemId.clear();
+    this.autoResumeLoadedThreadIds = null;
     this.handshakeInitializedSent = false;
   }
 
@@ -255,13 +308,31 @@ export class CodexAppServerSession {
   }
 
   private handleResponse(res: JsonRpcResponse): void {
-    if (res.id !== INIT_REQUEST_ID || this.handshakeInitializedSent) return;
-    if (res.error) {
-      this.onError(res.error);
+    if (res.id === INIT_REQUEST_ID && !this.handshakeInitializedSent) {
+      if (res.error) {
+        this.onError(res.error);
+        return;
+      }
+      this.handshakeInitializedSent = true;
+      this.onOutgoingMessage({ method: "initialized" });
+      this.startAutoResumeIfConfigured();
       return;
     }
-    this.handshakeInitializedSent = true;
-    this.onOutgoingMessage({ method: "initialized" });
+    if (res.id === AUTO_RESUME_LOADED_LIST_REQUEST_ID) {
+      this.handleAutoResumeLoadedListResponse(res);
+      return;
+    }
+    if (res.id === AUTO_RESUME_LIST_REQUEST_ID) {
+      this.handleAutoResumeListResponse(res);
+      return;
+    }
+    if (typeof res.id === "string" && res.id.startsWith(AUTO_RESUME_RESUME_REQUEST_PREFIX)) {
+      if (res.error) {
+        this.onError(res.error);
+        return;
+      }
+      this.onDebugLog("[codex-app-server] auto-resume succeeded");
+    }
   }
 
   private handleNotification(notification: JsonRpcNotification): void {
@@ -301,6 +372,100 @@ export class CodexAppServerSession {
       requestId: publicRequestId,
     });
   }
+
+  private startAutoResumeIfConfigured(): void {
+    if (!this.autoResumeCwd) return;
+    this.onDebugLog(`[codex-app-server] auto-resume scanning threads for cwd=${this.autoResumeCwd}`);
+    this.autoResumeLoadedThreadIds = null;
+    this.onOutgoingMessage({
+      id: AUTO_RESUME_LOADED_LIST_REQUEST_ID,
+      method: "thread/loaded/list",
+      params: { limit: 50 },
+    });
+  }
+
+  private requestAutoResumeThreadList(): void {
+    this.onOutgoingMessage({
+      id: AUTO_RESUME_LIST_REQUEST_ID,
+      method: "thread/list",
+      params: { limit: 100, sortKey: "updated_at" },
+    });
+  }
+
+  private handleAutoResumeLoadedListResponse(res: JsonRpcResponse): void {
+    if (res.error) {
+      this.onError(res.error);
+      this.autoResumeLoadedThreadIds = null;
+      this.requestAutoResumeThreadList();
+      return;
+    }
+    const result = asRecord(res.result);
+    const rawIds = Array.isArray(result?.data) ? result.data : [];
+    const ids = rawIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0);
+    this.autoResumeLoadedThreadIds = new Set(ids);
+    this.onDebugLog(`[codex-app-server] auto-resume loaded threads=${ids.length}`);
+    this.requestAutoResumeThreadList();
+  }
+
+  private handleAutoResumeListResponse(res: JsonRpcResponse): void {
+    if (res.error) {
+      this.onError(res.error);
+      return;
+    }
+    const result = asRecord(res.result);
+    const rows = Array.isArray(result?.data) ? result.data : [];
+    const threads = rows.map((value) => parseAutoResumeThread(value)).filter((value): value is AutoResumeThread => value !== null);
+    if (threads.length === 0) {
+      const fallbackLoaded = this.autoResumeLoadedThreadIds?.values().next().value ?? null;
+      if (typeof fallbackLoaded === "string" && fallbackLoaded.trim().length > 0) {
+        this.onDebugLog(`[codex-app-server] auto-resume selecting loaded thread ${fallbackLoaded}`);
+        this.onOutgoingMessage({
+          id: `${AUTO_RESUME_RESUME_REQUEST_PREFIX}${fallbackLoaded}`,
+          method: "thread/resume",
+          params: { threadId: fallbackLoaded },
+        });
+        return;
+      }
+      this.onDebugLog("[codex-app-server] auto-resume found no existing threads");
+      return;
+    }
+
+    let candidatePool = threads;
+    if (this.autoResumeLoadedThreadIds && this.autoResumeLoadedThreadIds.size > 0) {
+      const loadedPool = threads.filter((entry) => this.autoResumeLoadedThreadIds?.has(entry.id));
+      if (loadedPool.length > 0) {
+        candidatePool = loadedPool;
+      } else {
+        const fallbackLoaded = this.autoResumeLoadedThreadIds.values().next().value ?? null;
+        if (typeof fallbackLoaded === "string" && fallbackLoaded.trim().length > 0) {
+          this.onDebugLog(`[codex-app-server] auto-resume selecting loaded thread ${fallbackLoaded}`);
+          this.onOutgoingMessage({
+            id: `${AUTO_RESUME_RESUME_REQUEST_PREFIX}${fallbackLoaded}`,
+            method: "thread/resume",
+            params: { threadId: fallbackLoaded },
+          });
+          return;
+        }
+        this.onDebugLog("[codex-app-server] auto-resume loaded list did not overlap thread/list results");
+      }
+    }
+
+    const chosen = selectPreferredAutoResumeThread(candidatePool, this.autoResumeCwd);
+    const threadId = chosen?.id ?? null;
+    if (!threadId) {
+      this.onDebugLog("[codex-app-server] auto-resume thread id missing");
+      return;
+    }
+
+    this.onDebugLog(
+      `[codex-app-server] auto-resume selecting thread ${threadId} (cwd=${chosen?.cwd ?? "unknown"} status=${chosen?.statusType ?? "unknown"})`,
+    );
+    this.onOutgoingMessage({
+      id: `${AUTO_RESUME_RESUME_REQUEST_PREFIX}${threadId}`,
+      method: "thread/resume",
+      params: { threadId },
+    });
+  }
 }
 
 export class CodexAppServerProvider {
@@ -326,8 +491,10 @@ export class CodexAppServerProvider {
     this.session = new CodexAppServerSession({
       onHookEvent: options.onHookEvent,
       onOutgoingMessage: (msg) => this.sendMessage(msg),
+      onDebugLog: this.onDebugLog,
       onError: this.onError,
       clientInfo: options.clientInfo,
+      autoResumeCwd: options.autoResumeCwd,
     });
   }
 
