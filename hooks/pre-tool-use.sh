@@ -12,10 +12,10 @@
 set -euo pipefail
 
 BRIDGE_URL="${DECKY_BRIDGE_URL:-http://localhost:9130}"
-APPROVAL_FLOW_RAW="${DECKY_APPROVAL_FLOW:-gate}"
+APPROVAL_FLOW_RAW="${DECKY_APPROVAL_FLOW:-mirror}"
 APPROVAL_FLOW="$(printf '%s' "$APPROVAL_FLOW_RAW" | tr '[:upper:]' '[:lower:]')"
-if [ "$APPROVAL_FLOW" != "mirror" ]; then
-  APPROVAL_FLOW="gate"
+if [ "$APPROVAL_FLOW" != "gate" ]; then
+  APPROVAL_FLOW="mirror"
 fi
 GATE_FILE="$HOME/.decky/approval-gate"
 TOKEN_FILE="$HOME/.decky/bridge-token"
