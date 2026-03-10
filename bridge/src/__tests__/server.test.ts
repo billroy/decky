@@ -106,6 +106,24 @@ describe("POST /hook", () => {
     expect(data.state.state).toBe("thinking");
   });
 
+  it("drains hook mirror queue on PostToolUse even when tool labels differ", async () => {
+    await postHook({ event: "PreToolUse", tool: "Reset" });
+    await postHook({ event: "Stop" });
+
+    const pre = await postHook(
+      { event: "PreToolUse", tool: "Agent" },
+      { "x-decky-approval-flow": "mirror" },
+    );
+    expect(pre.status).toBe(200);
+    expect(pre.data.state.state).toBe("awaiting-approval");
+    expect(pre.data.state.approval?.pending).toBe(1);
+
+    const post = await postHook({ event: "PostToolUse", tool: "Bash" });
+    expect(post.status).toBe(200);
+    expect(post.data.state.state).toBe("thinking");
+    expect(post.data.state.approval).toBeNull();
+  });
+
   it("rejects unauthorized requests", async () => {
     const res = await fetch(`${baseUrl}/hook`, {
       method: "POST",
