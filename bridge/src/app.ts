@@ -322,6 +322,22 @@ export function createApp(): DeckyApp {
     return removed;
   }
 
+  function shiftApprovalRequestForSource(source: HookSource, requestId: string | null = null): ApprovalQueueItem | null {
+    if (approvalQueue.length === 0) return null;
+    if (requestId) {
+      const idx = approvalQueue.findIndex((entry) => entry.source === source && entry.requestId === requestId);
+      if (idx < 0) return null;
+      const [removed] = approvalQueue.splice(idx, 1);
+      applyPendingFromQueue();
+      return removed;
+    }
+    const idx = approvalQueue.findIndex((entry) => entry.source === source);
+    if (idx < 0) return null;
+    const [removed] = approvalQueue.splice(idx, 1);
+    applyPendingFromQueue();
+    return removed;
+  }
+
   function statePayload(snapshot = sm.getSnapshot()): StatePayload {
     const active = currentApproval();
     return {
@@ -462,7 +478,7 @@ export function createApp(): DeckyApp {
         },
       );
       if (payload.event !== "PreToolUse") {
-        shiftApprovalRequest(requestId);
+        shiftApprovalRequestForSource("codex-monitor", requestId);
         const next = currentApproval();
         if (next && snapshot.state !== "awaiting-approval") {
           snapshot = sm.forceState("awaiting-approval", "queued approval pending", next.tool);
@@ -484,7 +500,7 @@ export function createApp(): DeckyApp {
       !pendingMirrorSettlement &&
       (payload.event === "PostToolUse" || payload.event === "Stop" || payload.event === "SubagentStop")
     ) {
-      const shifted = shiftApprovalRequest(requestId);
+      const shifted = shiftApprovalRequestForSource("codex-monitor", requestId);
       if (shifted) {
         const next = currentApproval();
         if (next && snapshot.state !== "awaiting-approval") {
@@ -499,17 +515,13 @@ export function createApp(): DeckyApp {
       source === "hook" &&
       (payload.event === "PostToolUse" || payload.event === "Stop" || payload.event === "SubagentStop")
     ) {
-      const active = currentApproval();
-      if (active) {
-        const toolMatches = !payload.tool || !active.tool || payload.tool === active.tool;
-        if (toolMatches) {
-          shiftApprovalRequest();
-          const next = currentApproval();
-          if (next && snapshot.state !== "awaiting-approval") {
-            snapshot = sm.forceState("awaiting-approval", "queued approval pending", next.tool);
-          } else {
-            emitState(snapshot);
-          }
+      const shifted = shiftApprovalRequestForSource("hook", requestId);
+      if (shifted) {
+        const next = currentApproval();
+        if (next && snapshot.state !== "awaiting-approval") {
+          snapshot = sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+        } else {
+          emitState(snapshot);
         }
       }
     }
