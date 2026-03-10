@@ -1,13 +1,13 @@
-export type ApprovalTraceStatus = "open" | "settling" | "settled" | "failed" | "timed-out";
+type ApprovalTraceStatus = "open" | "settling" | "settled" | "failed" | "timed-out";
 
-export interface ApprovalTraceEvent {
+interface ApprovalTraceEvent {
   ts: number;
   stage: string;
   message: string;
   data?: Record<string, unknown>;
 }
 
-export interface ApprovalTraceRecord {
+interface ApprovalTraceRecord {
   actionId: string;
   action: string;
   targetApp: "claude" | "codex" | null;
@@ -95,16 +95,6 @@ export class ApprovalTraceStore {
     trace.finalState = input.finalState;
     trace.finalReason = input.finalReason;
     trace.updatedAt = Date.now();
-  }
-
-  has(actionId: string): boolean {
-    return !!this.findMutable(actionId);
-  }
-
-  get(actionId: string): ApprovalTraceRecord | null {
-    const found = this.traces.find((t) => t.actionId === actionId);
-    if (!found) return null;
-    return this.cloneTrace(found);
   }
 
   list(limit = 25): ApprovalTraceRecord[] {

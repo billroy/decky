@@ -74,5 +74,3 @@ export function redactActionForLog(data: Record<string, unknown>): Record<string
   }
   return out;
 }
-
-export const BRIDGE_TOKEN_PATH = TOKEN_PATH;

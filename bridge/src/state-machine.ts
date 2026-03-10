@@ -5,7 +5,7 @@
  * Transitions are driven by Claude Code lifecycle hook events.
  */
 
-export type State =
+type State =
   | "idle"
   | "thinking"
   | "awaiting-approval"
@@ -27,7 +27,7 @@ export interface HookPayload {
   [key: string]: unknown;
 }
 
-export interface StateSnapshot {
+interface StateSnapshot {
   state: State;
   previousState: State | null;
   tool: string | null;

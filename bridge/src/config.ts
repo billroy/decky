@@ -18,16 +18,16 @@ import {
 import { join } from "node:path";
 import { homedir } from "node:os";
 
-export interface ColorOverrides {
+interface ColorOverrides {
   bg?: string;
   text?: string;
   icon?: string;
 }
 
-export type WidgetKind = "bridge-status";
-export type WidgetRefreshMode = "onClick" | "interval";
+type WidgetKind = "bridge-status";
+type WidgetRefreshMode = "onClick" | "interval";
 
-export interface WidgetDef {
+interface WidgetDef {
   kind: WidgetKind;
   refreshMode?: WidgetRefreshMode;
   intervalMinutes?: number;
@@ -49,7 +49,7 @@ export type Theme =
   | "rainbow"
   | "random";
 
-export interface MacroDef {
+interface MacroDef {
   label: string;
   text: string;
   icon?: string;
@@ -69,7 +69,7 @@ export interface MacroDef {
   widget?: WidgetDef;
 }
 
-export interface DeckyConfig {
+interface DeckyConfig {
   macros: MacroDef[];
   approvalTimeout: number;
   theme: Theme;
@@ -121,16 +121,16 @@ const DEFAULT_CONFIG: DeckyConfig = {
   enableDictation: true,
 };
 
-export const MAX_MACROS = 36;
-export const MAX_LABEL_LENGTH = 20;
-export const MAX_TEXT_LENGTH = 2000;
-export const MAX_ICON_LENGTH = 64;
-export const MIN_FONT_SIZE = 16;
-export const MAX_FONT_SIZE = 42;
-export const MIN_WIDGET_INTERVAL_MINUTES = 1;
-export const MAX_WIDGET_INTERVAL_MINUTES = 60;
-export const MIN_APPROVAL_TIMEOUT = 5;
-export const MAX_APPROVAL_TIMEOUT = 300;
+const MAX_MACROS = 36;
+const MAX_LABEL_LENGTH = 20;
+const MAX_TEXT_LENGTH = 2000;
+const MAX_ICON_LENGTH = 64;
+const MIN_FONT_SIZE = 16;
+const MAX_FONT_SIZE = 42;
+const MIN_WIDGET_INTERVAL_MINUTES = 1;
+const MAX_WIDGET_INTERVAL_MINUTES = 60;
+const MIN_APPROVAL_TIMEOUT = 5;
+const MAX_APPROVAL_TIMEOUT = 300;
 const ICON_ALIASES: Readonly<Record<string, string>> = {
   checkmark: "check",
   stop: "octagon-x",
@@ -613,4 +613,3 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
 
 /** Exposed for testing. */
 export const CONFIG_PATH_VALUE = CONFIG_PATH;
-export const DECKY_DIR_VALUE = DECKY_DIR;

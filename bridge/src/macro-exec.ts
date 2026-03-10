@@ -216,9 +216,9 @@ export function approveOnceInClaude(): Promise<void> {
   return approveInTargetApp("claude");
 }
 
-export type ApprovalTargetApp = "claude" | "codex";
+type ApprovalTargetApp = "claude" | "codex";
 
-export interface ApprovalAttempt {
+interface ApprovalAttempt {
   timestamp: number;
   contextId: string | null;
   phase: "approve" | "dismiss";
@@ -462,7 +462,7 @@ async function runFrontmostCodexKeystroke(keystrokeScript: string): Promise<bool
   return true;
 }
 
-export async function approveInTargetApp(targetApp: ApprovalTargetApp): Promise<void> {
+async function approveInTargetApp(targetApp: ApprovalTargetApp): Promise<void> {
   if (targetApp === "codex") {
     const frontmostBundleId = await getFrontmostBundleId();
     const frontmostTarget =
@@ -563,7 +563,7 @@ export function dismissClaudeApproval(): Promise<void> {
   return dismissApprovalInTargetApp("claude");
 }
 
-export async function dismissApprovalInTargetApp(targetApp: ApprovalTargetApp): Promise<void> {
+async function dismissApprovalInTargetApp(targetApp: ApprovalTargetApp): Promise<void> {
   const codexDismissSequence = `key code 53
       delay 0.05
       keystroke "." using command down`;

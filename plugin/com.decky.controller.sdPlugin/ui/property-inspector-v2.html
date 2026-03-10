@@ -320,15 +320,6 @@
       margin-left: 4px;
       white-space: nowrap;
     }
-    .color-section {
-      margin-bottom: 6px;
-    }
-    .color-section h4 {
-      font-size: 10px;
-      color: #777;
-      margin: 0 0 4px 0;
-      font-weight: normal;
-    }
     .macro-colors-toggle {
       font-size: 10px;
       color: #888;
@@ -981,13 +972,6 @@
       btn.disabled = selectedMacroIndex < 0 || selectedMacroIndex >= macros.length;
     }
 
-    function hasAnyColorOverrides() {
-      if (defaultColors.bg || defaultColors.text || defaultColors.icon) return true;
-      return macros.some(function (m) {
-        return !!(m.colors && (m.colors.bg || m.colors.text || m.colors.icon));
-      });
-    }
-
     function hasPageColorOverrides() {
       return !!(defaultColors.bg || defaultColors.text || defaultColors.icon);
     }
@@ -1319,7 +1303,7 @@
       visibleIndexes.forEach((i) => {
         const macro = macros[i];
         const macroType = macro.type === "widget" || SLOT_ACTION_TYPES[macro.type] ? macro.type : "macro";
-        const widgetKind = macro.widget && macro.widget.kind === "bridge-status" ? "bridge-status" : "bridge-status";
+        const widgetKind = "bridge-status";
         const widgetRefreshMode = macro.widget && macro.widget.refreshMode === "interval" ? "interval" : "onClick";
         const widgetInterval = macro.widget && Number.isFinite(macro.widget.intervalMinutes)
           ? Math.min(60, Math.max(1, Math.floor(Number(macro.widget.intervalMinutes))))

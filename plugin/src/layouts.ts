@@ -5,7 +5,7 @@
  * send to the bridge when pressed.
  */
 
-export interface SlotConfig {
+interface SlotConfig {
   svg: string;
   title: string;
   action?: string;
@@ -14,17 +14,17 @@ export interface SlotConfig {
 
 type ApprovalTargetApp = "claude" | "codex";
 
-export type LayoutDef = Record<number, SlotConfig>;
-export type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";
-export type ConnectionStatus = "connected" | "disconnected" | "connecting";
-export type WidgetKind = "bridge-status";
-export type WidgetRefreshMode = "onClick" | "interval";
-export interface WidgetDef {
+type LayoutDef = Record<number, SlotConfig>;
+type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";
+type ConnectionStatus = "connected" | "disconnected" | "connecting";
+type WidgetKind = "bridge-status";
+type WidgetRefreshMode = "onClick" | "interval";
+interface WidgetDef {
   kind: WidgetKind;
   refreshMode?: WidgetRefreshMode;
   intervalMinutes?: number;
 }
-export type Theme =
+type Theme =
   | "light"
   | "dark"
   | "dracula"
@@ -194,10 +194,6 @@ const TARGET_BADGE_COLORS: Record<TargetApp, { bg: string; text: string }> = {
 
 export function setTheme(theme: Theme): void {
   currentTheme = PALETTES[theme] ? theme : (theme === "rainbow" || theme === "random" ? theme : "light");
-}
-
-export function getTheme(): Theme {
-  return currentTheme;
 }
 
 export function setThemeSeed(seed: number): void {
@@ -438,13 +434,6 @@ function targetBadge(targetApp?: TargetApp): string {
 }
 
 // --- SVG generators ---
-
-function roundedRect(color: string, symbol: string, fontSize = 64): string {
-  return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
-    <rect width="144" height="144" rx="16" fill="${color}" />
-    <text x="72" y="${fontSize > 40 ? 76 : 70}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="white">${symbol}</text>
-  </svg>`;
-}
 
 /** Default icon colors for legacy Unicode icons. */
 const ICON_COLORS: Record<string, string> = {
@@ -693,15 +682,11 @@ function approvalButtonSVG(bg: string, iconName: string, label: string): string 
   const iconPath = LUCIDE_ICONS[iconName];
   const labelFontSize = resolveLabelFontSize(label);
   const labelY = labelFontSize >= 36 ? 126 : 122;
-  if (iconPath) {
-    return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+  return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
       <rect width="144" height="144" rx="16" fill="${bg}" />
       <g transform="translate(30, 16) scale(3.5)" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconPath}</g>
       <text x="72" y="${labelY}" font-size="${labelFontSize}" font-family="sans-serif" text-anchor="middle" fill="#ffffff">${label}</text>
     </svg>`;
-  }
-  // Fallback to roundedRect if icon missing
-  return roundedRect(bg, label, 32);
 }
 
 // --- Slot config factories ---
@@ -775,7 +760,7 @@ const THINKING: SlotConfig = {
   title: "Thinking\u2026",
 };
 
-export interface ColorOverrides {
+interface ColorOverrides {
   bg?: string;
   text?: string;
   icon?: string;
