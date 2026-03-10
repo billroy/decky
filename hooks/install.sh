@@ -4,23 +4,22 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 DEST="$HOME/.decky/hooks"
-SETTINGS="$HOME/.claude/settings.local.json"
+SETTINGS="$HOME/.claude/settings.json"
 
 echo "Installing Decky hooks to $DEST ..."
 mkdir -p "$DEST"
 
-for hook in pre-tool-use.sh permission-request.sh post-tool-use.sh stop.sh notification.sh; do
+for hook in permission-request.sh post-tool-use.sh stop.sh notification.sh; do
   cp "$SCRIPT_DIR/$hook" "$DEST/$hook"
   chmod +x "$DEST/$hook"
   echo "  installed $hook"
 done
 
-# --- Merge hooks config into ~/.claude/settings.local.json ---
+# --- Merge hooks config into ~/.claude/settings.json ---
+# PermissionRequest hooks must be in the global settings.json to fire correctly;
+# hooks defined only in settings.local.json are silently ignored for newer event types.
 
-HOOKS_JSON='{
-  "PreToolUse": [
-    { "matcher": "*", "hooks": [{ "type": "command", "command": "~/.decky/hooks/pre-tool-use.sh" }] }
-  ],
+DECKY_HOOKS='{
   "PermissionRequest": [
     { "matcher": "*", "hooks": [{ "type": "command", "command": "~/.decky/hooks/permission-request.sh" }] }
   ],
@@ -41,25 +40,26 @@ if ! command -v jq &>/dev/null; then
   echo ""
   echo "WARNING: jq is not installed — cannot auto-configure Claude Code hooks."
   echo "Install jq (brew install jq / apt install jq) and re-run, or manually add"
-  echo "the following to $SETTINGS:"
+  echo "the following hooks to $SETTINGS:"
   echo ""
-  echo "{ \"hooks\": $HOOKS_JSON }"
+  echo "$DECKY_HOOKS" | jq .
   echo ""
   echo "Done (hooks installed, settings NOT updated)."
   exit 0
 fi
 
 if [ -f "$SETTINGS" ]; then
-  # Merge: set .hooks, preserving all other keys
-  MERGED=$(jq --argjson hooks "$HOOKS_JSON" '.hooks = $hooks' "$SETTINGS")
+  # Deep-merge decky hooks into existing hooks, preserving other hook entries
+  MERGED=$(jq --argjson decky "$DECKY_HOOKS" '
+    .hooks = ((.hooks // {}) * $decky)
+  ' "$SETTINGS")
   echo "$MERGED" > "$SETTINGS"
   echo ""
-  echo "Updated $SETTINGS (merged hooks config)."
+  echo "Updated $SETTINGS (merged Decky hooks)."
 else
-  # Create new file with just the hooks config
-  echo "{}" | jq --argjson hooks "$HOOKS_JSON" '.hooks = $hooks' > "$SETTINGS"
+  echo "{}" | jq --argjson decky "$DECKY_HOOKS" '.hooks = $decky' > "$SETTINGS"
   echo ""
-  echo "Created $SETTINGS with hooks config."
+  echo "Created $SETTINGS with Decky hooks."
 fi
 
 echo "Done."
