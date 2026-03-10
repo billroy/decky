@@ -89,44 +89,27 @@ async function getFrontmostSnapshot(): Promise<FrontmostSnapshot | null> {
 }
 
 /**
- * Restore the exact app + window that was frontmost before the focus steal.
- *
- * On multi-display setups `tell application id "X" to activate` often picks
- * a window on the wrong display.  Instead we use System Events to:
- *   1. AXRaise the specific window (forces it to front regardless of display)
- *   2. Make the process frontmost (gives it keyboard focus)
- *
- * Best-effort — errors are silently ignored so macro execution always resolves.
+ * Build an AppleScript fragment that waits, then restores the original app+window.
+ * Meant to be embedded at the end of the paste osascript so everything is atomic.
  */
-async function restoreFrontmostApp(snapshot: FrontmostSnapshot): Promise<void> {
+function buildRestoreFragment(snapshot: FrontmostSnapshot, delaySec: number): string {
   const proc = appleScriptString(snapshot.processName);
-
-  // If we have a window name, AXRaise it first so macOS raises the right
-  // window even on a different display, then make the process frontmost.
-  const script = snapshot.windowName
+  const raiseWindow = snapshot.windowName
     ? `
-    tell application "System Events"
-      tell process ${proc}
         try
           perform action "AXRaise" of window ${appleScriptString(snapshot.windowName)}
-        end try
-        set frontmost to true
-      end tell
-    end tell
-  `
-    : `
+        end try`
+    : "";
+
+  return `
+    delay ${delaySec}
     tell application "System Events"
       tell process ${proc}
+        ${raiseWindow}
         set frontmost to true
       end tell
     end tell
   `;
-
-  try {
-    await runAppleScript(script);
-  } catch {
-    // Best-effort — don't propagate.
-  }
 }
 
 /**
@@ -145,20 +128,53 @@ export async function executeMacro(text: string, options: MacroExecutionOptions 
 
   // Capture the currently focused app + window *before* we steal focus.
   const snapshot = await getFrontmostSnapshot();
+  const targetBundleId = TARGET_APP_SPECS[targetApp]?.bundleId;
+  const needsRestore = snapshot != null && snapshot.bundleId !== targetBundleId;
 
-  // Use pbcopy + AppleScript for reliable injection:
-  // 1. Copy text to clipboard via pbcopy (handles all characters safely)
-  // 2. Activate target app
-  // 3. Paste with Cmd+V
-  // 4. Press Return to send
-  const script = `
-    ${activation}
-    delay 0.2
+  // Build the restore script fragment (empty if no restore needed).
+  // Electron apps need a longer settle delay than native apps.
+  const restoreDelay = targetApp === "claude" ? 0.3 : 1.5;
+  const restoreFragment = needsRestore
+    ? buildRestoreFragment(snapshot!, restoreDelay)
+    : "";
+
+  // Everything — activate, paste, submit, wait, restore — runs in a single
+  // osascript so timing is atomic.  No JS setTimeout race conditions.
+  //
+  // For Electron apps, use the app's Edit > Paste menu command instead of
+  // keystroke Cmd+V — Electron can ignore System Events keystrokes but
+  // always honours its own menu bar actions.
+  const spec = TARGET_APP_SPECS[targetApp];
+  const isElectron = targetApp !== "claude";
+  const pasteCmd = isElectron
+    ? `
+    tell application "System Events"
+      tell process ${appleScriptString(spec.appName)}
+        try
+          click menu item "Paste" of menu "Edit" of menu bar 1
+        on error
+          -- Fallback to keystroke if menu not found
+          keystroke "v" using command down
+        end try
+      end tell
+    end tell`
+    : `
     tell application "System Events"
       keystroke "v" using command down
-      ${submit ? `delay 0.1
-      keystroke return` : ""}
-    end tell
+    end tell`;
+  const submitCmd = submit
+    ? `
+    delay 0.1
+    tell application "System Events"
+      keystroke return
+    end tell`
+    : "";
+  const script = `
+    ${activation}
+    delay 0.3
+    ${pasteCmd}
+    ${submitCmd}
+    ${restoreFragment}
   `;
 
   await new Promise<void>((resolve, reject) => {
@@ -170,7 +186,8 @@ export async function executeMacro(text: string, options: MacroExecutionOptions 
         return;
       }
 
-      // Then run AppleScript to paste
+      // Then run the combined AppleScript (paste + restore)
+      console.log(`[macro] osascript for target=${targetApp}, scriptLen=${script.length}, hasRestore=${needsRestore}`);
       execFile("osascript", ["-e", script], (asErr) => {
         if (asErr) {
           console.error(`[macro] AppleScript failed for target=${targetApp}:`, asErr.message);
@@ -180,6 +197,12 @@ export async function executeMacro(text: string, options: MacroExecutionOptions 
         console.log(
           `[macro] injected target=${targetApp}: "${text.slice(0, 40)}${text.length > 40 ? "…" : ""}"`
         );
+        if (needsRestore) {
+          console.log(
+            `[macro] restored focus to ${snapshot!.processName}` +
+              (snapshot!.windowName ? ` window "${snapshot!.windowName}"` : ""),
+          );
+        }
         resolve();
       });
     });
@@ -187,19 +210,6 @@ export async function executeMacro(text: string, options: MacroExecutionOptions 
     pbcopy.stdin?.write(text);
     pbcopy.stdin?.end();
   });
-
-  // Restore focus to the app + window the user was in before we stole it.
-  // Skip if we were already in the target app (no steal happened).
-  const targetBundleId = TARGET_APP_SPECS[targetApp]?.bundleId;
-  if (snapshot && snapshot.bundleId !== targetBundleId) {
-    // Give the target app time to process the paste + submit before switching.
-    await new Promise((r) => setTimeout(r, 250));
-    await restoreFrontmostApp(snapshot);
-    console.log(
-      `[macro] restored focus to ${snapshot.processName}` +
-        (snapshot.windowName ? ` window "${snapshot.windowName}"` : ""),
-    );
-  }
 }
 
 export function approveOnceInClaude(): Promise<void> {

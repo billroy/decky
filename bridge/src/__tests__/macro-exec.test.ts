@@ -75,23 +75,19 @@ describe("executeMacro quick-focus-steal", () => {
   it("restores focus to previous app and window after injection", async () => {
     await executeMacro("hello", { targetApp: "claude", submit: true });
 
-    // Should have at least 3 osascript calls:
-    // 1. getFrontmostSnapshot
-    // 2. activation + paste + submit
-    // 3. restore previous app + window
-    expect(osascriptCalls.length).toBeGreaterThanOrEqual(3);
+    // 2 osascript calls: snapshot query + combined paste-and-restore.
+    expect(osascriptCalls).toHaveLength(2);
 
     // First call: getFrontmostSnapshot
     expect(osascriptCalls[0]).toContain("bundle identifier of frontApp");
 
-    // Second call: activates Claude and pastes
-    expect(osascriptCalls[1]).toContain("com.anthropic.claudefordesktop");
-    expect(osascriptCalls[1]).toContain('keystroke "v" using command down');
-
-    // Third call: restores via AXRaise on the specific window + process.
-    expect(osascriptCalls[2]).toContain("AXRaise");
-    expect(osascriptCalls[2]).toContain("SomeApp");
-    expect(osascriptCalls[2]).toContain("My Document");
+    // Second call: single atomic script — activate, paste, restore.
+    const pasteScript = osascriptCalls[1];
+    expect(pasteScript).toContain("com.anthropic.claudefordesktop");
+    expect(pasteScript).toContain('keystroke "v" using command down');
+    expect(pasteScript).toContain("AXRaise");
+    expect(pasteScript).toContain("SomeApp");
+    expect(pasteScript).toContain("My Document");
   });
 
   it("does not restore focus if already in target app", async () => {
@@ -156,15 +152,21 @@ describe("executeMacro quick-focus-steal", () => {
     await expect(executeMacro("hello")).resolves.toBeUndefined();
   });
 
-  it("uses same paste sequence for Electron and native targets", async () => {
+  it("uses Edit > Paste menu for Electron targets", async () => {
     await executeMacro("test", { targetApp: "cursor", submit: true });
 
-    // Paste script should have standard 0.2s activation delay.
+    const pasteScript = osascriptCalls.find((s) => s.includes("Paste"));
+    expect(pasteScript).toBeDefined();
+    // Electron targets use menu bar Paste, not keystroke Cmd+V.
+    expect(pasteScript).toContain('click menu item "Paste"');
+    expect(pasteScript).toContain("Cursor");
+  });
+
+  it("uses keystroke Cmd+V for native targets", async () => {
+    await executeMacro("test", { targetApp: "claude", submit: true });
+
     const pasteScript = osascriptCalls.find((s) => s.includes('keystroke "v"'));
     expect(pasteScript).toBeDefined();
-    expect(pasteScript).toContain("delay 0.2");
-    // No Electron-specific focus hack — just activate + paste.
-    expect(pasteScript).not.toContain("python3");
-    expect(pasteScript).not.toContain("click at");
+    expect(pasteScript).not.toContain("menu item");
   });
 });
