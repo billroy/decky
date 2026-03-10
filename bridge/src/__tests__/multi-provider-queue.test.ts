@@ -1,11 +1,11 @@
 /**
- * Multi-provider approval queue tests.
+ * Approval queue tests.
  *
  * Validates:
  *   1. App surfacing on initial approval arrival
  *   2. App surfacing on queue advance (after approve/deny/stop)
  *   3. No surfacing for requests that aren't at the top of the queue
- *   4. Correct targetApp propagation through the queue
+ *   4. Correct metadata propagation through the queue
  */
 
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
@@ -17,8 +17,6 @@ import { saveConfig } from "../config.js";
 const macroMocks = vi.hoisted(() => ({
   approve: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
   dismiss: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
-  approveTarget: vi.fn<(targetApp: "claude" | "codex") => Promise<void>>().mockResolvedValue(undefined),
-  dismissTarget: vi.fn<(targetApp: "claude" | "codex") => Promise<void>>().mockResolvedValue(undefined),
   surface: vi.fn<(targetApp: string) => Promise<void>>().mockResolvedValue(undefined),
 }));
 
@@ -26,8 +24,6 @@ vi.mock("../macro-exec.js", () => ({
   executeMacro: vi.fn().mockResolvedValue(undefined),
   approveOnceInClaude: macroMocks.approve,
   dismissClaudeApproval: macroMocks.dismiss,
-  approveInTargetApp: macroMocks.approveTarget,
-  dismissApprovalInTargetApp: macroMocks.dismissTarget,
   surfaceTargetApp: macroMocks.surface,
   setApprovalAttemptLogger: vi.fn(),
   withApprovalAttemptContext: vi.fn(async (_actionId: string, fn: () => Promise<void>) => await fn()),
@@ -65,8 +61,6 @@ afterEach(() => {
   saveConfig({ popUpApp: true }); // keep surfacing enabled for these tests
   macroMocks.approve.mockClear();
   macroMocks.dismiss.mockClear();
-  macroMocks.approveTarget.mockClear();
-  macroMocks.dismissTarget.mockClear();
   macroMocks.surface.mockClear();
 });
 
@@ -105,22 +99,12 @@ function waitForState(sock: ClientSocket, targetState: string): Promise<Record<s
   });
 }
 
-describe("multi-provider queue — app surfacing on arrival", () => {
-  it("surfaces Claude app when Claude request arrives at top of queue", async () => {
+describe("approval queue — app surfacing on arrival", () => {
+  it("surfaces Claude app when request arrives at top of queue", async () => {
     await postHook({ event: "PermissionRequest", tool: "Bash" });
 
     expect(macroMocks.surface).toHaveBeenCalledOnce();
     expect(macroMocks.surface).toHaveBeenCalledWith("claude");
-  });
-
-  it("surfaces Codex app when Codex request arrives at top of queue", async () => {
-    await postHook(
-      { event: "PermissionRequest", tool: "Write" },
-      { "x-decky-target-app": "codex" },
-    );
-
-    expect(macroMocks.surface).toHaveBeenCalledOnce();
-    expect(macroMocks.surface).toHaveBeenCalledWith("codex");
   });
 
   it("does NOT surface again for duplicate hook request while awaiting", async () => {
@@ -131,13 +115,13 @@ describe("multi-provider queue — app surfacing on arrival", () => {
 
     macroMocks.surface.mockClear();
 
-    // Second hook-source request while awaiting is a duplicate (duplicateHookPre guard)
+    // Second hook-source request while awaiting is a duplicate (duplicatePre guard)
     await postHook({ event: "PermissionRequest", tool: "Write" });
     expect(macroMocks.surface).not.toHaveBeenCalled();
   });
 });
 
-describe("multi-provider queue — app surfacing on queue advance", () => {
+describe("approval queue — app surfacing on queue advance", () => {
   it("surfaces app for each new gate flow request cycle", async () => {
     // First cycle: request → approve → surfaces on arrival
     await postHook(
@@ -188,12 +172,11 @@ describe("multi-provider queue — app surfacing on queue advance", () => {
   });
 });
 
-describe("multi-provider queue — metadata propagation", () => {
-  it("approval metadata reflects active request targetApp and pending count", async () => {
+describe("approval queue — metadata propagation", () => {
+  it("approval metadata reflects pending count and flow", async () => {
     // Enqueue Claude request
     const { data: s0 } = await postHook({ event: "PermissionRequest", tool: "Bash" });
     expect(s0.state.approval).not.toBeNull();
-    expect(s0.state.approval.targetApp).toBe("claude");
     expect(s0.state.approval.pending).toBe(1);
 
     // /status returns statePayload directly (not nested under .state)
@@ -201,19 +184,7 @@ describe("multi-provider queue — metadata propagation", () => {
       headers: { "x-decky-token": token },
     });
     const status = await res.json();
-    expect(status.approval.targetApp).toBe("claude");
     expect(status.approval.pending).toBe(1);
-    expect(status.approval.requestId).toBeDefined();
-  });
-
-  it("Codex targetApp propagates when set via header", async () => {
-    // Gate flow with codex targetApp header (still hook source, but targetApp = codex)
-    const { data } = await postHook(
-      { event: "PreToolUse", tool: "Write" },
-      { "x-decky-approval-flow": "gate", "x-decky-target-app": "codex" },
-    );
-    expect(data.state.approval).not.toBeNull();
-    expect(data.state.approval.targetApp).toBe("codex");
-    expect(macroMocks.surface).toHaveBeenCalledWith("codex");
+    expect(status.approval.flow).toBe("mirror");
   });
 });

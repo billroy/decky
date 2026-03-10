@@ -18,7 +18,6 @@ import {
   reloadConfig,
   restoreConfigBackup,
   saveConfig,
-  type DeckyConfig,
   type Theme,
   ConfigValidationError,
 } from "./config.js";
@@ -26,29 +25,15 @@ import {
   executeMacro,
   approveOnceInClaude,
   dismissClaudeApproval,
-  dismissApprovalInTargetApp,
   setApprovalAttemptLogger,
   startDictationForClaude,
   surfaceTargetApp,
   withApprovalAttemptContext,
 } from "./macro-exec.js";
 import { getBridgeToken, readRequestToken, redactActionForLog } from "./security.js";
-import {
-  CodexAppServerProvider,
-  type CodexAppServerCompatibilityReport,
-  type CodexAppServerLifecycleEvent,
-  type CodexAppServerLifecycleState,
-  type CodexAutoResumeDiagnostics,
-  type CodexApprovalDecision,
-  type CodexAppServerHookEvent,
-} from "./codex-app-server-provider.js";
 import { ApprovalTraceStore } from "./approval-trace.js";
 
 const MAX_MACRO_ACTION_TEXT = 2000;
-const MIRROR_SETTLE_TIMEOUT_MS = 8000;
-const CODEX_RESTART_MAX_ATTEMPTS_DEFAULT = 3;
-const CODEX_RESTART_BASE_DELAY_MS_DEFAULT = 350;
-const CODEX_RESTART_MAX_DELAY_MS_DEFAULT = 4000;
 
 const VALID_EVENTS: Set<string> = new Set([
   "PreToolUse",
@@ -101,11 +86,6 @@ function isTheme(value: unknown): value is Theme {
     value === "random";
 }
 
-export function needsCodexIntegration(cfg: DeckyConfig): boolean {
-  if (cfg.defaultTargetApp === "codex") return true;
-  return cfg.macros.some((m) => m.targetApp === "codex");
-}
-
 export interface DeckyApp {
   app: express.Express;
   httpServer: HttpServer;
@@ -114,18 +94,12 @@ export interface DeckyApp {
 }
 
 type ApprovalFlow = "gate" | "mirror";
-type ApprovalTargetApp = "claude" | "codex";
-type HookSource = "hook" | "codex";
-type CodexProviderState = CodexAppServerLifecycleState | "disabled";
 
 interface ApprovalQueueItem {
   id: string;
-  requestId: string | null;
   flow: ApprovalFlow;
-  targetApp: ApprovalTargetApp;
   nonce: string | null;
   tool: string | null;
-  source: HookSource;
   createdAt: number;
 }
 
@@ -138,49 +112,8 @@ interface StatePayload {
   approval: {
     pending: number;
     position: number;
-    targetApp: ApprovalTargetApp;
     flow: ApprovalFlow;
-    requestId: string;
   } | null;
-  codex: {
-    mode: "app-server";
-    enabled: boolean;
-    provider: {
-      state: CodexProviderState;
-      lastStateAt: number | null;
-      lastStartAt: number | null;
-      lastReadyAt: number | null;
-      lastErrorAt: number | null;
-      lastError: string | null;
-      lastExitAt: number | null;
-      lastExitCode: number | null;
-      lastExitSignal: string | null;
-    };
-    compatibility: CodexAppServerCompatibilityReport;
-    autoResume: CodexAutoResumeDiagnostics;
-    supervisor: {
-      retries: number;
-      maxRetries: number;
-      nextRetryAt: number | null;
-      lastFailure: string | null;
-    };
-  };
-}
-
-interface CodexProviderHealth {
-  state: CodexProviderState;
-  lastStateAt: number | null;
-  lastStartAt: number | null;
-  lastReadyAt: number | null;
-  lastErrorAt: number | null;
-  lastError: string | null;
-  lastExitAt: number | null;
-  lastExitCode: number | null;
-  lastExitSignal: string | null;
-}
-
-function parseApprovalTargetApp(value: unknown): ApprovalTargetApp {
-  return value === "codex" ? "codex" : "claude";
 }
 
 function normalizeActionId(value: unknown): string | null {
@@ -196,29 +129,6 @@ function createActionId(prefix = "bridge"): string {
   return `${prefix}-${stamp}-${rand}`;
 }
 
-function parseOptionalEnvString(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
-function parseNonNegativeIntEnv(value: unknown, fallback: number): number {
-  if (typeof value === "number" && Number.isFinite(value) && value >= 0) return Math.floor(value);
-  if (typeof value !== "string") return fallback;
-  const trimmed = value.trim();
-  if (!trimmed) return fallback;
-  const parsed = Number(trimmed);
-  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
-  return Math.floor(parsed);
-}
-
-function isCodexAppServerHookEvent(event: HookPayload | CodexAppServerHookEvent): event is CodexAppServerHookEvent {
-  const candidate = event as Record<string, unknown>;
-  const payload = candidate.payload;
-  if (!payload || typeof payload !== "object") return false;
-  return typeof (payload as Record<string, unknown>).event === "string";
-}
-
 export function createApp(): DeckyApp {
   const app = express();
   const httpServer = createServer(app);
@@ -227,50 +137,6 @@ export function createApp(): DeckyApp {
   const approvalQueue: ApprovalQueueItem[] = [];
   let pendingGateNonce: string | null = null;
   let pendingApprovalFlow: ApprovalFlow = "gate";
-  let pendingApprovalTargetApp: ApprovalTargetApp = "claude";
-  let pendingMirrorSettlement:
-    | { actionId: string; socketId: string; timer: NodeJS.Timeout; reason: "approve" | "dismiss" }
-    | null = null;
-  const codexLifecycleTrace: CodexAppServerLifecycleEvent[] = [];
-  const codexProviderHealth: CodexProviderHealth = {
-    state: "disabled",
-    lastStateAt: null,
-    lastStartAt: null,
-    lastReadyAt: null,
-    lastErrorAt: null,
-    lastError: null,
-    lastExitAt: null,
-    lastExitCode: null,
-    lastExitSignal: null,
-  };
-  let codexCompatibility: CodexAppServerCompatibilityReport = {
-    status: "unknown",
-    checkedAt: Date.now(),
-    protocolVersion: null,
-    advertisedMethods: null,
-    missingRequiredMethods: [],
-    detail: "not yet evaluated",
-  };
-  let codexAutoResumeDiagnostics: CodexAutoResumeDiagnostics = {
-    state: "disabled",
-    at: Date.now(),
-    cwd: null,
-    selectedThreadId: null,
-    strategy: null,
-    loadedCount: null,
-    listedCount: null,
-    reason: "not yet evaluated",
-    error: null,
-  };
-  let codexRestartAttempts = 0;
-  let codexRestartMaxAttempts = CODEX_RESTART_MAX_ATTEMPTS_DEFAULT;
-  let codexNextRetryAt: number | null = null;
-  let codexLastFailure: string | null = null;
-  let codexRestartTimer: NodeJS.Timeout | null = null;
-  let codexStartInFlight = false;
-  let codexShuttingDown = false;
-  let codexMonitor: { start: () => Promise<boolean>; stop: () => void } | null = null;
-  let resolveCodexApproval: ((requestId: string, decision: CodexApprovalDecision) => Promise<void>) | null = null;
 
   const io = new SocketIOServer(httpServer, {
     cors: {
@@ -284,47 +150,6 @@ export function createApp(): DeckyApp {
   });
 
   const sm = new StateMachine();
-
-  function codexHealthSnapshot() {
-    return {
-      mode: "app-server" as const,
-      enabled: codexMonitorEnabled,
-      provider: { ...codexProviderHealth },
-      compatibility: { ...codexCompatibility },
-      autoResume: { ...codexAutoResumeDiagnostics },
-      supervisor: {
-        retries: codexRestartAttempts,
-        maxRetries: codexRestartMaxAttempts,
-        nextRetryAt: codexNextRetryAt,
-        lastFailure: codexLastFailure,
-      },
-    };
-  }
-
-  function updateCodexHealthFromLifecycle(event: CodexAppServerLifecycleEvent): void {
-    codexProviderHealth.state = event.state;
-    codexProviderHealth.lastStateAt = event.at;
-    if (event.state === "starting" || event.state === "spawned" || event.state === "handshake-sent") {
-      codexProviderHealth.lastStartAt = event.at;
-    }
-    if (event.state === "ready") {
-      codexProviderHealth.lastReadyAt = event.at;
-      codexProviderHealth.lastError = null;
-    }
-    if (event.state === "error" || event.state === "start-failed") {
-      codexProviderHealth.lastErrorAt = event.at;
-      codexProviderHealth.lastError = event.detail ?? codexProviderHealth.lastError ?? "unknown error";
-    }
-    if (event.state === "exit") {
-      codexProviderHealth.lastExitAt = event.at;
-      codexProviderHealth.lastExitCode = typeof event.code === "number" ? event.code : null;
-      codexProviderHealth.lastExitSignal = typeof event.signal === "string" ? event.signal : null;
-    }
-    codexLifecycleTrace.push(event);
-    if (codexLifecycleTrace.length > 120) {
-      codexLifecycleTrace.splice(0, codexLifecycleTrace.length - 120);
-    }
-  }
 
   setApprovalAttemptLogger((attempt) => {
     if (!attempt.contextId) return;
@@ -356,7 +181,6 @@ export function createApp(): DeckyApp {
       return;
     }
     pendingApprovalFlow = active.flow;
-    pendingApprovalTargetApp = active.targetApp;
     pendingGateNonce = active.nonce;
   }
 
@@ -371,32 +195,9 @@ export function createApp(): DeckyApp {
     return queued;
   }
 
-  function shiftApprovalRequest(requestId: string | null = null): ApprovalQueueItem | null {
+  function shiftApprovalRequest(): ApprovalQueueItem | null {
     if (approvalQueue.length === 0) return null;
-    if (!requestId) {
-      const removed = approvalQueue.shift() ?? null;
-      applyPendingFromQueue();
-      return removed;
-    }
-    const idx = approvalQueue.findIndex((entry) => entry.requestId === requestId);
-    if (idx < 0) return null;
-    const [removed] = approvalQueue.splice(idx, 1);
-    applyPendingFromQueue();
-    return removed;
-  }
-
-  function shiftApprovalRequestForSource(source: HookSource, requestId: string | null = null): ApprovalQueueItem | null {
-    if (approvalQueue.length === 0) return null;
-    if (requestId) {
-      const idx = approvalQueue.findIndex((entry) => entry.source === source && entry.requestId === requestId);
-      if (idx < 0) return null;
-      const [removed] = approvalQueue.splice(idx, 1);
-      applyPendingFromQueue();
-      return removed;
-    }
-    const idx = approvalQueue.findIndex((entry) => entry.source === source);
-    if (idx < 0) return null;
-    const [removed] = approvalQueue.splice(idx, 1);
+    const removed = approvalQueue.shift() ?? null;
     applyPendingFromQueue();
     return removed;
   }
@@ -406,7 +207,7 @@ export function createApp(): DeckyApp {
     if (!getConfig().popUpApp) return;
     const active = currentApproval();
     if (active) {
-      surfaceTargetApp(active.targetApp).catch((err) => {
+      surfaceTargetApp("claude").catch((err) => {
         console.error("[queue] surfaceTargetApp on advance failed:", err);
       });
     }
@@ -420,12 +221,9 @@ export function createApp(): DeckyApp {
         ? {
           pending: approvalQueue.length,
           position: approvalQueue.findIndex((item) => item.id === active.id) + 1,
-          targetApp: active.targetApp,
           flow: active.flow,
-          requestId: active.requestId ?? active.id,
         }
         : null,
-      codex: codexHealthSnapshot(),
     };
   }
 
@@ -438,133 +236,22 @@ export function createApp(): DeckyApp {
     if ((snapshot.state === "idle" || snapshot.state === "stopped") && approvalQueue.length > 0) {
       approvalQueue.splice(0, approvalQueue.length);
       applyPendingFromQueue();
-      clearPendingMirrorSettlement(`state=${snapshot.state} queue reset`);
     }
     emitState(snapshot);
   });
-
-  function clearPendingMirrorSettlement(reason?: string): void {
-    if (!pendingMirrorSettlement) return;
-    clearTimeout(pendingMirrorSettlement.timer);
-    if (reason) {
-      approvalTrace.append(
-        pendingMirrorSettlement.actionId,
-        "settlement",
-        "pending settlement cleared",
-        { reason },
-      );
-    }
-    pendingMirrorSettlement = null;
-  }
-
-  function failPendingMirrorSettlementFromProvider(reason: string): void {
-    if (!pendingMirrorSettlement) return;
-    const active = pendingMirrorSettlement;
-    approvalTrace.append(active.actionId, "settlement.provider_unavailable", "codex provider unavailable", { reason });
-    approvalTrace.settle({
-      actionId: active.actionId,
-      status: "failed",
-      finalState: sm.getSnapshot().state,
-      finalReason: reason,
-    });
-    io.to(active.socketId).emit("error", {
-      error: "Codex provider became unavailable while settling approval",
-    });
-    clearPendingMirrorSettlement(reason);
-  }
-
-  function clearCodexOriginApprovals(reason: string): number {
-    if (approvalQueue.length === 0) return 0;
-    let removed = 0;
-    for (let idx = approvalQueue.length - 1; idx >= 0; idx -= 1) {
-      if (approvalQueue[idx].source !== "codex") continue;
-      approvalQueue.splice(idx, 1);
-      removed += 1;
-    }
-    if (removed > 0) {
-      applyPendingFromQueue();
-      io.emit("error", { error: `Codex provider unavailable: ${reason}` });
-      const snapshot = sm.getSnapshot();
-      if (snapshot.state === "awaiting-approval") {
-        const next = currentApproval();
-        if (next) {
-          sm.forceState("awaiting-approval", "queued approval pending", next.tool);
-          surfaceActiveApproval();
-        } else {
-          sm.forceState("idle", `codex provider unavailable: ${reason}`);
-        }
-      } else {
-        emitState(snapshot);
-      }
-    }
-    return removed;
-  }
-
-  function startMirrorSettlement(actionId: string, socketId: string, reason: "approve" | "dismiss"): void {
-    clearPendingMirrorSettlement("replaced by newer action");
-    const timer = setTimeout(() => {
-      if (!pendingMirrorSettlement || pendingMirrorSettlement.actionId !== actionId) return;
-      const snap = sm.getSnapshot();
-      approvalTrace.append(actionId, "settlement.timeout", "no monitor settlement observed", {
-        state: snap.state,
-        timeoutMs: MIRROR_SETTLE_TIMEOUT_MS,
-        reason: pendingMirrorSettlement.reason,
-      });
-      approvalTrace.settle({
-        actionId,
-        status: "timed-out",
-        finalState: snap.state,
-        finalReason: "timeout waiting for codex monitor settlement",
-      });
-      io.to(socketId).emit("error", {
-        error:
-          pendingMirrorSettlement.reason === "approve"
-            ? "Approve timed out waiting for Codex settlement"
-            : "Dismiss timed out waiting for Codex settlement",
-      });
-      if (snap.state === "awaiting-approval") {
-        if (pendingMirrorSettlement.reason === "approve") {
-          // Fallback reconciliation: if monitor events are delayed/missed, avoid
-          // wedging the deck in awaiting-approval and continue the execution flow.
-          sm.forceState("tool-executing", "approve timed out via StreamDeck (fallback)");
-        } else {
-          sm.forceState("stopped", "dismiss timed out via StreamDeck");
-        }
-      }
-      shiftApprovalRequest();
-      const next = currentApproval();
-      if (next) {
-        sm.forceState("awaiting-approval", "queued approval pending", next.tool);
-        surfaceActiveApproval();
-      } else {
-        emitState();
-      }
-      clearPendingMirrorSettlement("timeout");
-    }, MIRROR_SETTLE_TIMEOUT_MS);
-    pendingMirrorSettlement = { actionId, socketId, timer, reason };
-    approvalTrace.setStatus(actionId, "settling", "waiting for codex monitor settlement", {
-      timeoutMs: MIRROR_SETTLE_TIMEOUT_MS,
-      reason,
-    });
-  }
 
   function applyHookPayload(
     payload: HookPayload,
     options?: {
       approvalFlow?: ApprovalFlow;
       nonce?: string | null;
-      targetApp?: ApprovalTargetApp;
-      source?: HookSource;
-      requestId?: string | null;
     },
   ) {
-    const source = options?.source ?? "hook";
-    const requestId = options?.requestId ?? null;
     const flow = options?.approvalFlow ?? "mirror";
 
     // Mirror-flow hooks use PermissionRequest for approval, not PreToolUse.
-    // Skip PreToolUse entirely for hook source in mirror flow — it's informational.
-    if (payload.event === "PreToolUse" && source === "hook" && flow === "mirror") {
+    // Skip PreToolUse entirely in mirror flow — it's informational.
+    if (payload.event === "PreToolUse" && flow === "mirror") {
       console.log(
         `[hook] PreToolUse (mirror, skip) tool=${payload.tool ?? "?"}`,
       );
@@ -572,32 +259,24 @@ export function createApp(): DeckyApp {
     }
 
     // Enqueue approval for events that trigger the approval UI:
-    // - PermissionRequest (mirror flow from hooks — only fires when dialog appears)
-    // - PreToolUse (gate flow from hooks, or codex source)
+    // - PermissionRequest (mirror flow — only fires when dialog appears)
+    // - PreToolUse (gate flow)
     if (payload.event === "PermissionRequest" || payload.event === "PreToolUse") {
       if (payload.event === "PreToolUse" && flow === "gate") {
         clearGateFile();
       }
-      const targetApp = options?.targetApp ?? "claude";
       const nonce = options?.nonce ?? null;
       const current = sm.getSnapshot();
-      const duplicateHookPre = source === "hook" && current.state === "awaiting-approval";
-      const duplicateMonitorPre =
-        source === "codex" &&
-        requestId !== null &&
-        approvalQueue.some((entry) => entry.requestId === requestId);
-      if (!duplicateHookPre && !duplicateMonitorPre) {
+      const duplicatePre = current.state === "awaiting-approval";
+      if (!duplicatePre) {
         const queued = enqueueApprovalRequest({
-          requestId,
           flow,
-          targetApp,
           nonce,
           tool: payload.tool ?? null,
-          source,
         });
         // Surface the target app when this request becomes the active one
         if (getConfig().popUpApp && currentApproval()?.id === queued.id) {
-          surfaceTargetApp(queued.targetApp).catch((err) => {
+          surfaceTargetApp("claude").catch((err) => {
             console.error("[queue] surfaceTargetApp on arrival failed:", err);
           });
         }
@@ -605,58 +284,10 @@ export function createApp(): DeckyApp {
     }
     let snapshot = sm.processEvent(payload);
 
-    if (pendingMirrorSettlement && source === "codex") {
-      approvalTrace.append(
-        pendingMirrorSettlement.actionId,
-        "codex.monitor",
-        `monitor event ${payload.event}`,
-        {
-          tool: payload.tool ?? null,
-          state: snapshot.state,
-          previousState: snapshot.previousState,
-        },
-      );
-      if (payload.event !== "PreToolUse") {
-        shiftApprovalRequestForSource("codex", requestId);
-        const next = currentApproval();
-        if (next && snapshot.state !== "awaiting-approval") {
-          snapshot = sm.forceState("awaiting-approval", "queued approval pending", next.tool);
-          surfaceActiveApproval();
-        } else {
-          emitState(snapshot);
-        }
-        approvalTrace.settle({
-          actionId: pendingMirrorSettlement.actionId,
-          status: "settled",
-          finalState: snapshot.state,
-          finalReason: `codex monitor ${payload.event}`,
-        });
-        clearPendingMirrorSettlement("settled by monitor event");
-      }
-    }
-
     if (
-      source === "codex" &&
-      !pendingMirrorSettlement &&
-      (payload.event === "PostToolUse" || payload.event === "Stop" || payload.event === "SubagentStop")
+      payload.event === "PostToolUse" || payload.event === "Stop" || payload.event === "SubagentStop"
     ) {
-      const shifted = shiftApprovalRequestForSource("codex", requestId);
-      if (shifted) {
-        const next = currentApproval();
-        if (next && snapshot.state !== "awaiting-approval") {
-          snapshot = sm.forceState("awaiting-approval", "queued approval pending", next.tool);
-          surfaceActiveApproval();
-        } else {
-          emitState(snapshot);
-        }
-      }
-    }
-
-    if (
-      source === "hook" &&
-      (payload.event === "PostToolUse" || payload.event === "Stop" || payload.event === "SubagentStop")
-    ) {
-      const shifted = shiftApprovalRequestForSource("hook", requestId);
+      const shifted = shiftApprovalRequest();
       if (shifted) {
         const next = currentApproval();
         if (next && snapshot.state !== "awaiting-approval") {
@@ -678,205 +309,7 @@ export function createApp(): DeckyApp {
     return snapshot;
   }
 
-  const isTestRuntime = process.env.VITEST === "true";
-  const codexForceEnable = process.env.DECKY_ENABLE_CODEX_MONITOR === "1";
-  const codexForceDisable = process.env.DECKY_ENABLE_CODEX_MONITOR === "0";
-  const codexMonitorEnabled = !isTestRuntime && !codexForceDisable &&
-    (codexForceEnable || needsCodexIntegration(getConfig()));
-  const codexAppServerCommand = parseOptionalEnvString(process.env.DECKY_CODEX_APP_SERVER_COMMAND);
-  const codexAutoResumeCwd = process.env.DECKY_CODEX_AUTO_RESUME === "1"
-    ? (process.env.DECKY_CODEX_CWD || process.cwd())
-    : null;
-  codexRestartMaxAttempts = parseNonNegativeIntEnv(
-    process.env.DECKY_CODEX_RESTART_MAX_ATTEMPTS,
-    CODEX_RESTART_MAX_ATTEMPTS_DEFAULT,
-  );
-  const codexRestartBaseDelayMs = parseNonNegativeIntEnv(
-    process.env.DECKY_CODEX_RESTART_BASE_DELAY_MS,
-    CODEX_RESTART_BASE_DELAY_MS_DEFAULT,
-  );
-  const codexRestartMaxDelayMs = Math.max(
-    codexRestartBaseDelayMs,
-    parseNonNegativeIntEnv(process.env.DECKY_CODEX_RESTART_MAX_DELAY_MS, CODEX_RESTART_MAX_DELAY_MS_DEFAULT),
-  );
-  codexProviderHealth.state = codexMonitorEnabled ? "starting" : "disabled";
-  codexProviderHealth.lastStateAt = codexMonitorEnabled ? Date.now() : null;
-  codexCompatibility = {
-    status: "unknown",
-    checkedAt: Date.now(),
-    protocolVersion: null,
-    advertisedMethods: null,
-    missingRequiredMethods: [],
-    detail: codexMonitorEnabled ? "awaiting initialize response" : "provider disabled",
-  };
-  codexAutoResumeDiagnostics = {
-    state: codexMonitorEnabled ? (codexAutoResumeCwd ? "skipped" : "disabled") : "disabled",
-    at: Date.now(),
-    cwd: codexAutoResumeCwd,
-    selectedThreadId: null,
-    strategy: null,
-    loadedCount: null,
-    listedCount: null,
-    reason: codexMonitorEnabled
-      ? (codexAutoResumeCwd ? "awaiting initialize" : "auto-resume disabled by configuration")
-      : "provider disabled",
-    error: null,
-  };
-
-  function clearCodexRestartTimer(reason?: string): void {
-    if (!codexRestartTimer) return;
-    clearTimeout(codexRestartTimer);
-    codexRestartTimer = null;
-    codexNextRetryAt = null;
-    if (reason) console.log(`[codex] cleared restart timer (${reason})`);
-  }
-
-  async function startCodexMonitor(reason: string): Promise<void> {
-    if (!codexMonitor || codexStartInFlight || codexShuttingDown) return;
-    codexStartInFlight = true;
-    clearCodexRestartTimer("starting");
-    try {
-      const started = await codexMonitor.start();
-      if (!started) {
-        codexLastFailure = `provider start() returned false (${reason})`;
-        console.warn(`[codex] provider failed to start (reason=${reason})`);
-        emitState();
-        return;
-      }
-      codexRestartAttempts = 0;
-      codexNextRetryAt = null;
-      codexLastFailure = null;
-      console.log(`[codex-app-server] connected using app-server stdio transport (${reason})`);
-      emitState();
-    } finally {
-      codexStartInFlight = false;
-    }
-  }
-
-  function scheduleCodexRestart(reason: string): void {
-    if (!codexMonitorEnabled || !codexMonitor || codexShuttingDown) return;
-    if (codexRestartMaxAttempts <= 0) return;
-    if (codexRestartAttempts >= codexRestartMaxAttempts) {
-      console.warn(`[codex] restart budget exhausted (${codexRestartAttempts}/${codexRestartMaxAttempts})`);
-      io.emit("error", { error: "Codex provider restart budget exhausted" });
-      emitState();
-      return;
-    }
-    if (codexRestartTimer) return;
-    codexRestartAttempts += 1;
-    const expDelay = codexRestartBaseDelayMs * (2 ** Math.max(0, codexRestartAttempts - 1));
-    const delay = Math.min(codexRestartMaxDelayMs, expDelay);
-    codexNextRetryAt = Date.now() + delay;
-    console.warn(`[codex] scheduling restart attempt ${codexRestartAttempts}/${codexRestartMaxAttempts} in ${delay}ms (${reason})`);
-    codexRestartTimer = setTimeout(() => {
-      codexRestartTimer = null;
-      codexNextRetryAt = null;
-      void startCodexMonitor(`retry-${codexRestartAttempts}`);
-    }, delay);
-    emitState();
-  }
-
-  function onCodexProviderUnavailable(reason: string): void {
-    codexLastFailure = reason;
-    failPendingMirrorSettlementFromProvider(reason);
-    clearCodexOriginApprovals(reason);
-  }
-
-  console.log("[bridge] Claude integration: always loaded");
-  if (!codexMonitorEnabled && !isTestRuntime) {
-    console.log("[bridge] Codex integration: disabled (no codex buttons configured)");
-  }
-  if (codexMonitorEnabled) {
-    const reason = codexForceEnable ? "DECKY_ENABLE_CODEX_MONITOR=1"
-      : getConfig().defaultTargetApp === "codex" ? `defaultTargetApp=codex`
-      : "codex buttons configured";
-    console.log(`[bridge] Codex integration: enabled (${reason})`);
-  }
-  if (codexMonitorEnabled) {
-    const onCodexHookEvent = (event: HookPayload | CodexAppServerHookEvent) => {
-      const payload = isCodexAppServerHookEvent(event) ? event.payload : event;
-      const requestId = isCodexAppServerHookEvent(event) ? event.requestId : null;
-      const opts =
-        payload.event === "PreToolUse"
-          ? {
-            approvalFlow: "mirror" as const,
-            nonce: null,
-            targetApp: "codex" as const,
-            source: "codex" as const,
-            requestId: requestId ?? null,
-          }
-          : {
-            source: "codex" as const,
-            requestId: requestId ?? null,
-          };
-      applyHookPayload(payload, opts);
-    };
-
-    const codexAppServer = new CodexAppServerProvider({
-      command: codexAppServerCommand,
-      autoResumeCwd: codexAutoResumeCwd,
-      onHookEvent: (event) => onCodexHookEvent(event),
-      onError: (error) => {
-        const detail = error instanceof Error ? error.message : String(error);
-        updateCodexHealthFromLifecycle({ state: "error", at: Date.now(), detail });
-        codexLastFailure = detail;
-        console.warn("[codex-app-server] error:", error);
-        emitState();
-      },
-      onDebugLog: (message) => {
-        console.log(`[codex-app-server] ${message}`);
-      },
-      onCompatibility: (report) => {
-        codexCompatibility = report;
-        console.log(
-          `[codex-app-server] compatibility status=${report.status} detail=${report.detail}`,
-        );
-        emitState();
-      },
-      onAutoResumeDiagnostics: (diagnostics) => {
-        codexAutoResumeDiagnostics = diagnostics;
-        const selected = diagnostics.selectedThreadId ? ` thread=${diagnostics.selectedThreadId}` : "";
-        const reason = diagnostics.reason ? ` reason=${diagnostics.reason}` : "";
-        console.log(`[codex-app-server] auto-resume state=${diagnostics.state}${selected}${reason}`);
-        emitState();
-      },
-      onLifecycle: (event) => {
-        updateCodexHealthFromLifecycle(event);
-        const detail = event.detail ? ` detail=${event.detail}` : "";
-        const exitInfo =
-          event.state === "exit" ? ` code=${event.code ?? "null"} signal=${event.signal ?? "null"}` : "";
-        console.log(`[codex-app-server] lifecycle state=${event.state}${exitInfo}${detail}`);
-        if (event.state === "ready") {
-          codexRestartAttempts = 0;
-          codexNextRetryAt = null;
-          codexLastFailure = null;
-          clearCodexRestartTimer("provider ready");
-        }
-        if (event.state === "start-failed" || event.state === "exit") {
-          const reason =
-            event.detail ??
-            (event.state === "exit"
-              ? `process exited (code=${event.code ?? "null"}, signal=${event.signal ?? "null"})`
-              : "startup failed");
-          onCodexProviderUnavailable(reason);
-          scheduleCodexRestart(event.state);
-        }
-        emitState();
-      },
-    });
-    codexMonitor = codexAppServer;
-    resolveCodexApproval = (requestId, decision) => codexAppServer.resolveApproval(requestId, decision);
-
-    void startCodexMonitor("initial");
-    httpServer.on("close", () => {
-      codexShuttingDown = true;
-      clearCodexRestartTimer("server closing");
-      codexMonitor?.stop();
-    });
-  }
   httpServer.on("close", () => {
-    clearPendingMirrorSettlement("server closed");
-    clearCodexRestartTimer("server closed");
     setApprovalAttemptLogger(null);
   });
 
@@ -919,7 +352,6 @@ export function createApp(): DeckyApp {
 
     const flowHeader = req.header("x-decky-approval-flow");
     const nonceHeader = req.header("x-decky-nonce");
-    const targetHeader = req.header("x-decky-target-app");
     const approvalFlow =
       typeof flowHeader === "string" && flowHeader.trim().toLowerCase() === "gate"
         ? "gate"
@@ -928,15 +360,7 @@ export function createApp(): DeckyApp {
       typeof nonceHeader === "string" && nonceHeader.trim().length > 0
         ? nonceHeader.trim()
         : null;
-    const targetApp =
-      (payload.event === "PreToolUse" || payload.event === "PermissionRequest")
-        ? parseApprovalTargetApp(
-            typeof targetHeader === "string" && targetHeader.trim().length > 0
-              ? targetHeader.trim()
-              : body?.targetApp,
-          )
-        : undefined;
-    const snapshot = applyHookPayload(payload, { approvalFlow, nonce, targetApp });
+    const snapshot = applyHookPayload(payload, { approvalFlow, nonce });
     res.json({ ok: true, state: statePayload(snapshot) });
   });
 
@@ -949,30 +373,13 @@ export function createApp(): DeckyApp {
     const limit = Number.isFinite(raw) ? Math.max(1, Math.min(100, Math.floor(raw))) : 25;
     res.json({
       traces: approvalTrace.list(limit),
-      codexIntegrationMode: "app-server",
-      pendingMirrorSettlement: pendingMirrorSettlement
-        ? { actionId: pendingMirrorSettlement.actionId, socketId: pendingMirrorSettlement.socketId }
-        : null,
       approvalQueue: approvalQueue.map((entry, idx) => ({
         id: entry.id,
-        requestId: entry.requestId,
         index: idx + 1,
         flow: entry.flow,
-        targetApp: entry.targetApp,
         tool: entry.tool,
-        source: entry.source,
         createdAt: entry.createdAt,
       })),
-      codexProvider: codexHealthSnapshot(),
-      codexLifecycle: codexLifecycleTrace.slice(-40),
-      now: Date.now(),
-    });
-  });
-
-  app.get("/debug/codex-provider", (_req, res) => {
-    res.json({
-      codexProvider: codexHealthSnapshot(),
-      lifecycle: codexLifecycleTrace,
       now: Date.now(),
     });
   });
@@ -1056,18 +463,11 @@ export function createApp(): DeckyApp {
         const currentState = sm.getSnapshot().state;
         const activeApproval = currentApproval();
         const activeFlow = activeApproval?.flow ?? pendingApprovalFlow;
-        const activeRequestId = activeApproval?.requestId ?? null;
-        const approvalTargetApp =
-          activeApproval?.targetApp === "codex" || pendingApprovalTargetApp === "codex"
-            ? "codex"
-            : parseApprovalTargetApp(data.targetApp);
-        approvalTrace.start({ actionId, action: data.action, targetApp: approvalTargetApp });
+        approvalTrace.start({ actionId, action: data.action, targetApp: "claude" });
         approvalTrace.append(actionId, "bridge.action.received", "approval action received", {
           action: data.action,
           state: currentState,
           pendingApprovalFlow: activeFlow,
-          pendingApprovalTargetApp: activeApproval?.targetApp ?? pendingApprovalTargetApp,
-          resolvedTargetApp: approvalTargetApp,
           socketId: socket.id,
           queued: approvalQueue.length,
         });
@@ -1081,9 +481,6 @@ export function createApp(): DeckyApp {
             finalReason: reason,
           });
           socket.emit("error", { error: errorText });
-          if (pendingMirrorSettlement?.actionId === actionId) {
-            clearPendingMirrorSettlement("failed");
-          }
         };
 
         if (data.action === "cancel" && currentState !== "awaiting-approval") {
@@ -1098,17 +495,10 @@ export function createApp(): DeckyApp {
             finalState: "stopped",
             finalReason: "cancelled via StreamDeck",
           });
-          if (approvalTargetApp === "claude") {
-            withApprovalAttemptContext(actionId, () => dismissClaudeApproval()).catch((err) => {
-              console.error("[io] cancel action failed outside approval state:", err);
-              socket.emit("error", { error: "Failed to dismiss Claude" });
-            });
-          } else {
-            withApprovalAttemptContext(actionId, () => dismissApprovalInTargetApp(approvalTargetApp)).catch((err) => {
-              console.error("[io] cancel action failed outside approval state:", err);
-              socket.emit("error", { error: "Failed to dismiss Codex" });
-            });
-          }
+          withApprovalAttemptContext(actionId, () => dismissClaudeApproval()).catch((err) => {
+            console.error("[io] cancel action failed outside approval state:", err);
+            socket.emit("error", { error: "Failed to dismiss Claude" });
+          });
           return;
         }
 
@@ -1128,7 +518,7 @@ export function createApp(): DeckyApp {
             actionId,
             "bridge.action.ignored",
             "awaiting approval without active queue context",
-            { state: currentState, pendingApprovalFlow, pendingApprovalTargetApp },
+            { state: currentState, pendingApprovalFlow },
           );
           approvalTrace.settle({
             actionId,
@@ -1142,79 +532,36 @@ export function createApp(): DeckyApp {
         if (activeFlow === "mirror") {
           pendingGateNonce = null;
           if (entry.result === "approve") {
-            if (approvalTargetApp === "claude") {
-              withApprovalAttemptContext(actionId, () => approveOnceInClaude()).catch((err) => {
-                console.error("[io] approve action failed in mirror flow:", err);
-                settleFailed("Failed to approve in Claude", "approve action failed in mirror flow");
-              });
-            } else {
-              startMirrorSettlement(actionId, socket.id, "approve");
-              if (resolveCodexApproval && activeRequestId) {
-                withApprovalAttemptContext(
-                  actionId,
-                  () => resolveCodexApproval(activeRequestId, "approve"),
-                ).catch((err) => {
-                  console.error("[io] approve action failed in app-server flow:", err);
-                  settleFailed("Failed to approve in Codex", "approve action failed in app-server flow");
-                });
-              } else {
-                settleFailed(
-                  "Failed to approve in Codex (missing app-server request ID)",
-                  "approve action missing codex app-server request correlation",
-                );
-              }
-            }
+            withApprovalAttemptContext(actionId, () => approveOnceInClaude()).catch((err) => {
+              console.error("[io] approve action failed in mirror flow:", err);
+              settleFailed("Failed to approve in Claude", "approve action failed in mirror flow");
+            });
             approvalTrace.setStatus(actionId, "settling", "mirror approve dispatched");
           } else {
-            if (approvalTargetApp === "claude") {
-              const mirrorDismissReason = `${entry.result} via StreamDeck (mirror)`;
-              withApprovalAttemptContext(actionId, () => dismissClaudeApproval()).then(() => {
-                shiftApprovalRequest();
-                const next = currentApproval();
-                if (next) {
-                  sm.forceState("awaiting-approval", "queued approval pending", next.tool);
-                  surfaceActiveApproval();
-                } else {
-                  sm.forceState("idle", mirrorDismissReason);
-                }
-                approvalTrace.append(actionId, "state.force", "forced state", {
-                  state: next ? "awaiting-approval" : "idle",
-                  reason: next ? "queued approval pending" : mirrorDismissReason,
-                });
-                approvalTrace.settle({
-                  actionId,
-                  status: "settled",
-                  finalState: next ? "awaiting-approval" : "idle",
-                  finalReason: next ? "queued approval pending" : mirrorDismissReason,
-                });
-              }).catch((err) => {
-                console.error("[io] deny/cancel action failed in mirror flow:", err);
-                settleFailed("Failed to dismiss Claude approval", "deny/cancel action failed in mirror flow");
-              });
-            } else {
-              // For Codex mirror flow, rely on mirrored Codex events to advance state
-              // so the Deck never reports idle before the host app actually settles.
-              startMirrorSettlement(actionId, socket.id, "dismiss");
-              if (resolveCodexApproval && activeRequestId) {
-                withApprovalAttemptContext(
-                  actionId,
-                  () => resolveCodexApproval(activeRequestId, entry.result === "cancel" ? "cancel" : "deny"),
-                ).then(() => {
-                  approvalTrace.append(actionId, "bridge.dismiss.dispatched", "dismiss sent to codex app-server", {
-                    targetApp: approvalTargetApp,
-                    requestId: activeRequestId,
-                  });
-                }).catch((err) => {
-                  console.error("[io] deny/cancel action failed in app-server flow:", err);
-                  settleFailed("Failed to dismiss Codex approval", "deny/cancel action failed in app-server flow");
-                });
+            const mirrorDismissReason = `${entry.result} via StreamDeck (mirror)`;
+            withApprovalAttemptContext(actionId, () => dismissClaudeApproval()).then(() => {
+              shiftApprovalRequest();
+              const next = currentApproval();
+              if (next) {
+                sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+                surfaceActiveApproval();
               } else {
-                settleFailed(
-                  "Failed to dismiss Codex approval (missing app-server request ID)",
-                  "deny/cancel action missing codex app-server request correlation",
-                );
+                sm.forceState("idle", mirrorDismissReason);
               }
-            }
+              approvalTrace.append(actionId, "state.force", "forced state", {
+                state: next ? "awaiting-approval" : "idle",
+                reason: next ? "queued approval pending" : mirrorDismissReason,
+              });
+              approvalTrace.settle({
+                actionId,
+                status: "settled",
+                finalState: next ? "awaiting-approval" : "idle",
+                finalReason: next ? "queued approval pending" : mirrorDismissReason,
+              });
+            }).catch((err) => {
+              console.error("[io] deny/cancel action failed in mirror flow:", err);
+              settleFailed("Failed to dismiss Claude approval", "deny/cancel action failed in mirror flow");
+            });
           }
           return;
         }

@@ -5,8 +5,6 @@ vi.mock("../macro-exec.js", () => ({
   executeMacro: vi.fn().mockResolvedValue(undefined),
   approveOnceInClaude: vi.fn().mockResolvedValue(undefined),
   dismissClaudeApproval: vi.fn().mockResolvedValue(undefined),
-  approveInTargetApp: vi.fn().mockResolvedValue(undefined),
-  dismissApprovalInTargetApp: vi.fn().mockResolvedValue(undefined),
   surfaceTargetApp: vi.fn().mockResolvedValue(undefined),
   setApprovalAttemptLogger: vi.fn(),
   withApprovalAttemptContext: vi.fn(async (_actionId: string, fn: () => Promise<void>) => await fn()),
@@ -55,30 +53,6 @@ describe("GET /status", () => {
     expect(status).toBe(200);
     expect(data.state).toBe("idle");
     expect(data).toHaveProperty("timestamp");
-    expect(data).toHaveProperty("codex");
-    expect(data.codex).toHaveProperty("mode", "app-server");
-    expect(data.codex).toHaveProperty("enabled", false);
-    expect(data.codex.provider).toHaveProperty("state", "disabled");
-    expect(data.codex.compatibility).toBeDefined();
-    expect(data.codex.autoResume).toBeDefined();
-    expect(data.codex.supervisor).toBeDefined();
-  });
-});
-
-describe("GET /debug/codex-provider", () => {
-  it("returns codex provider health and lifecycle trace", async () => {
-    const res = await fetch(`${baseUrl}/debug/codex-provider`, {
-      headers: { "x-decky-token": token },
-    });
-    const data = await res.json();
-    expect(res.status).toBe(200);
-    expect(data.codexProvider).toBeDefined();
-    expect(data.codexProvider.mode).toBe("app-server");
-    expect(data.codexProvider.enabled).toBe(false);
-    expect(data.codexProvider.provider.state).toBe("disabled");
-    expect(data.codexProvider.compatibility).toBeDefined();
-    expect(data.codexProvider.autoResume).toBeDefined();
-    expect(Array.isArray(data.lifecycle)).toBe(true);
   });
 });
 

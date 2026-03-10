@@ -6,16 +6,12 @@ import { clearGateFile, gateFileExists } from "../approval-gate.js";
 const macroMocks = vi.hoisted(() => ({
   approve: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
   dismiss: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
-  approveTarget: vi.fn<(targetApp: "claude" | "codex") => Promise<void>>().mockResolvedValue(undefined),
-  dismissTarget: vi.fn<(targetApp: "claude" | "codex") => Promise<void>>().mockResolvedValue(undefined),
 }));
 
 vi.mock("../macro-exec.js", () => ({
   executeMacro: vi.fn().mockResolvedValue(undefined),
   approveOnceInClaude: macroMocks.approve,
   dismissClaudeApproval: macroMocks.dismiss,
-  approveInTargetApp: macroMocks.approveTarget,
-  dismissApprovalInTargetApp: macroMocks.dismissTarget,
   surfaceTargetApp: vi.fn().mockResolvedValue(undefined),
   setApprovalAttemptLogger: vi.fn(),
   withApprovalAttemptContext: vi.fn(async (_actionId: string, fn: () => Promise<void>) => await fn()),
@@ -51,8 +47,6 @@ afterEach(() => {
   decky.sm.forceState("idle", "test cleanup");
   macroMocks.approve.mockClear();
   macroMocks.dismiss.mockClear();
-  macroMocks.approveTarget.mockClear();
-  macroMocks.dismissTarget.mockClear();
 });
 
 async function postHook(
@@ -127,46 +121,6 @@ describe("approval workflow — mirror mode", () => {
     sock.disconnect();
   });
 
-  it("approve action fails fast for Codex when app-server request id is missing", async () => {
-    const { status } = await postHook(
-      { event: "PermissionRequest", tool: "Write" },
-      { "x-decky-approval-flow": "mirror" },
-    );
-    expect(status).toBe(200);
-
-    const sock = await connectClient();
-    const errorPromise = waitForSocketEvent<{ error: string }>(sock, "error");
-    sock.emit("action", { action: "approve", targetApp: "codex" });
-    const err = await errorPromise;
-
-    expect(err.error).toContain("missing app-server request ID");
-    expect(macroMocks.approve).not.toHaveBeenCalled();
-    expect(macroMocks.approveTarget).not.toHaveBeenCalled();
-    expect(gateFileExists()).toBe(false);
-    const { data } = await getStatus();
-    expect(data.state).toBe("awaiting-approval");
-    sock.disconnect();
-  });
-
-  it("approve action does not attempt Codex UI fallback when app-server request id is missing", async () => {
-    const { status } = await postHook(
-      { event: "PermissionRequest", tool: "Write" },
-      { "x-decky-approval-flow": "mirror" },
-    );
-    expect(status).toBe(200);
-
-    const sock = await connectClient();
-    const errorPromise = waitForSocketEvent<{ error: string }>(sock, "error");
-    sock.emit("action", { action: "approve", targetApp: "codex" });
-
-    const err = await errorPromise;
-    expect(err.error).toContain("missing app-server request ID");
-    expect(macroMocks.approveTarget).not.toHaveBeenCalled();
-    const { data } = await getStatus();
-    expect(data.state).toBe("awaiting-approval");
-    sock.disconnect();
-  });
-
   it("deny action dismisses Claude approval, clears approval UI, and does not write gate", async () => {
     const { status } = await postHook(
       { event: "PermissionRequest", tool: "Write" },
@@ -182,27 +136,6 @@ describe("approval workflow — mirror mode", () => {
     expect(gateFileExists()).toBe(false);
     const { data } = await getStatus();
     expect(data.state).toBe("idle");
-    sock.disconnect();
-  });
-
-  it("deny action fails fast for Codex when app-server request id is missing", async () => {
-    const { status } = await postHook(
-      { event: "PermissionRequest", tool: "Write" },
-      { "x-decky-approval-flow": "mirror" },
-    );
-    expect(status).toBe(200);
-
-    const sock = await connectClient();
-    const errorPromise = waitForSocketEvent<{ error: string }>(sock, "error");
-    sock.emit("action", { action: "deny", targetApp: "codex" });
-    const err = await errorPromise;
-
-    expect(err.error).toContain("missing app-server request ID");
-    expect(macroMocks.dismiss).not.toHaveBeenCalled();
-    expect(macroMocks.dismissTarget).not.toHaveBeenCalled();
-    expect(gateFileExists()).toBe(false);
-    const { data } = await getStatus();
-    expect(data.state).toBe("awaiting-approval");
     sock.disconnect();
   });
 
@@ -224,7 +157,7 @@ describe("approval workflow — mirror mode", () => {
     sock.disconnect();
   });
 
-  it("cancel action fails fast for Codex when app-server request id is missing", async () => {
+  it("records action-level trace entries for mirror cancel", async () => {
     const { status } = await postHook(
       { event: "PermissionRequest", tool: "Write" },
       { "x-decky-approval-flow": "mirror" },
@@ -232,28 +165,7 @@ describe("approval workflow — mirror mode", () => {
     expect(status).toBe(200);
 
     const sock = await connectClient();
-    const errorPromise = waitForSocketEvent<{ error: string }>(sock, "error");
-    sock.emit("action", { action: "cancel", targetApp: "codex" });
-    const err = await errorPromise;
-
-    expect(err.error).toContain("missing app-server request ID");
-    expect(macroMocks.dismiss).not.toHaveBeenCalled();
-    expect(macroMocks.dismissTarget).not.toHaveBeenCalled();
-    expect(gateFileExists()).toBe(false);
-    const { data } = await getStatus();
-    expect(data.state).toBe("awaiting-approval");
-    sock.disconnect();
-  });
-
-  it("records action-level trace entries for codex mirror cancel", async () => {
-    const { status } = await postHook(
-      { event: "PermissionRequest", tool: "Write" },
-      { "x-decky-approval-flow": "mirror" },
-    );
-    expect(status).toBe(200);
-
-    const sock = await connectClient();
-    sock.emit("action", { action: "cancel", targetApp: "codex", actionId: "sd-trace-test-1" });
+    sock.emit("action", { action: "cancel", actionId: "sd-trace-test-1" });
     await new Promise((r) => setTimeout(r, 120));
 
     const traceRes = await getApprovalTrace(20);
@@ -265,25 +177,6 @@ describe("approval workflow — mirror mode", () => {
     expect(
       trace.events.some((e: { stage?: string }) => e.stage === "bridge.action.received")
     ).toBe(true);
-    sock.disconnect();
-  });
-
-  it("mirror cancel keeps awaiting-approval when Codex request id is missing", async () => {
-    const { status } = await postHook(
-      { event: "PermissionRequest", tool: "Write" },
-      { "x-decky-approval-flow": "mirror" },
-    );
-    expect(status).toBe(200);
-
-    const sock = await connectClient();
-    const errorPromise = waitForSocketEvent<{ error: string }>(sock, "error");
-    sock.emit("action", { action: "cancel", targetApp: "codex" });
-    const err = await errorPromise;
-
-    expect(err.error).toContain("missing app-server request ID");
-    expect(macroMocks.dismissTarget).not.toHaveBeenCalled();
-    const { data } = await getStatus();
-    expect(data.state).toBe("awaiting-approval");
     sock.disconnect();
   });
 
@@ -302,13 +195,10 @@ describe("approval workflow — mirror mode", () => {
     sock.disconnect();
   });
 
-  it("cancel action outside awaiting-approval transitions to stopped and dismisses target app", async () => {
+  it("cancel action outside awaiting-approval transitions to stopped and dismisses Claude", async () => {
     const pre = await postHook(
       { event: "PermissionRequest", tool: "Write" },
-      {
-        "x-decky-approval-flow": "mirror",
-        "x-decky-target-app": "codex",
-      },
+      { "x-decky-approval-flow": "mirror" },
     );
     expect(pre.status).toBe(200);
     const post = await postHook(
@@ -321,9 +211,7 @@ describe("approval workflow — mirror mode", () => {
     sock.emit("action", { action: "cancel" });
     await new Promise((r) => setTimeout(r, 100));
 
-    expect(macroMocks.dismiss).not.toHaveBeenCalled();
-    expect(macroMocks.dismissTarget).toHaveBeenCalledOnce();
-    expect(macroMocks.dismissTarget).toHaveBeenCalledWith("codex");
+    expect(macroMocks.dismiss).toHaveBeenCalledOnce();
     const { data } = await getStatus();
     expect(data.state).toBe("stopped");
     sock.disconnect();
