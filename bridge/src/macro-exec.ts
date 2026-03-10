@@ -90,33 +90,40 @@ async function getFrontmostSnapshot(): Promise<FrontmostSnapshot | null> {
 
 /**
  * Restore the exact app + window that was frontmost before the focus steal.
+ *
+ * On multi-display setups `tell application id "X" to activate` often picks
+ * a window on the wrong display.  Instead we use System Events to:
+ *   1. AXRaise the specific window (forces it to front regardless of display)
+ *   2. Make the process frontmost (gives it keyboard focus)
+ *
  * Best-effort — errors are silently ignored so macro execution always resolves.
  */
 async function restoreFrontmostApp(snapshot: FrontmostSnapshot): Promise<void> {
-  // Step 1: activate the app (brings *some* window forward).
-  const activateScript = `
-    try
-      tell application id ${appleScriptString(snapshot.bundleId)} to activate
-    end try
-  `;
+  const proc = appleScriptString(snapshot.processName);
 
-  // Step 2: if we know the specific window, raise it.
-  const raiseWindowScript =
-    snapshot.windowName && snapshot.processName
-      ? `
-    delay 0.05
+  // If we have a window name, AXRaise it first so macOS raises the right
+  // window even on a different display, then make the process frontmost.
+  const script = snapshot.windowName
+    ? `
     tell application "System Events"
-      tell process ${appleScriptString(snapshot.processName)}
+      tell process ${proc}
         try
-          set frontmost of window ${appleScriptString(snapshot.windowName)} to true
+          perform action "AXRaise" of window ${appleScriptString(snapshot.windowName)}
         end try
+        set frontmost to true
       end tell
     end tell
   `
-      : "";
+    : `
+    tell application "System Events"
+      tell process ${proc}
+        set frontmost to true
+      end tell
+    end tell
+  `;
 
   try {
-    await runAppleScript(activateScript + raiseWindowScript);
+    await runAppleScript(script);
   } catch {
     // Best-effort — don't propagate.
   }

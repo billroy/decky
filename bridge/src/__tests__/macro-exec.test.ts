@@ -88,8 +88,8 @@ describe("executeMacro quick-focus-steal", () => {
     expect(osascriptCalls[1]).toContain("com.anthropic.claudefordesktop");
     expect(osascriptCalls[1]).toContain('keystroke "v" using command down');
 
-    // Third call: restores the previous app AND targets the specific window.
-    expect(osascriptCalls[2]).toContain("com.example.previous");
+    // Third call: restores via AXRaise on the specific window + process.
+    expect(osascriptCalls[2]).toContain("AXRaise");
     expect(osascriptCalls[2]).toContain("SomeApp");
     expect(osascriptCalls[2]).toContain("My Document");
   });

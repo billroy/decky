@@ -590,6 +590,11 @@ export function createApp(): DeckyApp {
         sm.forceState("idle", "restarted via StreamDeck");
       } else if (data.action === "macro") {
         const macroText = typeof data.text === "string" ? data.text : null;
+        console.log(
+          `[io] macro request: targetApp=${data.targetApp ?? "(default)"} ` +
+            `textLen=${macroText?.length ?? "null"} submit=${data.submit ?? true}` +
+            (macroText ? ` text="${macroText.slice(0, 50)}${macroText.length > 50 ? "…" : ""}"` : " text=<empty>"),
+        );
         if (macroText && macroText.length <= MAX_MACRO_ACTION_TEXT) {
           const cfg = getConfig();
           const targetApp =
