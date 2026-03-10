@@ -79,6 +79,81 @@ describe("codex app-server session", () => {
     expect(events).toHaveLength(0);
   });
 
+  it("auto-resumes most recent thread for matching cwd after initialize", () => {
+    const outgoing: Record<string, unknown>[] = [];
+    const debug: string[] = [];
+    const session = new CodexAppServerSession({
+      onOutgoingMessage: (msg) => outgoing.push(msg),
+      onHookEvent: () => undefined,
+      onDebugLog: (message) => debug.push(message),
+      autoResumeCwd: "/repo",
+    });
+
+    session.startHandshake();
+    session.ingestMessage({ id: "decky-init", result: {} });
+
+    expect(outgoing[1]).toEqual({ method: "initialized" });
+    expect(outgoing[2]).toEqual({
+      id: "decky-thread-loaded-list",
+      method: "thread/loaded/list",
+      params: { limit: 50 },
+    });
+
+    session.ingestMessage({
+      id: "decky-thread-loaded-list",
+      result: {
+        data: ["thread-b", "thread-c"],
+      },
+    });
+
+    expect(outgoing[3]).toEqual({
+      id: "decky-thread-list",
+      method: "thread/list",
+      params: { limit: 100, sortKey: "updated_at" },
+    });
+
+    session.ingestMessage({
+      id: "decky-thread-list",
+      result: {
+        data: [
+          { id: "thread-a", cwd: "/repo", status: { type: "active", activeFlags: ["waitingOnApproval"] } },
+          { id: "thread-b", cwd: "/repo", status: { type: "active", activeFlags: ["waitingOnApproval"] } },
+          { id: "thread-c", cwd: "/other", status: { type: "active", activeFlags: [] } },
+        ],
+      },
+    });
+
+    expect(outgoing[4]).toEqual({
+      id: "decky-thread-resume:thread-b",
+      method: "thread/resume",
+      params: { threadId: "thread-b" },
+    });
+    expect(debug.some((entry) => entry.includes("auto-resume selecting thread thread-b"))).toBe(true);
+  });
+
+  it("falls back to first loaded thread id when thread/list has no overlap", () => {
+    const outgoing: Record<string, unknown>[] = [];
+    const session = new CodexAppServerSession({
+      onOutgoingMessage: (msg) => outgoing.push(msg),
+      onHookEvent: () => undefined,
+      autoResumeCwd: "/repo",
+    });
+
+    session.startHandshake();
+    session.ingestMessage({ id: "decky-init", result: {} });
+    session.ingestMessage({ id: "decky-thread-loaded-list", result: { data: ["thread-live"] } });
+    session.ingestMessage({
+      id: "decky-thread-list",
+      result: { data: [{ id: "thread-a", cwd: "/other", status: { type: "notLoaded" } }] },
+    });
+
+    expect(outgoing[outgoing.length - 1]).toEqual({
+      id: "decky-thread-resume:thread-live",
+      method: "thread/resume",
+      params: { threadId: "thread-live" },
+    });
+  });
+
   it("tracks request ids and resolves command approvals", async () => {
     const outgoing: Record<string, unknown>[] = [];
     const events: Array<{ event: string; requestId: string | null; tool?: string | undefined }> = [];

@@ -528,6 +528,7 @@ export function createApp(): DeckyApp {
   const codexIntegrationMode = parseCodexIntegrationMode(process.env.DECKY_CODEX_INTEGRATION);
   const codexCompareEnabled = false;
   const codexAppServerCommand = parseOptionalEnvString(process.env.DECKY_CODEX_APP_SERVER_COMMAND);
+  const codexAutoResumeCwd = process.env.DECKY_CODEX_AUTO_RESUME === "0" ? null : process.cwd();
   let codexMonitor: { start: () => Promise<boolean>; stop: () => void } | null = null;
   let resolveCodexApproval: ((requestId: string, decision: CodexApprovalDecision) => Promise<void>) | null = null;
   if (!codexMonitorEnabled && !isTestRuntime) {
@@ -560,6 +561,7 @@ export function createApp(): DeckyApp {
 
     const codexAppServer = new CodexAppServerProvider({
       command: codexAppServerCommand,
+      autoResumeCwd: codexAutoResumeCwd,
       onHookEvent: (event) => onCodexHookEvent(event),
       onError: (error) => {
         console.warn("[codex-app-server] error:", error);
