@@ -34,6 +34,8 @@ import {
 import { getBridgeToken, readRequestToken, redactActionForLog } from "./security.js";
 import {
   CodexAppServerProvider,
+  type CodexAppServerLifecycleEvent,
+  type CodexAppServerLifecycleState,
   type CodexApprovalDecision,
   type CodexAppServerHookEvent,
 } from "./codex-app-server-provider.js";
@@ -102,6 +104,7 @@ type ApprovalFlow = "gate" | "mirror";
 type ApprovalTargetApp = "claude" | "codex";
 type HookSource = "hook" | "codex-monitor";
 type CodexIntegrationMode = "app-server";
+type CodexProviderState = CodexAppServerLifecycleState | "disabled";
 
 interface ApprovalQueueItem {
   id: string;
@@ -127,6 +130,33 @@ interface StatePayload {
     flow: ApprovalFlow;
     requestId: string;
   } | null;
+  codex: {
+    mode: CodexIntegrationMode;
+    enabled: boolean;
+    provider: {
+      state: CodexProviderState;
+      lastStateAt: number | null;
+      lastStartAt: number | null;
+      lastReadyAt: number | null;
+      lastErrorAt: number | null;
+      lastError: string | null;
+      lastExitAt: number | null;
+      lastExitCode: number | null;
+      lastExitSignal: string | null;
+    };
+  };
+}
+
+interface CodexProviderHealth {
+  state: CodexProviderState;
+  lastStateAt: number | null;
+  lastStartAt: number | null;
+  lastReadyAt: number | null;
+  lastErrorAt: number | null;
+  lastError: string | null;
+  lastExitAt: number | null;
+  lastExitCode: number | null;
+  lastExitSignal: string | null;
 }
 
 interface CodexCompareEvent {
@@ -200,6 +230,18 @@ export function createApp(): DeckyApp {
   const codexComparePrimary: CodexCompareEvent[] = [];
   const codexCompareShadow: CodexCompareEvent[] = [];
   const codexCompareDivergences: CodexCompareDivergence[] = [];
+  const codexLifecycleTrace: CodexAppServerLifecycleEvent[] = [];
+  const codexProviderHealth: CodexProviderHealth = {
+    state: "disabled",
+    lastStateAt: null,
+    lastStartAt: null,
+    lastReadyAt: null,
+    lastErrorAt: null,
+    lastError: null,
+    lastExitAt: null,
+    lastExitCode: null,
+    lastExitSignal: null,
+  };
 
   const io = new SocketIOServer(httpServer, {
     cors: {
@@ -213,6 +255,39 @@ export function createApp(): DeckyApp {
   });
 
   const sm = new StateMachine();
+
+  function codexHealthSnapshot() {
+    return {
+      mode: codexIntegrationMode,
+      enabled: codexMonitorEnabled,
+      provider: { ...codexProviderHealth },
+    };
+  }
+
+  function updateCodexHealthFromLifecycle(event: CodexAppServerLifecycleEvent): void {
+    codexProviderHealth.state = event.state;
+    codexProviderHealth.lastStateAt = event.at;
+    if (event.state === "starting" || event.state === "spawned" || event.state === "handshake-sent") {
+      codexProviderHealth.lastStartAt = event.at;
+    }
+    if (event.state === "ready") {
+      codexProviderHealth.lastReadyAt = event.at;
+      codexProviderHealth.lastError = null;
+    }
+    if (event.state === "error" || event.state === "start-failed") {
+      codexProviderHealth.lastErrorAt = event.at;
+      codexProviderHealth.lastError = event.detail ?? codexProviderHealth.lastError ?? "unknown error";
+    }
+    if (event.state === "exit") {
+      codexProviderHealth.lastExitAt = event.at;
+      codexProviderHealth.lastExitCode = typeof event.code === "number" ? event.code : null;
+      codexProviderHealth.lastExitSignal = typeof event.signal === "string" ? event.signal : null;
+    }
+    codexLifecycleTrace.push(event);
+    if (codexLifecycleTrace.length > 120) {
+      codexLifecycleTrace.splice(0, codexLifecycleTrace.length - 120);
+    }
+  }
 
   function trimCompareBuffers(): void {
     const maxEvents = 200;
@@ -351,6 +426,7 @@ export function createApp(): DeckyApp {
           requestId: active.requestId ?? active.id,
         }
         : null,
+      codex: codexHealthSnapshot(),
     };
   }
 
@@ -541,6 +617,8 @@ export function createApp(): DeckyApp {
   const codexCompareEnabled = false;
   const codexAppServerCommand = parseOptionalEnvString(process.env.DECKY_CODEX_APP_SERVER_COMMAND);
   const codexAutoResumeCwd = process.env.DECKY_CODEX_AUTO_RESUME === "0" ? null : process.cwd();
+  codexProviderHealth.state = codexMonitorEnabled ? "starting" : "disabled";
+  codexProviderHealth.lastStateAt = codexMonitorEnabled ? Date.now() : null;
   let codexMonitor: { start: () => Promise<boolean>; stop: () => void } | null = null;
   let resolveCodexApproval: ((requestId: string, decision: CodexApprovalDecision) => Promise<void>) | null = null;
   if (!codexMonitorEnabled && !isTestRuntime) {
@@ -576,10 +654,21 @@ export function createApp(): DeckyApp {
       autoResumeCwd: codexAutoResumeCwd,
       onHookEvent: (event) => onCodexHookEvent(event),
       onError: (error) => {
+        const detail = error instanceof Error ? error.message : String(error);
+        updateCodexHealthFromLifecycle({ state: "error", at: Date.now(), detail });
         console.warn("[codex-app-server] error:", error);
+        emitState();
       },
       onDebugLog: (message) => {
         console.log(`[codex-app-server] ${message}`);
+      },
+      onLifecycle: (event) => {
+        updateCodexHealthFromLifecycle(event);
+        const detail = event.detail ? ` detail=${event.detail}` : "";
+        const exitInfo =
+          event.state === "exit" ? ` code=${event.code ?? "null"} signal=${event.signal ?? "null"}` : "";
+        console.log(`[codex-app-server] lifecycle state=${event.state}${exitInfo}${detail}`);
+        emitState();
       },
     });
     codexMonitor = codexAppServer;
@@ -587,7 +676,13 @@ export function createApp(): DeckyApp {
 
     void codexMonitor.start().then((started) => {
       if (!started) {
+        updateCodexHealthFromLifecycle({
+          state: "start-failed",
+          at: Date.now(),
+          detail: "provider start() returned false",
+        });
         console.warn(`[codex] failed to start integration provider (mode=${codexIntegrationMode})`);
+        emitState();
         return;
       }
       console.log("[codex-app-server] connected using app-server stdio transport");
@@ -684,6 +779,16 @@ export function createApp(): DeckyApp {
         source: entry.source,
         createdAt: entry.createdAt,
       })),
+      codexProvider: codexHealthSnapshot(),
+      codexLifecycle: codexLifecycleTrace.slice(-40),
+      now: Date.now(),
+    });
+  });
+
+  app.get("/debug/codex-provider", (_req, res) => {
+    res.json({
+      codexProvider: codexHealthSnapshot(),
+      lifecycle: codexLifecycleTrace,
       now: Date.now(),
     });
   });

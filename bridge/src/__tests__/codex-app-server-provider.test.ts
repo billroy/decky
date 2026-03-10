@@ -60,10 +60,14 @@ describe("codex app-server session", () => {
   it("performs initialize handshake and emits initialized notification", () => {
     const outgoing: Record<string, unknown>[] = [];
     const events: Array<{ event: string; requestId: string | null }> = [];
+    let readyCount = 0;
 
     const session = new CodexAppServerSession({
       onOutgoingMessage: (msg) => outgoing.push(msg),
       onHookEvent: (e) => events.push({ event: e.payload.event, requestId: e.requestId }),
+      onHandshakeReady: () => {
+        readyCount += 1;
+      },
     });
 
     session.startHandshake();
@@ -77,6 +81,7 @@ describe("codex app-server session", () => {
     expect(outgoing).toHaveLength(2);
     expect(outgoing[1]).toEqual({ method: "initialized" });
     expect(events).toHaveLength(0);
+    expect(readyCount).toBe(1);
   });
 
   it("auto-resumes most recent thread for matching cwd after initialize", () => {
