@@ -156,12 +156,15 @@ describe("executeMacro quick-focus-steal", () => {
     await expect(executeMacro("hello")).resolves.toBeUndefined();
   });
 
-  it("uses increased delay for Electron target apps", async () => {
+  it("uses same paste sequence for Electron and native targets", async () => {
     await executeMacro("test", { targetApp: "cursor", submit: true });
 
-    // Paste script should have 0.3s activation delay (for Electron).
+    // Paste script should have standard 0.2s activation delay.
     const pasteScript = osascriptCalls.find((s) => s.includes('keystroke "v"'));
     expect(pasteScript).toBeDefined();
-    expect(pasteScript).toContain("delay 0.3");
+    expect(pasteScript).toContain("delay 0.2");
+    // No Electron-specific focus hack — just activate + paste.
+    expect(pasteScript).not.toContain("python3");
+    expect(pasteScript).not.toContain("click at");
   });
 });

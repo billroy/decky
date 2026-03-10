@@ -149,41 +149,14 @@ export async function executeMacro(text: string, options: MacroExecutionOptions 
   // Use pbcopy + AppleScript for reliable injection:
   // 1. Copy text to clipboard via pbcopy (handles all characters safely)
   // 2. Activate target app
-  // 3. Focus the text input (Electron apps need explicit focus)
-  // 4. Paste with Cmd+V
-  // 5. Press Return to send
-  //
-  // delay 0.3 after activation gives Electron apps (Codex, Cursor, etc.)
-  // enough time to fully focus and accept keystrokes.
-  //
-  // For Electron targets we click the center-bottom of the front window to
-  // land in the chat input area, then wait for the click to register before
-  // pasting.  Native apps (Claude) just need activation.
-  const isElectron = targetApp !== "claude";
-  const focusInputScript = isElectron
-    ? `
-      tell application "System Events"
-        tell process ${appleScriptString(TARGET_APP_SPECS[targetApp].appName)}
-          try
-            set winPos to position of front window
-            set winSz to size of front window
-            -- Click near the horizontal center, 90% down (chat input region)
-            set clickX to (item 1 of winPos) + ((item 1 of winSz) / 2) as integer
-            set clickY to (item 2 of winPos) + ((item 2 of winSz) * 0.9) as integer
-            click at {clickX, clickY}
-          end try
-        end tell
-      end tell
-      delay 0.15
-    `
-    : "";
+  // 3. Paste with Cmd+V
+  // 4. Press Return to send
   const script = `
     ${activation}
-    delay 0.3
-    ${focusInputScript}
+    delay 0.2
     tell application "System Events"
       keystroke "v" using command down
-      ${submit ? `delay 0.15
+      ${submit ? `delay 0.1
       keystroke return` : ""}
     end tell
   `;
