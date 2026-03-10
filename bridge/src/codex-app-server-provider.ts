@@ -4,6 +4,23 @@ import type { HookPayload } from "./state-machine.js";
 
 export type CodexApprovalDecision = "approve" | "deny" | "cancel";
 export type JsonRpcRequestId = string | number;
+export type CodexAppServerLifecycleState =
+  | "starting"
+  | "spawned"
+  | "handshake-sent"
+  | "ready"
+  | "start-failed"
+  | "error"
+  | "exit"
+  | "stopped";
+
+export interface CodexAppServerLifecycleEvent {
+  state: CodexAppServerLifecycleState;
+  at: number;
+  detail?: string;
+  code?: number | null;
+  signal?: NodeJS.Signals | null;
+}
 
 const PUBLIC_REQUEST_PREFIX = "jsonrpc:";
 const INIT_REQUEST_ID = "decky-init";
@@ -52,6 +69,7 @@ export interface CodexAppServerSessionOptions {
   onHookEvent: (event: CodexAppServerHookEvent) => void;
   onOutgoingMessage?: (message: Record<string, unknown>) => void;
   onDebugLog?: (message: string) => void;
+  onHandshakeReady?: () => void;
   onError?: (error: unknown) => void;
   clientInfo?: {
     name: string;
@@ -66,6 +84,7 @@ export interface CodexAppServerProviderOptions extends CodexAppServerSessionOpti
   env?: NodeJS.ProcessEnv;
   onDebugLog?: (message: string) => void;
   autoResumeCwd?: string | null;
+  onLifecycle?: (event: CodexAppServerLifecycleEvent) => void;
 }
 
 const COMMAND_APPROVAL_METHOD = "item/commandExecution/requestApproval";
@@ -205,6 +224,7 @@ export class CodexAppServerSession {
   private readonly onHookEvent: (event: CodexAppServerHookEvent) => void;
   private readonly onOutgoingMessage: (message: Record<string, unknown>) => void;
   private readonly onDebugLog: (message: string) => void;
+  private readonly onHandshakeReady: () => void;
   private readonly onError: (error: unknown) => void;
   private readonly clientInfo: { name: string; version: string };
   private readonly autoResumeCwd: string | null;
@@ -218,6 +238,7 @@ export class CodexAppServerSession {
     this.onHookEvent = options.onHookEvent;
     this.onOutgoingMessage = options.onOutgoingMessage ?? (() => undefined);
     this.onDebugLog = options.onDebugLog ?? (() => undefined);
+    this.onHandshakeReady = options.onHandshakeReady ?? (() => undefined);
     this.onError = options.onError ?? ((error) => console.warn("[codex-app-server] session error:", error));
     this.clientInfo = options.clientInfo ?? { name: "decky-bridge", version: "0.1.0" };
     this.autoResumeCwd = typeof options.autoResumeCwd === "string" && options.autoResumeCwd.trim().length > 0
@@ -314,6 +335,7 @@ export class CodexAppServerSession {
         return;
       }
       this.handshakeInitializedSent = true;
+      this.onHandshakeReady();
       this.onOutgoingMessage({ method: "initialized" });
       this.startAutoResumeIfConfigured();
       return;
@@ -473,6 +495,7 @@ export class CodexAppServerProvider {
 
   private readonly onError: (error: unknown) => void;
   private readonly onDebugLog: (message: string) => void;
+  private readonly onLifecycle: (event: CodexAppServerLifecycleEvent) => void;
   private readonly command: string;
   private readonly args: string[];
   private readonly env: NodeJS.ProcessEnv;
@@ -485,6 +508,7 @@ export class CodexAppServerProvider {
   constructor(options: CodexAppServerProviderOptions) {
     this.onError = options.onError ?? ((error) => console.warn("[codex-app-server] provider error:", error));
     this.onDebugLog = options.onDebugLog ?? (() => undefined);
+    this.onLifecycle = options.onLifecycle ?? (() => undefined);
     this.command = options.command ?? resolveDefaultCodexAppServerCommand();
     this.args = options.args ?? ["app-server", "--listen", "stdio://"];
     this.env = options.env ?? process.env;
@@ -492,6 +516,7 @@ export class CodexAppServerProvider {
       onHookEvent: options.onHookEvent,
       onOutgoingMessage: (msg) => this.sendMessage(msg),
       onDebugLog: this.onDebugLog,
+      onHandshakeReady: () => this.emitLifecycle({ state: "ready", at: Date.now() }),
       onError: this.onError,
       clientInfo: options.clientInfo,
       autoResumeCwd: options.autoResumeCwd,
@@ -501,6 +526,7 @@ export class CodexAppServerProvider {
   async start(): Promise<boolean> {
     if (this.process) return true;
     try {
+      this.emitLifecycle({ state: "starting", at: Date.now() });
       this.stopping = false;
       const child = spawn(this.command, this.args, {
         stdio: ["pipe", "pipe", "pipe"],
@@ -509,8 +535,10 @@ export class CodexAppServerProvider {
       this.process = child;
       this.stdoutBuffer = "";
       this.onDebugLog(`launching: ${this.command} ${this.args.join(" ")}`);
+      this.emitLifecycle({ state: "spawned", at: Date.now(), detail: `${this.command} ${this.args.join(" ")}` });
 
       child.on("error", (error) => {
+        const errorMessage = error instanceof Error ? error.message : String(error);
         if (
           error &&
           typeof error === "object" &&
@@ -524,6 +552,7 @@ export class CodexAppServerProvider {
           );
         }
         this.onError(error);
+        this.emitLifecycle({ state: "error", at: Date.now(), detail: errorMessage });
       });
 
       child.stdout.setEncoding("utf8");
@@ -542,6 +571,7 @@ export class CodexAppServerProvider {
         this.process = null;
         this.stdoutBuffer = "";
         this.session.stop();
+        this.emitLifecycle({ state: "exit", at: Date.now(), code, signal });
         if (this.stopping) {
           this.stopping = false;
           return;
@@ -550,9 +580,15 @@ export class CodexAppServerProvider {
       });
 
       this.session.startHandshake();
+      this.emitLifecycle({ state: "handshake-sent", at: Date.now() });
       return true;
     } catch (error) {
       this.onError(error);
+      this.emitLifecycle({
+        state: "start-failed",
+        at: Date.now(),
+        detail: error instanceof Error ? error.message : String(error),
+      });
       this.process = null;
       this.stdoutBuffer = "";
       this.session.stop();
@@ -568,6 +604,7 @@ export class CodexAppServerProvider {
       this.process = null;
     }
     this.stdoutBuffer = "";
+    this.emitLifecycle({ state: "stopped", at: Date.now() });
   }
 
   async resolveApproval(requestId: string, decision: CodexApprovalDecision): Promise<void> {
@@ -600,5 +637,9 @@ export class CodexAppServerProvider {
     const payload = `${JSON.stringify(message)}\n`;
     if (!this.process || this.process.stdin.destroyed) return;
     this.process.stdin.write(payload);
+  }
+
+  private emitLifecycle(event: CodexAppServerLifecycleEvent): void {
+    this.onLifecycle(event);
   }
 }
