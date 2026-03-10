@@ -16,6 +16,7 @@ vi.mock("../macro-exec.js", () => ({
   dismissClaudeApproval: macroMocks.dismiss,
   approveInTargetApp: macroMocks.approveTarget,
   dismissApprovalInTargetApp: macroMocks.dismissTarget,
+  surfaceTargetApp: vi.fn().mockResolvedValue(undefined),
   setApprovalAttemptLogger: vi.fn(),
   withApprovalAttemptContext: vi.fn(async (_actionId: string, fn: () => Promise<void>) => await fn()),
   startDictationForClaude: vi.fn().mockResolvedValue(undefined),

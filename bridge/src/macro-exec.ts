@@ -42,6 +42,15 @@ function activationScriptFor(targetApp: TargetApp): string {
 }
 
 /**
+ * Bring the target app to the foreground without clicking any buttons.
+ * Used to surface the app whose approval request is active on the deck.
+ */
+export async function surfaceTargetApp(targetApp: TargetApp): Promise<void> {
+  const script = activationScriptFor(targetApp);
+  await runAppleScript(script);
+}
+
+/**
  * Inject text into the selected app by copying to clipboard and pasting.
  * Returns a promise that resolves when the AppleScript completes.
  */

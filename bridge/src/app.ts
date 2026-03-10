@@ -29,6 +29,7 @@ import {
   dismissApprovalInTargetApp,
   setApprovalAttemptLogger,
   startDictationForClaude,
+  surfaceTargetApp,
   withApprovalAttemptContext,
 } from "./macro-exec.js";
 import { getBridgeToken, readRequestToken, redactActionForLog } from "./security.js";
@@ -400,6 +401,16 @@ export function createApp(): DeckyApp {
     return removed;
   }
 
+  /** Surface the target app for the currently active approval request. */
+  function surfaceActiveApproval(): void {
+    const active = currentApproval();
+    if (active) {
+      surfaceTargetApp(active.targetApp).catch((err) => {
+        console.error("[queue] surfaceTargetApp on advance failed:", err);
+      });
+    }
+  }
+
   function statePayload(snapshot = sm.getSnapshot()): StatePayload {
     const active = currentApproval();
     return {
@@ -477,6 +488,7 @@ export function createApp(): DeckyApp {
         const next = currentApproval();
         if (next) {
           sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+          surfaceActiveApproval();
         } else {
           sm.forceState("idle", `codex provider unavailable: ${reason}`);
         }
@@ -522,6 +534,7 @@ export function createApp(): DeckyApp {
       const next = currentApproval();
       if (next) {
         sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+        surfaceActiveApproval();
       } else {
         emitState();
       }
@@ -573,7 +586,7 @@ export function createApp(): DeckyApp {
         requestId !== null &&
         approvalQueue.some((entry) => entry.requestId === requestId);
       if (!duplicateHookPre && !duplicateMonitorPre) {
-        enqueueApprovalRequest({
+        const queued = enqueueApprovalRequest({
           requestId,
           flow,
           targetApp,
@@ -581,6 +594,12 @@ export function createApp(): DeckyApp {
           tool: payload.tool ?? null,
           source,
         });
+        // Surface the target app when this request becomes the active one
+        if (currentApproval()?.id === queued.id) {
+          surfaceTargetApp(queued.targetApp).catch((err) => {
+            console.error("[queue] surfaceTargetApp on arrival failed:", err);
+          });
+        }
       }
     }
     let snapshot = sm.processEvent(payload);
@@ -601,6 +620,7 @@ export function createApp(): DeckyApp {
         const next = currentApproval();
         if (next && snapshot.state !== "awaiting-approval") {
           snapshot = sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+          surfaceActiveApproval();
         } else {
           emitState(snapshot);
         }
@@ -624,6 +644,7 @@ export function createApp(): DeckyApp {
         const next = currentApproval();
         if (next && snapshot.state !== "awaiting-approval") {
           snapshot = sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+          surfaceActiveApproval();
         } else {
           emitState(snapshot);
         }
@@ -639,6 +660,7 @@ export function createApp(): DeckyApp {
         const next = currentApproval();
         if (next && snapshot.state !== "awaiting-approval") {
           snapshot = sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+          surfaceActiveApproval();
         } else {
           emitState(snapshot);
         }
@@ -1150,6 +1172,7 @@ export function createApp(): DeckyApp {
                 const next = currentApproval();
                 if (next) {
                   sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+                  surfaceActiveApproval();
                 } else {
                   sm.forceState("idle", mirrorDismissReason);
                 }
@@ -1200,6 +1223,7 @@ export function createApp(): DeckyApp {
         const next = currentApproval();
         if (next) {
           sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+          surfaceActiveApproval();
         } else {
           sm.forceState(entry.state as Parameters<typeof sm.forceState>[0], entry.reason);
         }
@@ -1243,6 +1267,7 @@ export function createApp(): DeckyApp {
           const next = currentApproval();
           if (next) {
             sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+            surfaceActiveApproval();
           } else {
             sm.forceState("tool-executing", "approved via StreamDeck (approve once)");
           }

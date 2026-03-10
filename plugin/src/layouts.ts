@@ -704,30 +704,33 @@ function approvalButtonSVG(bg: string, iconName: string, label: string): string 
 
 // --- Slot config factories ---
 
-function approveSlot(): SlotConfig {
+function approveSlot(approval?: ApprovalUiMeta | null): SlotConfig {
+  const targetApp = approval?.targetApp ?? "claude";
   return {
     svg: approvalButtonSVG("#22c55e", "check", "Approve"),
     title: "Approve",
     action: "approve",
-    data: { targetApp: "claude" },
+    data: { targetApp },
   };
 }
 
-function denySlot(): SlotConfig {
+function denySlot(approval?: ApprovalUiMeta | null): SlotConfig {
+  const targetApp = approval?.targetApp ?? "claude";
   return {
-    svg: approvalButtonSVG("#ef4444", "x", "Deny"),
+    svg: approvalButtonSVG("#f59e0b", "x", "Deny"),
     title: "Deny",
     action: "deny",
-    data: { targetApp: "claude" },
+    data: { targetApp },
   };
 }
 
-function cancelSlot(): SlotConfig {
+function stopSlot(approval?: ApprovalUiMeta | null): SlotConfig {
+  const targetApp = approval?.targetApp ?? "claude";
   return {
-    svg: approvalButtonSVG("#f59e0b", "ban", "Cancel"),
-    title: "Cancel",
+    svg: approvalButtonSVG("#ef4444", "octagon-x", "Stop"),
+    title: "Stop",
     action: "cancel",
-    data: { targetApp: "claude" },
+    data: { targetApp },
   };
 }
 
@@ -748,7 +751,7 @@ const DENY: SlotConfig = {
 
 const CANCEL: SlotConfig = {
   svg: "",
-  title: "Cancel",
+  title: "Stop",
   action: "cancel",
   data: { targetApp: "claude" },
 };
@@ -796,6 +799,7 @@ export interface MacroInput {
     | "approve"
     | "deny"
     | "cancel"
+    | "stop"
     | "restart"
     | "openConfig"
     | "approveOnceInClaude"
@@ -851,7 +855,7 @@ function macroSlot(index: number, macro: MacroInput): SlotConfig {
       data: { targetApp },
     };
   }
-  if (macro.type === "cancel") {
+  if (macro.type === "cancel" || macro.type === "stop") {
     const targetApp = resolveApprovalTargetApp(macro.targetApp);
     return {
       ...CANCEL,
@@ -1006,9 +1010,9 @@ export function getSlotConfig(
 
   // Awaiting-approval: dynamic rendering with Lucide icons + labels
   if (state === "awaiting-approval") {
-    if (slotIndex === 0) return approveSlot();
-    if (slotIndex === 1) return denySlot();
-    if (slotIndex === 2) return cancelSlot();
+    if (slotIndex === 0) return approveSlot(approval);
+    if (slotIndex === 1) return denySlot(approval);
+    if (slotIndex === 2) return stopSlot(approval);
     if (slotIndex === 3) {
       const title = toolName && toolName.trim().length > 0 ? toolName : "Tool Approval";
       return { svg: approvalInfoSVG(toolName, approval), title };
@@ -1027,7 +1031,7 @@ export function getLayout(state: string, macros?: MacroInput[]): LayoutDef {
     return buildIdleLayout(macros ?? DEFAULT_MACROS);
   }
   if (state === "awaiting-approval") {
-    return { 0: approveSlot(), 1: denySlot(), 2: cancelSlot() };
+    return { 0: approveSlot(), 1: denySlot(), 2: stopSlot() };
   }
   return LAYOUTS[state] ?? {};
 }

@@ -161,6 +161,7 @@ describe("layouts", () => {
         { type: "approve", expected: "approve" },
         { type: "deny", expected: "deny" },
         { type: "cancel", expected: "cancel" },
+        { type: "stop", expected: "cancel" },
         { type: "restart", expected: "restart" },
         { type: "openConfig", expected: "openConfig" },
         { type: "approveOnceInClaude", expected: "approveOnceInClaude" },
@@ -187,10 +188,35 @@ describe("layouts", () => {
       expect(config.action).toBe("deny");
     });
 
-    it("slot 2 is Cancel", () => {
+    it("slot 2 is Stop", () => {
       const config = getSlotConfig("awaiting-approval", 2);
-      expect(config.title).toBe("Cancel");
+      expect(config.title).toBe("Stop");
       expect(config.action).toBe("cancel");
+    });
+
+    it("approval slots use targetApp from approval metadata", () => {
+      const approval = {
+        pending: 1,
+        position: 1,
+        targetApp: "codex" as const,
+        flow: "mirror" as const,
+        requestId: "req-codex",
+      };
+      const approve = getSlotConfig("awaiting-approval", 0, null, undefined, approval);
+      expect(approve.data?.targetApp).toBe("codex");
+      const deny = getSlotConfig("awaiting-approval", 1, null, undefined, approval);
+      expect(deny.data?.targetApp).toBe("codex");
+      const stop = getSlotConfig("awaiting-approval", 2, null, undefined, approval);
+      expect(stop.data?.targetApp).toBe("codex");
+    });
+
+    it("approval slots default targetApp to claude when no metadata", () => {
+      const approve = getSlotConfig("awaiting-approval", 0);
+      expect(approve.data?.targetApp).toBe("claude");
+      const deny = getSlotConfig("awaiting-approval", 1);
+      expect(deny.data?.targetApp).toBe("claude");
+      const stop = getSlotConfig("awaiting-approval", 2);
+      expect(stop.data?.targetApp).toBe("claude");
     });
 
     it("slot 3 shows tool name when available", () => {
