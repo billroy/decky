@@ -372,12 +372,16 @@ function backupPath(index: number): string {
 function rotateBackups(): void {
   for (let i = CONFIG_BACKUP_COUNT - 1; i >= 0; i--) {
     const src = backupPath(i);
-    if (!existsSync(src)) continue;
-    if (i === CONFIG_BACKUP_COUNT - 1) {
-      unlinkSync(src);
-      continue;
+    try {
+      if (i === CONFIG_BACKUP_COUNT - 1) {
+        unlinkSync(src);
+      } else {
+        renameSync(src, backupPath(i + 1));
+      }
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
+      // File already gone — safe to skip.
     }
-    renameSync(src, backupPath(i + 1));
   }
   if (existsSync(CONFIG_PATH)) {
     copyFileSync(CONFIG_PATH, backupPath(0));
