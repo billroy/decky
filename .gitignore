@@ -7,3 +7,5 @@ plugin/test-results/
 plugin/.oracle/
 plugin/com.decky.controller.sdPlugin/logs/
 .worktrees/
+.claude/
+.obsidian/
