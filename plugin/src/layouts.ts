@@ -661,6 +661,22 @@ export function slideInFrame(targetSvg: string, xOffset: number): string {
 </svg>`;
 }
 
+/**
+ * Generate a slide-out animation frame.
+ * Wraps the inner content of `targetSvg` at the given vertical offset,
+ * clipped to the 144×144 viewport over a black background.
+ * Negative yOffset moves content upward (departure direction).
+ */
+export function slideOutFrame(targetSvg: string, yOffset: number): string {
+  const inner = extractSvgContent(targetSvg);
+  return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg" overflow="hidden">
+  <rect width="144" height="144" fill="#000000"/>
+  <g transform="translate(0, ${yOffset})">
+    ${inner}
+  </g>
+</svg>`;
+}
+
 /** Pure black 144×144 SVG with no content — used for the clear phase before animations. */
 export function blackSVG(): string {
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">

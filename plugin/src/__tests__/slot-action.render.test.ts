@@ -751,4 +751,41 @@ describe("approval slide-in animation", () => {
     const finalSvg = latestSvg(actions[0]);
     expect(finalSvg).not.toContain("Approve");
   });
+
+  it("departure from awaiting-approval animates slide-out then renders new state", async () => {
+    const { bridge, actions } = await setupWithSlots(4);
+
+    // Enter awaiting-approval first
+    bridge.snapshot = {
+      state: "awaiting-approval",
+      previousState: null,
+      tool: "Bash" as any,
+      lastEvent: null,
+      timestamp: Date.now(),
+      approval: { pending: 1, position: 1, targetApp: "claude", flow: "mirror", requestId: "r1" },
+    } as any;
+    for (const cb of bridge.stateListeners) cb(bridge.snapshot);
+    await new Promise((r) => setTimeout(r, 700));
+
+    // Clear counts from the slide-in
+    for (const a of actions) a.setImage.mockClear();
+
+    // Now transition to idle — should trigger slide-out
+    bridge.snapshot = {
+      state: "idle",
+      previousState: null,
+      tool: null,
+      lastEvent: null,
+      timestamp: Date.now(),
+    };
+    for (const cb of bridge.stateListeners) cb(bridge.snapshot);
+    await new Promise((r) => setTimeout(r, 500));
+
+    // Should have multiple setImage calls (animation frames + final render)
+    expect(actions[0].setImage.mock.calls.length).toBeGreaterThan(2);
+
+    // Final SVG should be the idle state macro, not approval
+    const finalSvg = latestSvg(actions[0]);
+    expect(finalSvg).not.toContain("Approve");
+  });
 });

@@ -4,6 +4,7 @@ import {
   getLayout,
   getLayoutStates,
   slideInFrame,
+  slideOutFrame,
   blackSVG,
   setTheme,
   setThemeSeed,
@@ -608,6 +609,29 @@ describe("layouts", () => {
       expect(svg).not.toContain("<text");
       expect(svg).not.toContain("<circle");
       expect(svg).not.toContain("<g ");
+    });
+
+    it("slideOutFrame uses vertical translate with overflow hidden", () => {
+      const svg = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+        <rect width="144" height="144" fill="#22c55e"/>
+      </svg>`;
+      const frame = slideOutFrame(svg, -72);
+      expect(frame).toContain('overflow="hidden"');
+      expect(frame).toContain("translate(0, -72)");
+      expect(frame).toContain('fill="#000000"');
+      expect(frame).toContain('fill="#22c55e"');
+    });
+
+    it("slideOutFrame at offset 0 has translate(0, 0)", () => {
+      const svg = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg"><rect/></svg>`;
+      const frame = slideOutFrame(svg, 0);
+      expect(frame).toContain("translate(0, 0)");
+    });
+
+    it("slideOutFrame at offset -144 has translate(0, -144)", () => {
+      const svg = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg"><rect/></svg>`;
+      const frame = slideOutFrame(svg, -144);
+      expect(frame).toContain("translate(0, -144)");
     });
   });
 });

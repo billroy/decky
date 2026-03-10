@@ -21,6 +21,7 @@ import { type BridgeClient, type ConnectionStatus, type StateSnapshot } from "..
 import {
   getSlotConfig,
   slideInFrame,
+  slideOutFrame,
   blackSVG,
   setTheme,
   setThemeSeed,
@@ -100,6 +101,7 @@ export class SlotAction extends SingletonAction {
   private widgetInterval?: ReturnType<typeof setInterval>;
   private animationAbort: AbortController | null = null;
   private lastRenderedState: string = "";
+  private lastApprovalSnapshot: StateSnapshot | null = null;
   private getRenderableActions(): Map<string, WillAppearEvent["action"]> {
     const all = new Map<string, WillAppearEvent["action"]>(activeKeyActions);
     for (const action of this.actions) {
@@ -418,7 +420,17 @@ export class SlotAction extends SingletonAction {
     const isNewApproval =
       state === "awaiting-approval" &&
       this.lastRenderedState !== "awaiting-approval";
+
+    // Detect transition OUT OF awaiting-approval → run slide-out animation
+    const isLeavingApproval =
+      state !== "awaiting-approval" &&
+      this.lastRenderedState === "awaiting-approval";
+
+    const prevApprovalSnapshot = this.lastApprovalSnapshot;
     this.lastRenderedState = state;
+    if (state === "awaiting-approval") {
+      this.lastApprovalSnapshot = snapshot;
+    }
 
     if (isNewApproval) {
       await this.animateApprovalSlideIn(snapshot, macros);
@@ -429,6 +441,11 @@ export class SlotAction extends SingletonAction {
     if (this.animationAbort) {
       this.animationAbort.abort();
       this.animationAbort = null;
+    }
+
+    if (isLeavingApproval && prevApprovalSnapshot) {
+      await this.animateApprovalSlideOut(prevApprovalSnapshot, snapshot, macros);
+      return;
     }
 
     for (const instance of this.getRenderableActions().values()) {
@@ -549,6 +566,95 @@ export class SlotAction extends SingletonAction {
           const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
           try { await instance.setImage(imageData); } catch { /* */ }
         }),
+    );
+
+    if (this.animationAbort === abort) {
+      this.animationAbort = null;
+    }
+  }
+
+  /**
+   * Animated slide-out for approval buttons (slots 0-3).
+   * Slides buttons upward out of view, then renders the new state.
+   */
+  private async animateApprovalSlideOut(
+    prevApprovalSnapshot: StateSnapshot,
+    newSnapshot: StateSnapshot | null,
+    macros: MacroInput[] | undefined,
+  ): Promise<void> {
+    this.animationAbort?.abort();
+    const abort = new AbortController();
+    this.animationAbort = abort;
+
+    const approval = prevApprovalSnapshot.approval ?? null;
+    const toolName = prevApprovalSnapshot.tool;
+    const allActions = this.getRenderableActions();
+
+    // Collect current approval button SVGs for the departure animation
+    const approvalSlots: Array<{
+      instance: WillAppearEvent["action"];
+      currentSvg: string;
+      slotIndex: number;
+    }> = [];
+
+    for (const [actionId, instance] of allActions) {
+      const slotIndex = getSlotIndex(actionId);
+      if (slotIndex >= 0 && slotIndex <= 3) {
+        const config = getSlotConfig("awaiting-approval", slotIndex, toolName, macros, approval);
+        approvalSlots.push({ instance, currentSvg: config.svg, slotIndex });
+      }
+    }
+
+    const TOTAL_DURATION = 300;
+    const FRAME_COUNT = 6;
+    const STAGGER_DELAY = 30;
+    const FRAME_INTERVAL = TOTAL_DURATION / FRAME_COUNT;
+
+    function easeInCubic(t: number): number {
+      return t * t * t;
+    }
+
+    for (let frame = 0; frame <= FRAME_COUNT; frame++) {
+      if (abort.signal.aborted) return;
+      const frameStart = Date.now();
+
+      await Promise.all(
+        approvalSlots.map(async ({ instance, currentSvg, slotIndex }) => {
+          if (abort.signal.aborted) return;
+
+          const slotProgress = frame / FRAME_COUNT - (slotIndex * STAGGER_DELAY) / TOTAL_DURATION;
+          const clamped = Math.max(0, Math.min(1, slotProgress));
+          const eased = easeInCubic(clamped);
+          const yOffset = Math.round(-144 * eased);
+
+          const svg = yOffset === 0 ? currentSvg : slideOutFrame(currentSvg, yOffset);
+          const imageData = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+          try { await instance.setImage(imageData); } catch { /* */ }
+        }),
+      );
+
+      if (frame < FRAME_COUNT) {
+        const elapsed = Date.now() - frameStart;
+        const wait = Math.max(0, FRAME_INTERVAL - elapsed);
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      }
+    }
+
+    if (abort.signal.aborted) return;
+
+    // Render all keys in the new state
+    const newState = newSnapshot?.state ?? "idle";
+    await Promise.all(
+      [...allActions.entries()].map(async ([actionId, instance]) => {
+        const slotIndex = getSlotIndex(actionId);
+        if (slotIndex === -1) return;
+        const config = getSlotConfig(newState, slotIndex, newSnapshot?.tool, macros, newSnapshot?.approval ?? null);
+        const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
+        try {
+          await instance.setImage(imageData);
+          await instance.setTitle("");
+        } catch { /* */ }
+      }),
     );
 
     if (this.animationAbort === abort) {
