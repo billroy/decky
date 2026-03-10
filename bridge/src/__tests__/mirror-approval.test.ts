@@ -21,6 +21,9 @@ vi.mock("../macro-exec.js", () => ({
   startDictationForClaude: vi.fn().mockResolvedValue(undefined),
 }));
 
+process.env.DECKY_CODEX_INTEGRATION = "sqlite";
+process.env.DECKY_ENABLE_CODEX_SQLITE = "1";
+
 const { createApp } = await import("../app.js");
 
 let baseUrl: string;
