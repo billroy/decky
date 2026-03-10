@@ -170,14 +170,6 @@ describe("layouts", () => {
       expect(config.svg).toContain("Approve O");
     });
 
-    it("supports openConfig utility type in slot macros", () => {
-      const macros: MacroInput[] = [{ label: "Config", text: "", type: "openConfig", icon: "settings" }];
-      const config = getSlotConfig("idle", 0, null, macros);
-      expect(config.action).toBe("openConfig");
-      expect(config.title).toBe("Config");
-      expect(config.svg).toContain("svg");
-    });
-
     it("supports all built-in utility action types", () => {
       const cases: Array<{ type: NonNullable<MacroInput["type"]>; expected: string }> = [
         { type: "approve", expected: "approve" },
@@ -185,7 +177,6 @@ describe("layouts", () => {
         { type: "cancel", expected: "cancel" },
         { type: "stop", expected: "cancel" },
         { type: "restart", expected: "restart" },
-        { type: "openConfig", expected: "openConfig" },
         { type: "approveOnceInClaude", expected: "approveOnceInClaude" },
         { type: "startDictationForClaude", expected: "startDictationForClaude" },
       ];

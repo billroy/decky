@@ -646,7 +646,6 @@ export function createApp(): DeckyApp {
           typeof data.themeSeed === "number" && Number.isFinite(data.themeSeed)
             ? Math.floor(data.themeSeed)
             : undefined;
-        const editor = typeof data.editor === "string" ? data.editor : undefined;
         let colors = data.colors && typeof data.colors === "object" ? data.colors : undefined;
         const defaultTargetApp =
           data.defaultTargetApp === "claude" ||
@@ -696,7 +695,6 @@ export function createApp(): DeckyApp {
         if (timeout !== undefined) update.approvalTimeout = timeout;
         if (theme) update.theme = theme;
         if (themeSeed !== undefined) update.themeSeed = themeSeed;
-        if (editor !== undefined) update.editor = editor;
         if (colors) update.colors = colors;
         if (defaultTargetApp) update.defaultTargetApp = defaultTargetApp;
         if (showTargetBadge !== undefined) update.showTargetBadge = showTargetBadge;

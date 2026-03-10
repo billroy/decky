@@ -64,7 +64,6 @@ export interface MacroDef {
     | "deny"
     | "cancel"
     | "restart"
-    | "openConfig"
     | "approveOnceInClaude"
     | "startDictationForClaude";
   widget?: WidgetDef;
@@ -75,7 +74,6 @@ export interface DeckyConfig {
   approvalTimeout: number;
   theme: Theme;
   themeSeed?: number;
-  editor: string;
   colors?: ColorOverrides;
   defaultTargetApp: TargetApp;
   showTargetBadge: boolean;
@@ -83,8 +81,6 @@ export interface DeckyConfig {
   enableApproveOnce: boolean;
   enableDictation: boolean;
 }
-
-export type EditorName = "bbedit" | "code" | "cursor" | "windsurf" | "textedit";
 
 export class ConfigValidationError extends Error {
   constructor(message: string) {
@@ -102,8 +98,6 @@ const CONFIG_PATH = join(DECKY_DIR, "config.json");
 const CONFIG_BACKUP_COUNT = 10;
 const CONFIG_TMP_PREFIX = "config.json.tmp";
 
-const DEFAULT_EDITOR: EditorName = "bbedit";
-
 const DEFAULT_CONFIG: DeckyConfig = {
   macros: [
     { label: "Continue", text: "Continue", icon: "check" },
@@ -120,7 +114,6 @@ const DEFAULT_CONFIG: DeckyConfig = {
   approvalTimeout: 30,
   theme: "light",
   themeSeed: 0,
-  editor: DEFAULT_EDITOR,
   defaultTargetApp: "claude",
   showTargetBadge: false,
   popUpApp: false,
@@ -136,10 +129,8 @@ export const MIN_FONT_SIZE = 16;
 export const MAX_FONT_SIZE = 42;
 export const MIN_WIDGET_INTERVAL_MINUTES = 1;
 export const MAX_WIDGET_INTERVAL_MINUTES = 60;
-export const MAX_EDITOR_LENGTH = 128;
 export const MIN_APPROVAL_TIMEOUT = 5;
 export const MAX_APPROVAL_TIMEOUT = 300;
-const ALLOWED_EDITORS: readonly EditorName[] = ["bbedit", "code", "cursor", "windsurf", "textedit"];
 const ICON_ALIASES: Readonly<Record<string, string>> = {
   checkmark: "check",
   stop: "octagon-x",
@@ -184,12 +175,6 @@ function normalizeTargetApp(value: unknown, fallback: TargetApp): TargetApp {
     : fallback;
 }
 
-function normalizeEditor(value: unknown, fallback: EditorName): EditorName {
-  if (typeof value !== "string") return fallback;
-  const v = value.trim().toLowerCase();
-  return (ALLOWED_EDITORS as readonly string[]).includes(v) ? (v as EditorName) : fallback;
-}
-
 function normalizeIcon(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
@@ -227,7 +212,6 @@ function normalizeMacro(value: unknown, fallbackTarget: TargetApp): MacroDef | n
     macro.type === "deny" ||
     macro.type === "cancel" ||
     macro.type === "restart" ||
-    macro.type === "openConfig" ||
     macro.type === "approveOnceInClaude" ||
     macro.type === "startDictationForClaude"
   ) {
@@ -322,12 +306,11 @@ function parseMacroStrict(value: unknown, fallbackTarget: TargetApp): MacroDef {
       macro.type !== "deny" &&
       macro.type !== "cancel" &&
       macro.type !== "restart" &&
-      macro.type !== "openConfig" &&
       macro.type !== "approveOnceInClaude" &&
       macro.type !== "startDictationForClaude"
     ) {
       throw new ConfigValidationError(
-        "Macro type must be one of: macro, widget, approve, deny, cancel, restart, openConfig, approveOnceInClaude, startDictationForClaude",
+        "Macro type must be one of: macro, widget, approve, deny, cancel, restart, approveOnceInClaude, startDictationForClaude",
       );
     }
     if (macro.type !== "macro") out.type = macro.type;
@@ -481,7 +464,6 @@ export function loadConfig(): DeckyConfig {
         typeof raw_obj.themeSeed === "number" && Number.isFinite(raw_obj.themeSeed)
           ? Math.floor(raw_obj.themeSeed)
           : DEFAULT_CONFIG.themeSeed,
-      editor: normalizeEditor(raw_obj.editor, DEFAULT_EDITOR),
       defaultTargetApp,
       showTargetBadge:
         typeof raw_obj.showTargetBadge === "boolean"
@@ -542,15 +524,6 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
       );
     }
   }
-  if (update_obj.editor !== undefined) {
-    if (typeof update_obj.editor !== "string") throw new ConfigValidationError("editor must be a string");
-    if (update_obj.editor.length > MAX_EDITOR_LENGTH) {
-      throw new ConfigValidationError(`editor must not exceed ${MAX_EDITOR_LENGTH} characters`);
-    }
-    if (!ALLOWED_EDITORS.includes(update_obj.editor.trim().toLowerCase() as EditorName)) {
-      throw new ConfigValidationError(`editor must be one of: ${ALLOWED_EDITORS.join(", ")}`);
-    }
-  }
   if (update_obj.themeSeed !== undefined) {
     if (typeof update_obj.themeSeed !== "number" || !Number.isFinite(update_obj.themeSeed)) {
       throw new ConfigValidationError("themeSeed must be a finite number");
@@ -609,10 +582,6 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
       typeof update_obj.themeSeed === "number" && Number.isFinite(update_obj.themeSeed)
         ? Math.floor(update_obj.themeSeed)
         : currentConfig.themeSeed,
-    editor:
-      typeof update_obj.editor === "string"
-        ? normalizeEditor(update_obj.editor, normalizeEditor(currentConfig.editor, DEFAULT_EDITOR))
-        : currentConfig.editor,
     defaultTargetApp: normalizeTargetApp(update_obj.defaultTargetApp, currentConfig.defaultTargetApp),
     showTargetBadge:
       typeof update_obj.showTargetBadge === "boolean"

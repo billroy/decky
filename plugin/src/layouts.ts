@@ -770,12 +770,6 @@ const RESTART: SlotConfig = {
   action: "restart",
 };
 
-const OPEN_CONFIG: SlotConfig = {
-  svg: approvalButtonSVG("#0f172a", "settings", "Config"),
-  title: "Config",
-  action: "openConfig",
-};
-
 const THINKING: SlotConfig = {
   svg: thinkingSVG(),
   title: "Thinking\u2026",
@@ -803,7 +797,6 @@ export interface MacroInput {
     | "cancel"
     | "stop"
     | "restart"
-    | "openConfig"
     | "approveOnceInClaude"
     | "startDictationForClaude";
   widget?: WidgetDef;
@@ -867,7 +860,6 @@ function macroSlot(index: number, macro: MacroInput): SlotConfig {
     };
   }
   if (macro.type === "restart") return { ...RESTART, svg: macroSVG(index, macro.label, macro.icon, macro.fontSize, macro.colors, "claude"), title: macro.label || RESTART.title };
-  if (macro.type === "openConfig") return { ...OPEN_CONFIG, svg: macroSVG(index, macro.label, macro.icon, macro.fontSize, macro.colors, "claude"), title: macro.label || OPEN_CONFIG.title };
   if (macro.type === "approveOnceInClaude") {
     return {
       svg: macroSVG(index, macro.label, macro.icon, macro.fontSize, macro.colors, "claude"),

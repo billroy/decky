@@ -71,7 +71,6 @@ export interface MacroDef {
     | "deny"
     | "cancel"
     | "restart"
-    | "openConfig"
     | "approveOnceInClaude"
     | "startDictationForClaude";
   widget?: WidgetDef;
@@ -82,7 +81,6 @@ export interface DeckyConfig {
   approvalTimeout: number;
   theme: Theme;
   themeSeed?: number;
-  editor?: string;
   colors?: ColorOverrides;
   defaultTargetApp: TargetApp;
   showTargetBadge: boolean;
