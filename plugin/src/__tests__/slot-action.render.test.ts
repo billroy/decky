@@ -89,10 +89,16 @@ class FakeBridge {
   }
 }
 
-function makeKeyAction(id = "action-1") {
+function makeKeyAction(
+  id = "action-1",
+  options?: { columns?: number; rows?: number; deviceId?: string },
+) {
   return {
     id,
-    device: { size: { columns: 5 } },
+    device: {
+      id: options?.deviceId ?? "device-1",
+      size: { columns: options?.columns ?? 5, rows: options?.rows ?? 3 },
+    },
     setImage: vi.fn().mockResolvedValue(undefined),
     setTitle: vi.fn().mockResolvedValue(undefined),
     isKey: () => true,
@@ -489,6 +495,112 @@ describe("SlotAction render path", () => {
 
     expect(latestSvg(actionLeft)).toContain("S0");
     expect(latestSvg(actionRight)).toContain("S4");
+  });
+
+  it("anchors approval controls at the first visible slot on the page", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge(baseConfig());
+    bridge.snapshot = {
+      ...bridge.snapshot,
+      state: "awaiting-approval",
+      tool: "Bash",
+      approval: {
+        pending: 1,
+        position: 1,
+        targetApp: "claude",
+        flow: "mirror",
+        requestId: "req-anchor-1",
+      },
+    };
+    setSlotClient(bridge as any);
+
+    const row2c0 = makeKeyAction("row2-c0");
+    const row2c1 = makeKeyAction("row2-c1");
+    const row2c2 = makeKeyAction("row2-c2");
+    const row2c3 = makeKeyAction("row2-c3");
+    const row2c4 = makeKeyAction("row2-c4");
+    const slot = new SlotAction();
+    (slot as any).actions = [row2c0, row2c1, row2c2, row2c3, row2c4];
+
+    await slot.onWillAppear({
+      action: row2c0,
+      payload: { isInMultiAction: false, coordinates: { row: 1, column: 0 } },
+    } as any);
+    await slot.onWillAppear({
+      action: row2c1,
+      payload: { isInMultiAction: false, coordinates: { row: 1, column: 1 } },
+    } as any);
+    await slot.onWillAppear({
+      action: row2c2,
+      payload: { isInMultiAction: false, coordinates: { row: 1, column: 2 } },
+    } as any);
+    await slot.onWillAppear({
+      action: row2c3,
+      payload: { isInMultiAction: false, coordinates: { row: 1, column: 3 } },
+    } as any);
+    await slot.onWillAppear({
+      action: row2c4,
+      payload: { isInMultiAction: false, coordinates: { row: 1, column: 4 } },
+    } as any);
+
+    expect(latestSvg(row2c0)).toContain("Approve");
+    expect(latestSvg(row2c1)).toContain("Deny");
+    expect(latestSvg(row2c2)).toContain("Cancel");
+    expect(latestSvg(row2c3)).toContain("Bash");
+    expect(latestSvg(row2c4)).toContain("•••");
+  });
+
+  it("dispatches anchored approval actions from non-top-row slots", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge(baseConfig());
+    bridge.snapshot = {
+      ...bridge.snapshot,
+      state: "awaiting-approval",
+      approval: {
+        pending: 1,
+        position: 1,
+        targetApp: "claude",
+        flow: "mirror",
+        requestId: "req-anchor-2",
+      },
+    };
+    setSlotClient(bridge as any);
+
+    const row2c0 = makeKeyAction("row2-c0");
+    const row2c1 = makeKeyAction("row2-c1");
+    const row2c2 = makeKeyAction("row2-c2");
+    const row2c4 = makeKeyAction("row2-c4");
+    const slot = new SlotAction();
+    (slot as any).actions = [row2c0, row2c1, row2c2, row2c4];
+
+    await slot.onWillAppear({
+      action: row2c0,
+      payload: { isInMultiAction: false, coordinates: { row: 1, column: 0 } },
+    } as any);
+    await slot.onWillAppear({
+      action: row2c1,
+      payload: { isInMultiAction: false, coordinates: { row: 1, column: 1 } },
+    } as any);
+    await slot.onWillAppear({
+      action: row2c2,
+      payload: { isInMultiAction: false, coordinates: { row: 1, column: 2 } },
+    } as any);
+    await slot.onWillAppear({
+      action: row2c4,
+      payload: { isInMultiAction: false, coordinates: { row: 1, column: 4 } },
+    } as any);
+
+    bridge.sendAction.mockClear();
+    await slot.onKeyDown({ action: row2c0 } as any);
+    await slot.onKeyDown({ action: row2c1 } as any);
+    await slot.onKeyDown({ action: row2c2 } as any);
+    await slot.onKeyDown({ action: row2c4 } as any);
+
+    expect(bridge.sendAction.mock.calls.map((call: unknown[]) => call[0])).toEqual(["approve", "deny", "cancel"]);
   });
 
   it("converges all active keys after rapid color updates", async () => {
