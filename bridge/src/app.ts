@@ -172,23 +172,6 @@ interface CodexProviderHealth {
   lastExitSignal: string | null;
 }
 
-interface CodexCompareEvent {
-  seq: number;
-  source: "primary" | "shadow";
-  event: HookEvent;
-  tool: string | null;
-  requestId: string | null;
-  timestamp: number;
-}
-
-interface CodexCompareDivergence {
-  seq: number;
-  index: number;
-  primary: string;
-  shadow: string;
-  timestamp: number;
-}
-
 function parseApprovalTargetApp(value: unknown): ApprovalTargetApp {
   return value === "codex" ? "codex" : "claude";
 }
@@ -207,10 +190,7 @@ function createActionId(prefix = "bridge"): string {
 }
 
 function parseCodexIntegrationMode(value: unknown): CodexIntegrationMode {
-  const requested = typeof value === "string" ? value.trim().toLowerCase() : "";
-  if (requested === "sqlite") {
-    console.warn("[codex] sqlite integration is disabled; forcing app-server mode");
-  }
+  void value;
   return "app-server";
 }
 
@@ -249,10 +229,6 @@ export function createApp(): DeckyApp {
   let pendingMirrorSettlement:
     | { actionId: string; socketId: string; timer: NodeJS.Timeout; reason: "approve" | "dismiss" }
     | null = null;
-  let codexCompareSeq = 0;
-  const codexComparePrimary: CodexCompareEvent[] = [];
-  const codexCompareShadow: CodexCompareEvent[] = [];
-  const codexCompareDivergences: CodexCompareDivergence[] = [];
   const codexLifecycleTrace: CodexAppServerLifecycleEvent[] = [];
   const codexProviderHealth: CodexProviderHealth = {
     state: "disabled",
@@ -346,55 +322,6 @@ export function createApp(): DeckyApp {
     if (codexLifecycleTrace.length > 120) {
       codexLifecycleTrace.splice(0, codexLifecycleTrace.length - 120);
     }
-  }
-
-  function trimCompareBuffers(): void {
-    const maxEvents = 200;
-    const maxDivergences = 120;
-    if (codexComparePrimary.length > maxEvents) {
-      codexComparePrimary.splice(0, codexComparePrimary.length - maxEvents);
-    }
-    if (codexCompareShadow.length > maxEvents) {
-      codexCompareShadow.splice(0, codexCompareShadow.length - maxEvents);
-    }
-    if (codexCompareDivergences.length > maxDivergences) {
-      codexCompareDivergences.splice(0, codexCompareDivergences.length - maxDivergences);
-    }
-  }
-
-  function compareSignature(event: CodexCompareEvent): string {
-    return `${event.event}:${event.tool ?? ""}`;
-  }
-
-  function recordCodexCompareEvent(source: "primary" | "shadow", payload: HookPayload, requestId: string | null): void {
-    const event: CodexCompareEvent = {
-      seq: ++codexCompareSeq,
-      source,
-      event: payload.event,
-      tool: payload.tool ?? null,
-      requestId,
-      timestamp: Date.now(),
-    };
-    const own = source === "primary" ? codexComparePrimary : codexCompareShadow;
-    const other = source === "primary" ? codexCompareShadow : codexComparePrimary;
-    own.push(event);
-
-    const index = own.length - 1;
-    const counterpart = other[index];
-    if (counterpart) {
-      const ownSig = compareSignature(event);
-      const otherSig = compareSignature(counterpart);
-      if (ownSig !== otherSig) {
-        codexCompareDivergences.push({
-          seq: event.seq,
-          index,
-          primary: source === "primary" ? ownSig : otherSig,
-          shadow: source === "shadow" ? ownSig : otherSig,
-          timestamp: Date.now(),
-        });
-      }
-    }
-    trimCompareBuffers();
   }
 
   setApprovalAttemptLogger((attempt) => {
@@ -715,7 +642,6 @@ export function createApp(): DeckyApp {
   const isTestRuntime = process.env.VITEST === "true";
   const codexMonitorEnabled = !isTestRuntime && process.env.DECKY_ENABLE_CODEX_MONITOR !== "0";
   const codexIntegrationMode = parseCodexIntegrationMode(process.env.DECKY_CODEX_INTEGRATION);
-  const codexCompareEnabled = false;
   const codexAppServerCommand = parseOptionalEnvString(process.env.DECKY_CODEX_APP_SERVER_COMMAND);
   const codexAutoResumeCwd = process.env.DECKY_CODEX_AUTO_RESUME === "0" ? null : process.cwd();
   codexRestartMaxAttempts = parseNonNegativeIntEnv(
@@ -822,9 +748,6 @@ export function createApp(): DeckyApp {
     const onCodexHookEvent = (event: HookPayload | CodexAppServerHookEvent) => {
       const payload = isCodexAppServerHookEvent(event) ? event.payload : event;
       const requestId = isCodexAppServerHookEvent(event) ? event.requestId : null;
-      if (codexCompareEnabled) {
-        recordCodexCompareEvent("primary", payload, requestId ?? null);
-      }
       const opts =
         payload.event === "PreToolUse"
           ? {
@@ -1002,22 +925,6 @@ export function createApp(): DeckyApp {
     res.json({
       codexProvider: codexHealthSnapshot(),
       lifecycle: codexLifecycleTrace,
-      now: Date.now(),
-    });
-  });
-
-  app.get("/debug/codex-compare", (_req, res) => {
-    res.json({
-      enabled: codexCompareEnabled,
-      mode: codexIntegrationMode,
-      primaryEvents: codexComparePrimary,
-      shadowEvents: codexCompareShadow,
-      divergences: codexCompareDivergences,
-      counts: {
-        primary: codexComparePrimary.length,
-        shadow: codexCompareShadow.length,
-        divergences: codexCompareDivergences.length,
-      },
       now: Date.now(),
     });
   });

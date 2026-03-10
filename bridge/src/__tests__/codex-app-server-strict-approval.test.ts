@@ -28,11 +28,9 @@ let client: ClientSocket;
 const token = getBridgeToken();
 
 const prevIntegration = process.env.DECKY_CODEX_INTEGRATION;
-const prevEnableSqlite = process.env.DECKY_ENABLE_CODEX_SQLITE;
 
 beforeAll(async () => {
   process.env.DECKY_CODEX_INTEGRATION = "app-server";
-  delete process.env.DECKY_ENABLE_CODEX_SQLITE;
   vi.resetModules();
   ({ createApp } = await import("../app.js"));
   decky = createApp();
@@ -52,8 +50,6 @@ afterAll(async () => {
 
   if (typeof prevIntegration === "string") process.env.DECKY_CODEX_INTEGRATION = prevIntegration;
   else delete process.env.DECKY_CODEX_INTEGRATION;
-  if (typeof prevEnableSqlite === "string") process.env.DECKY_ENABLE_CODEX_SQLITE = prevEnableSqlite;
-  else delete process.env.DECKY_ENABLE_CODEX_SQLITE;
 });
 
 afterEach(() => {
