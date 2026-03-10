@@ -1024,7 +1024,7 @@ export function createApp(): DeckyApp {
 
       const validActions: Record<string, { result: ApprovalResult; state: string; reason: string }> = {
         approve: { result: "approve", state: "tool-executing", reason: "approved via StreamDeck" },
-        deny:    { result: "deny",    state: "thinking",       reason: "denied via StreamDeck" },
+        deny:    { result: "deny",    state: "idle",            reason: "denied via StreamDeck" },
         cancel:  { result: "cancel",  state: "stopped",        reason: "cancelled via StreamDeck" },
       };
 

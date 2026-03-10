@@ -109,7 +109,7 @@ describe("approval workflow — gate file (legacy, explicit header)", () => {
     await postHookGate({ event: "PreToolUse", tool: "Bash" });
 
     const sock = await connectClient();
-    const statePromise = waitForState(sock, "thinking");
+    const statePromise = waitForState(sock, "idle");
 
     sock.emit("action", { action: "deny" });
     await statePromise;
@@ -189,19 +189,19 @@ describe("approval workflow — mirror flow (default)", () => {
     expect(data.state.previousState).toBe("thinking");
   });
 
-  it("PostToolUse after PermissionRequest transitions to thinking", async () => {
+  it("PostToolUse after PermissionRequest transitions to idle", async () => {
     decky.sm.forceState("idle", "test reset");
     await postHook({ event: "PermissionRequest", tool: "Bash" });
 
     const { data } = await postHook({ event: "PostToolUse", tool: "Bash" });
-    expect(data.state.state).toBe("thinking");
+    expect(data.state.state).toBe("idle");
   });
 
-  it("PostToolUse from idle (auto-approved tool, no PermissionRequest) transitions to thinking", async () => {
+  it("PostToolUse from idle (auto-approved tool, no PermissionRequest) stays idle", async () => {
     decky.sm.forceState("idle", "test reset");
     // No PermissionRequest — this was an auto-approved tool
     const { data } = await postHook({ event: "PostToolUse", tool: "Read" });
-    expect(data.state.state).toBe("thinking");
+    expect(data.state.state).toBe("idle");
   });
 
   it("explicit gate header still works for legacy flow", async () => {
@@ -224,28 +224,22 @@ describe("approval workflow — full cycle (gate flow)", () => {
     await execPromise;
 
     const { data: s2 } = await postHookGate({ event: "PostToolUse", tool: "Write" });
-    expect(s2.state.state).toBe("thinking");
-
-    const { data: s3 } = await postHookGate({ event: "Stop" });
-    expect(s3.state.state).toBe("idle");
+    expect(s2.state.state).toBe("idle");
     sock.disconnect();
   });
 
-  it("deny: idle → awaiting-approval → thinking → idle", async () => {
+  it("deny: idle → awaiting-approval → idle", async () => {
     decky.sm.forceState("idle", "test reset");
 
     const { data: s0 } = await postHookGate({ event: "PreToolUse", tool: "Bash" });
     expect(s0.state.state).toBe("awaiting-approval");
 
     const sock = await connectClient();
-    const thinkPromise = waitForState(sock, "thinking");
+    const idlePromise = waitForState(sock, "idle");
     sock.emit("action", { action: "deny" });
-    await thinkPromise;
+    await idlePromise;
 
     expect(readFileSync(GATE_FILE_PATH, "utf-8")).toBe("deny");
-
-    const { data: s2 } = await postHookGate({ event: "Stop" });
-    expect(s2.state.state).toBe("idle");
     sock.disconnect();
   });
 
@@ -285,7 +279,7 @@ describe("approval workflow — full cycle (gate flow)", () => {
 });
 
 describe("approval workflow — mirror full cycle (PermissionRequest)", () => {
-  it("PermissionRequest → PostToolUse → Stop full cycle", async () => {
+  it("PermissionRequest → PostToolUse full cycle", async () => {
     decky.sm.forceState("idle", "test reset");
 
     const { data: s0 } = await postHook({ event: "PermissionRequest", tool: "Write" });
@@ -293,20 +287,17 @@ describe("approval workflow — mirror full cycle (PermissionRequest)", () => {
 
     // Simulate approval handled (either in Claude or on deck) — PostToolUse follows
     const { data: s1 } = await postHook({ event: "PostToolUse", tool: "Write" });
-    expect(s1.state.state).toBe("thinking");
-
-    const { data: s2 } = await postHook({ event: "Stop" });
-    expect(s2.state.state).toBe("idle");
+    expect(s1.state.state).toBe("idle");
   });
 
-  it("approved in Claude (PostToolUse while awaiting): awaiting-approval → thinking", async () => {
+  it("approved in Claude (PostToolUse while awaiting): awaiting-approval → idle", async () => {
     decky.sm.forceState("idle", "test reset");
 
     await postHook({ event: "PermissionRequest", tool: "Bash" });
 
     // User approved in Claude directly — PostToolUse arrives while awaiting-approval
     const { data } = await postHook({ event: "PostToolUse", tool: "Bash" });
-    expect(data.state.state).toBe("thinking");
+    expect(data.state.state).toBe("idle");
   });
 
   it("auto-approved tool does NOT flash approval (PreToolUse → PostToolUse, no PermissionRequest)", async () => {
@@ -316,12 +307,8 @@ describe("approval workflow — mirror full cycle (PermissionRequest)", () => {
     const { data: s0 } = await postHook({ event: "PreToolUse", tool: "Read" });
     expect(s0.state.state).toBe("idle");
 
-    // PostToolUse arrives — tool completed without approval
+    // PostToolUse arrives — stays idle (thinking state disabled)
     const { data: s1 } = await postHook({ event: "PostToolUse", tool: "Read" });
-    expect(s1.state.state).toBe("thinking");
-
-    // Stop
-    const { data: s2 } = await postHook({ event: "Stop" });
-    expect(s2.state.state).toBe("idle");
+    expect(s1.state.state).toBe("idle");
   });
 });

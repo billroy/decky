@@ -62,15 +62,16 @@ export class StateMachine {
     "tool-executing:PermissionRequest": "awaiting-approval",
     "stopped:PermissionRequest": "awaiting-approval",
 
-    // PostToolUse → thinking (tool finished, Claude resumes)
-    "tool-executing:PostToolUse": "thinking",
+    // PostToolUse → idle (tool finished; thinking state is disabled for now
+    // because it interferes with deck usability — revisit when UI is reworked)
+    "tool-executing:PostToolUse": "idle",
     // PostToolUse can arrive in awaiting-approval if approval was
     // handled outside decky (e.g. user clicked in Claude.app directly)
-    "awaiting-approval:PostToolUse": "thinking",
+    "awaiting-approval:PostToolUse": "idle",
     // PostToolUse can arrive in idle/thinking when PreToolUse was skipped
     // (mirror flow auto-approved tools)
-    "idle:PostToolUse": "thinking",
-    "thinking:PostToolUse": "thinking",
+    "idle:PostToolUse": "idle",
+    "thinking:PostToolUse": "idle",
 
     // Stop → idle (Claude finished responding)
     "thinking:Stop": "idle",

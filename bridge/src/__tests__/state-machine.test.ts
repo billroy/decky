@@ -26,28 +26,19 @@ describe("StateMachine", () => {
       expect(snap.tool).toBe("Bash");
     });
 
-    it("awaiting-approval → thinking on PostToolUse (approved outside decky)", () => {
+    it("awaiting-approval → idle on PostToolUse (approved outside decky)", () => {
       sm.processEvent({ event: "PreToolUse", tool: "Bash" });
       const snap = sm.processEvent({ event: "PostToolUse", tool: "Bash" });
-      expect(snap.state).toBe("thinking");
+      expect(snap.state).toBe("idle");
       expect(snap.previousState).toBe("awaiting-approval");
     });
 
-    it("tool-executing → thinking on PostToolUse", () => {
+    it("tool-executing → idle on PostToolUse", () => {
       sm.processEvent({ event: "PreToolUse", tool: "Bash" });
       sm.forceState("tool-executing", "approved");
       const snap = sm.processEvent({ event: "PostToolUse", tool: "Bash" });
-      expect(snap.state).toBe("thinking");
-      expect(snap.previousState).toBe("tool-executing");
-    });
-
-    it("thinking → idle on Stop", () => {
-      sm.processEvent({ event: "PreToolUse", tool: "Bash" });
-      sm.processEvent({ event: "PostToolUse", tool: "Bash" });
-      // Now in thinking
-      const snap = sm.processEvent({ event: "Stop" });
       expect(snap.state).toBe("idle");
-      expect(snap.previousState).toBe("thinking");
+      expect(snap.previousState).toBe("tool-executing");
     });
 
     it("idle → idle on Stop (no-op but valid)", () => {
@@ -68,8 +59,7 @@ describe("StateMachine", () => {
     });
 
     it("thinking → idle on SubagentStop", () => {
-      sm.processEvent({ event: "PreToolUse", tool: "Bash" });
-      sm.processEvent({ event: "PostToolUse", tool: "Bash" });
+      sm.forceState("thinking", "test setup");
       const snap = sm.processEvent({ event: "SubagentStop" });
       expect(snap.state).toBe("idle");
       expect(snap.previousState).toBe("thinking");
@@ -77,7 +67,7 @@ describe("StateMachine", () => {
   });
 
   describe("full approval cycle", () => {
-    it("idle → awaiting-approval → tool-executing → thinking → idle", () => {
+    it("idle → awaiting-approval → tool-executing → idle", () => {
       sm.processEvent({ event: "PreToolUse", tool: "Read" });
       expect(sm.getSnapshot().state).toBe("awaiting-approval");
 
@@ -85,9 +75,6 @@ describe("StateMachine", () => {
       expect(sm.getSnapshot().state).toBe("tool-executing");
 
       sm.processEvent({ event: "PostToolUse", tool: "Read" });
-      expect(sm.getSnapshot().state).toBe("thinking");
-
-      sm.processEvent({ event: "Stop" });
       expect(sm.getSnapshot().state).toBe("idle");
     });
   });
@@ -107,9 +94,9 @@ describe("StateMachine", () => {
   });
 
   describe("invalid/unexpected transitions", () => {
-    it("PostToolUse while idle — transitions to thinking", () => {
+    it("PostToolUse while idle — stays idle", () => {
       const snap = sm.processEvent({ event: "PostToolUse", tool: "Bash" });
-      expect(snap.state).toBe("thinking");
+      expect(snap.state).toBe("idle");
     });
 
     it("stopped → awaiting-approval on PreToolUse", () => {
@@ -141,10 +128,10 @@ describe("StateMachine", () => {
       expect(snap.previousState).toBe("awaiting-approval");
     });
 
-    it("deny: awaiting-approval → thinking", () => {
+    it("deny: awaiting-approval → idle", () => {
       sm.processEvent({ event: "PreToolUse", tool: "Bash" });
-      const snap = sm.forceState("thinking", "denied");
-      expect(snap.state).toBe("thinking");
+      const snap = sm.forceState("idle", "denied");
+      expect(snap.state).toBe("idle");
       expect(snap.previousState).toBe("awaiting-approval");
     });
 

@@ -90,9 +90,9 @@ describe("POST /hook", () => {
     expect(data.state).toBe("awaiting-approval");
   });
 
-  it("accepts PostToolUse and transitions to thinking", async () => {
+  it("accepts PostToolUse and transitions to idle", async () => {
     const { data } = await postHook({ event: "PostToolUse", tool: "Bash" });
-    expect(data.state.state).toBe("thinking");
+    expect(data.state.state).toBe("idle");
   });
 
   it("accepts Stop and transitions to idle", async () => {
@@ -135,7 +135,7 @@ describe("POST /hook", () => {
   it("accepts x-decky-event header fallback", async () => {
     const { status, data } = await postHook({}, { "x-decky-event": "PostToolUse" });
     expect(status).toBe(200);
-    expect(data.state.state).toBe("thinking");
+    expect(data.state.state).toBe("idle");
   });
 
   it("drains hook mirror queue on PostToolUse even when tool labels differ", async () => {
@@ -151,7 +151,7 @@ describe("POST /hook", () => {
 
     const post = await postHook({ event: "PostToolUse", tool: "Bash" });
     expect(post.status).toBe(200);
-    expect(post.data.state.state).toBe("thinking");
+    expect(post.data.state.state).toBe("idle");
     expect(post.data.state.approval).toBeNull();
   });
 
