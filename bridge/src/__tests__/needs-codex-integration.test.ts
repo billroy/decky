@@ -17,7 +17,7 @@ function makeConfig(overrides: Partial<DeckyConfig> = {}): DeckyConfig {
   };
 }
 
-describe("needsCodexIntegration (utility — provider always starts at runtime)", () => {
+describe("needsCodexIntegration", () => {
   it("returns false when no codex buttons and defaultTargetApp is claude", () => {
     const cfg = makeConfig({
       macros: [

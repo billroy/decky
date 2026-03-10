@@ -679,23 +679,14 @@ export function createApp(): DeckyApp {
   }
 
   const isTestRuntime = process.env.VITEST === "true";
+  const codexForceEnable = process.env.DECKY_ENABLE_CODEX_MONITOR === "1";
   const codexForceDisable = process.env.DECKY_ENABLE_CODEX_MONITOR === "0";
-  // Always enable the Codex provider unless explicitly disabled or in tests.
-  // The provider handles graceful failure (ENOENT, retries, backoff) when the
-  // Codex binary isn't available.  Gating on config was the root cause of a
-  // persistent bug: if no macro had targetApp=codex and defaultTargetApp was
-  // "claude", the provider never started and Codex approvals never reached
-  // the StreamDeck — even though the user was actively using Codex.
-  const codexMonitorEnabled = !isTestRuntime && !codexForceDisable;
+  const codexMonitorEnabled = !isTestRuntime && !codexForceDisable &&
+    (codexForceEnable || needsCodexIntegration(getConfig()));
   const codexAppServerCommand = parseOptionalEnvString(process.env.DECKY_CODEX_APP_SERVER_COMMAND);
-  // Always auto-resume by default — the app-server subprocess only forwards
-  // approval requests for threads it has attached to via thread/resume.
-  // Without auto-resume the subprocess sits idle and approvals never arrive.
-  // Set DECKY_CODEX_AUTO_RESUME=0 to disable.
-  const codexAutoResumeDisabled = process.env.DECKY_CODEX_AUTO_RESUME === "0";
-  const codexAutoResumeCwd = codexAutoResumeDisabled
-    ? null
-    : (process.env.DECKY_CODEX_CWD || process.cwd());
+  const codexAutoResumeCwd = process.env.DECKY_CODEX_AUTO_RESUME === "1"
+    ? (process.env.DECKY_CODEX_CWD || process.cwd())
+    : null;
   codexRestartMaxAttempts = parseNonNegativeIntEnv(
     process.env.DECKY_CODEX_RESTART_MAX_ATTEMPTS,
     CODEX_RESTART_MAX_ATTEMPTS_DEFAULT,
@@ -792,10 +783,14 @@ export function createApp(): DeckyApp {
   }
 
   console.log("[bridge] Claude integration: always loaded");
+  if (!codexMonitorEnabled && !isTestRuntime) {
+    console.log("[bridge] Codex integration: disabled (no codex buttons configured)");
+  }
   if (codexMonitorEnabled) {
-    console.log("[bridge] Codex integration: always loaded");
-  } else if (!isTestRuntime) {
-    console.log("[bridge] Codex integration: disabled (DECKY_ENABLE_CODEX_MONITOR=0)");
+    const reason = codexForceEnable ? "DECKY_ENABLE_CODEX_MONITOR=1"
+      : getConfig().defaultTargetApp === "codex" ? `defaultTargetApp=codex`
+      : "codex buttons configured";
+    console.log(`[bridge] Codex integration: enabled (${reason})`);
   }
   if (codexMonitorEnabled) {
     const onCodexHookEvent = (event: HookPayload | CodexAppServerHookEvent) => {

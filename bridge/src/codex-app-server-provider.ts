@@ -436,25 +436,17 @@ export class CodexAppServerSession {
   }
 
   ingestMessage(message: unknown): void {
-    const obj = asRecord(message);
-    const method = obj ? String(obj.method ?? "") : "";
-    const id = obj ? obj.id : undefined;
     if (isJsonRpcRequest(message)) {
-      this.onDebugLog(`recv request id=${String(id)} method=${method}`);
       this.handleRequest(message);
       return;
     }
     if (isJsonRpcResponse(message)) {
-      this.onDebugLog(`recv response id=${String(id)}`);
       this.handleResponse(message);
       return;
     }
     if (isJsonRpcNotification(message)) {
-      this.onDebugLog(`recv notification method=${method}`);
       this.handleNotification(message);
-      return;
     }
-    this.onDebugLog(`recv unknown message: ${JSON.stringify(message).slice(0, 200)}`);
   }
 
   async resolveApproval(publicRequestId: string, decision: CodexApprovalDecision): Promise<void> {
