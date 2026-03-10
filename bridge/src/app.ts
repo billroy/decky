@@ -679,10 +679,14 @@ export function createApp(): DeckyApp {
   }
 
   const isTestRuntime = process.env.VITEST === "true";
-  const codexForceEnable = process.env.DECKY_ENABLE_CODEX_MONITOR === "1";
   const codexForceDisable = process.env.DECKY_ENABLE_CODEX_MONITOR === "0";
-  const codexMonitorEnabled = !isTestRuntime && !codexForceDisable &&
-    (codexForceEnable || needsCodexIntegration(getConfig()));
+  // Always enable the Codex provider unless explicitly disabled or in tests.
+  // The provider handles graceful failure (ENOENT, retries, backoff) when the
+  // Codex binary isn't available.  Gating on config was the root cause of a
+  // persistent bug: if no macro had targetApp=codex and defaultTargetApp was
+  // "claude", the provider never started and Codex approvals never reached
+  // the StreamDeck — even though the user was actively using Codex.
+  const codexMonitorEnabled = !isTestRuntime && !codexForceDisable;
   const codexAppServerCommand = parseOptionalEnvString(process.env.DECKY_CODEX_APP_SERVER_COMMAND);
   const codexAutoResumeCwd = process.env.DECKY_CODEX_AUTO_RESUME === "1"
     ? (process.env.DECKY_CODEX_CWD || process.cwd())
@@ -783,14 +787,10 @@ export function createApp(): DeckyApp {
   }
 
   console.log("[bridge] Claude integration: always loaded");
-  if (!codexMonitorEnabled && !isTestRuntime) {
-    console.log("[bridge] Codex integration: disabled (no codex buttons configured)");
-  }
   if (codexMonitorEnabled) {
-    const reason = codexForceEnable ? "DECKY_ENABLE_CODEX_MONITOR=1"
-      : getConfig().defaultTargetApp === "codex" ? `defaultTargetApp=codex`
-      : "codex buttons configured";
-    console.log(`[bridge] Codex integration: enabled (${reason})`);
+    console.log("[bridge] Codex integration: always loaded");
+  } else if (!isTestRuntime) {
+    console.log("[bridge] Codex integration: disabled (DECKY_ENABLE_CODEX_MONITOR=0)");
   }
   if (codexMonitorEnabled) {
     const onCodexHookEvent = (event: HookPayload | CodexAppServerHookEvent) => {
