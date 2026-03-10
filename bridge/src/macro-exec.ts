@@ -50,18 +50,73 @@ export async function surfaceTargetApp(targetApp: TargetApp): Promise<void> {
   await runAppleScript(script);
 }
 
+/** Snapshot of the user's frontmost app + window before we steal focus. */
+interface FrontmostSnapshot {
+  bundleId: string;
+  processName: string;
+  windowName: string | null;
+}
+
 /**
- * Re-activate an app by bundle ID. Best-effort — errors are silently ignored
- * so that macro execution still resolves even if focus restoration fails.
+ * Capture the frontmost app's bundle ID, process name, and front window title.
+ * Returns null if anything goes wrong (best-effort).
  */
-async function reactivateApp(bundleId: string): Promise<void> {
+async function getFrontmostSnapshot(): Promise<FrontmostSnapshot | null> {
   const script = `
-    try
-      tell application id "${bundleId}" to activate
-    end try
+    tell application "System Events"
+      set frontApp to first application process whose frontmost is true
+      set appId to bundle identifier of frontApp
+      set appName to name of frontApp
+      set winTitle to ""
+      try
+        set winTitle to name of front window of frontApp
+      end try
+      return appId & (ASCII character 9) & appName & (ASCII character 9) & winTitle
+    end tell
   `;
   try {
-    await runAppleScript(script);
+    const raw = await runAppleScript(script);
+    const [bundleId, processName, windowName] = raw.split("\t");
+    if (!bundleId) return null;
+    return {
+      bundleId,
+      processName: processName ?? "",
+      windowName: windowName || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Restore the exact app + window that was frontmost before the focus steal.
+ * Best-effort — errors are silently ignored so macro execution always resolves.
+ */
+async function restoreFrontmostApp(snapshot: FrontmostSnapshot): Promise<void> {
+  // Step 1: activate the app (brings *some* window forward).
+  const activateScript = `
+    try
+      tell application id ${appleScriptString(snapshot.bundleId)} to activate
+    end try
+  `;
+
+  // Step 2: if we know the specific window, raise it.
+  const raiseWindowScript =
+    snapshot.windowName && snapshot.processName
+      ? `
+    delay 0.05
+    tell application "System Events"
+      tell process ${appleScriptString(snapshot.processName)}
+        try
+          set frontmost of window ${appleScriptString(snapshot.windowName)} to true
+        end try
+      end tell
+    end tell
+  `
+      : "";
+
+  try {
+    await runAppleScript(activateScript + raiseWindowScript);
   } catch {
     // Best-effort — don't propagate.
   }
@@ -70,8 +125,9 @@ async function reactivateApp(bundleId: string): Promise<void> {
 /**
  * Inject text into the selected app by copying to clipboard and pasting.
  *
- * Quick-focus-steal: captures the frontmost app before activating the target,
- * then restores it after paste+submit so the user's window isn't left behind.
+ * Quick-focus-steal: captures the frontmost app + window before activating the
+ * target, then restores the exact window after paste+submit so the user's
+ * context isn't disrupted.
  *
  * Returns a promise that resolves when the AppleScript completes.
  */
@@ -80,20 +136,23 @@ export async function executeMacro(text: string, options: MacroExecutionOptions 
   const submit = options.submit !== false;
   const activation = activationScriptFor(targetApp);
 
-  // Capture the currently focused app *before* we steal focus.
-  const previousBundleId = await getFrontmostBundleId();
+  // Capture the currently focused app + window *before* we steal focus.
+  const snapshot = await getFrontmostSnapshot();
 
   // Use pbcopy + AppleScript for reliable injection:
   // 1. Copy text to clipboard via pbcopy (handles all characters safely)
   // 2. Activate target app
   // 3. Paste with Cmd+V
   // 4. Press Return to send
+  //
+  // delay 0.3 after activation gives Electron apps (Cursor, Codex) enough
+  // time to fully focus and accept keystrokes.
   const script = `
     ${activation}
-    delay 0.2
+    delay 0.3
     tell application "System Events"
       keystroke "v" using command down
-      ${submit ? `delay 0.1
+      ${submit ? `delay 0.15
       keystroke return` : ""}
     end tell
   `;
@@ -110,7 +169,7 @@ export async function executeMacro(text: string, options: MacroExecutionOptions 
       // Then run AppleScript to paste
       execFile("osascript", ["-e", script], (asErr) => {
         if (asErr) {
-          console.error("[macro] AppleScript failed:", asErr.message);
+          console.error(`[macro] AppleScript failed for target=${targetApp}:`, asErr.message);
           reject(asErr);
           return;
         }
@@ -125,14 +184,17 @@ export async function executeMacro(text: string, options: MacroExecutionOptions 
     pbcopy.stdin?.end();
   });
 
-  // Restore focus to the app the user was in before we stole it.
+  // Restore focus to the app + window the user was in before we stole it.
   // Skip if we were already in the target app (no steal happened).
   const targetBundleId = TARGET_APP_SPECS[targetApp]?.bundleId;
-  if (previousBundleId && previousBundleId !== targetBundleId) {
-    // Small delay so the paste + submit lands before we switch away.
-    await new Promise((r) => setTimeout(r, 150));
-    await reactivateApp(previousBundleId);
-    console.log(`[macro] restored focus to ${previousBundleId}`);
+  if (snapshot && snapshot.bundleId !== targetBundleId) {
+    // Give the target app time to process the paste + submit before switching.
+    await new Promise((r) => setTimeout(r, 250));
+    await restoreFrontmostApp(snapshot);
+    console.log(
+      `[macro] restored focus to ${snapshot.processName}` +
+        (snapshot.windowName ? ` window "${snapshot.windowName}"` : ""),
+    );
   }
 }
 
