@@ -22,6 +22,39 @@ export interface CodexAppServerLifecycleEvent {
   signal?: NodeJS.Signals | null;
 }
 
+export type CodexAppServerCompatibilityStatus = "unknown" | "compatible" | "incompatible";
+
+export interface CodexAppServerCompatibilityReport {
+  status: CodexAppServerCompatibilityStatus;
+  checkedAt: number;
+  protocolVersion: string | null;
+  advertisedMethods: string[] | null;
+  missingRequiredMethods: string[];
+  detail: string;
+}
+
+export type CodexAutoResumeState =
+  | "disabled"
+  | "scanning"
+  | "loaded-list"
+  | "thread-list"
+  | "resume-requested"
+  | "resumed"
+  | "skipped"
+  | "failed";
+
+export interface CodexAutoResumeDiagnostics {
+  state: CodexAutoResumeState;
+  at: number;
+  cwd: string | null;
+  selectedThreadId: string | null;
+  strategy: "preferred-thread" | "loaded-fallback" | "none" | null;
+  loadedCount: number | null;
+  listedCount: number | null;
+  reason: string | null;
+  error: string | null;
+}
+
 const PUBLIC_REQUEST_PREFIX = "jsonrpc:";
 const INIT_REQUEST_ID = "decky-init";
 const AUTO_RESUME_LOADED_LIST_REQUEST_ID = "decky-thread-loaded-list";
@@ -70,6 +103,8 @@ export interface CodexAppServerSessionOptions {
   onOutgoingMessage?: (message: Record<string, unknown>) => void;
   onDebugLog?: (message: string) => void;
   onHandshakeReady?: () => void;
+  onCompatibility?: (report: CodexAppServerCompatibilityReport) => void;
+  onAutoResumeDiagnostics?: (diagnostics: CodexAutoResumeDiagnostics) => void;
   onError?: (error: unknown) => void;
   clientInfo?: {
     name: string;
@@ -94,6 +129,13 @@ const LEGACY_COMMAND_APPROVAL_METHOD = "execCommandApproval";
 const LEGACY_PATCH_APPROVAL_METHOD = "applyPatchApproval";
 const DEFAULT_CODEX_APP_PATH = "/Applications/Codex.app/Contents/Resources/codex";
 const DEFAULT_HANDSHAKE_TIMEOUT_MS = 5_000;
+const REQUIRED_RPC_METHODS = [
+  "thread/loaded/list",
+  "thread/list",
+  "thread/resume",
+  "item/commandExecution/requestApproval",
+  "item/fileChange/requestApproval",
+] as const;
 
 const APPROVAL_METHODS = new Set<string>([
   COMMAND_APPROVAL_METHOD,
@@ -111,6 +153,87 @@ export function resolveDefaultCodexAppServerCommand(
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === "object" ? (value as Record<string, unknown>) : null;
+}
+
+function asStringArray(value: unknown): string[] | null {
+  if (!Array.isArray(value)) return null;
+  const values = value
+    .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+    .filter((entry) => entry.length > 0);
+  return values.length > 0 ? values : [];
+}
+
+function extractAdvertisedMethodsFromInitializeResult(result: Record<string, unknown>): string[] | null {
+  const direct = asStringArray(result.methods);
+  if (direct) return direct;
+
+  const capabilities = asRecord(result.capabilities);
+  const capabilityMethods = capabilities ? asStringArray(capabilities.methods) : null;
+  if (capabilityMethods) return capabilityMethods;
+
+  const serverCapabilities = asRecord(result.serverCapabilities);
+  const serverMethods = serverCapabilities ? asStringArray(serverCapabilities.methods) : null;
+  if (serverMethods) return serverMethods;
+
+  const experimental = capabilities ? asRecord(capabilities.experimentalApi) : null;
+  const experimentalMethods = experimental ? asStringArray(experimental.methods) : null;
+  if (experimentalMethods) return experimentalMethods;
+
+  return null;
+}
+
+function validateInitializeResult(result: unknown): CodexAppServerCompatibilityReport {
+  const checkedAt = Date.now();
+  const obj = asRecord(result);
+  if (!obj) {
+    return {
+      status: "incompatible",
+      checkedAt,
+      protocolVersion: null,
+      advertisedMethods: null,
+      missingRequiredMethods: [...REQUIRED_RPC_METHODS],
+      detail: "initialize result is not an object",
+    };
+  }
+
+  const protocolVersion = typeof obj.protocolVersion === "string" && obj.protocolVersion.trim().length > 0
+    ? obj.protocolVersion.trim()
+    : null;
+  const advertisedMethods = extractAdvertisedMethodsFromInitializeResult(obj);
+  if (!advertisedMethods) {
+    return {
+      status: "unknown",
+      checkedAt,
+      protocolVersion,
+      advertisedMethods: null,
+      missingRequiredMethods: [],
+      detail: "initialize result did not advertise method capabilities",
+    };
+  }
+
+  const set = new Set(advertisedMethods);
+  const missingRequiredMethods = REQUIRED_RPC_METHODS.filter((method) => !set.has(method));
+  if (missingRequiredMethods.length > 0) {
+    return {
+      status: "incompatible",
+      checkedAt,
+      protocolVersion,
+      advertisedMethods,
+      missingRequiredMethods,
+      detail: `initialize missing required methods: ${missingRequiredMethods.join(", ")}`,
+    };
+  }
+
+  return {
+    status: "compatible",
+    checkedAt,
+    protocolVersion,
+    advertisedMethods,
+    missingRequiredMethods: [],
+    detail: protocolVersion
+      ? `initialize compatibility checks passed (protocolVersion=${protocolVersion})`
+      : "initialize compatibility checks passed",
+  };
 }
 
 function isRequestId(value: unknown): value is JsonRpcRequestId {
@@ -227,6 +350,8 @@ export class CodexAppServerSession {
   private readonly onOutgoingMessage: (message: Record<string, unknown>) => void;
   private readonly onDebugLog: (message: string) => void;
   private readonly onHandshakeReady: () => void;
+  private readonly onCompatibility: (report: CodexAppServerCompatibilityReport) => void;
+  private readonly onAutoResumeDiagnostics: (diagnostics: CodexAutoResumeDiagnostics) => void;
   private readonly onError: (error: unknown) => void;
   private readonly clientInfo: { name: string; version: string };
   private readonly autoResumeCwd: string | null;
@@ -235,17 +360,31 @@ export class CodexAppServerSession {
   private pendingByRequestId = new Map<string, PendingApproval>();
   private pendingByItemId = new Map<string, string>();
   private autoResumeLoadedThreadIds: Set<string> | null = null;
+  private autoResumeDiagnostics: CodexAutoResumeDiagnostics;
 
   constructor(options: CodexAppServerSessionOptions) {
     this.onHookEvent = options.onHookEvent;
     this.onOutgoingMessage = options.onOutgoingMessage ?? (() => undefined);
     this.onDebugLog = options.onDebugLog ?? (() => undefined);
     this.onHandshakeReady = options.onHandshakeReady ?? (() => undefined);
+    this.onCompatibility = options.onCompatibility ?? (() => undefined);
+    this.onAutoResumeDiagnostics = options.onAutoResumeDiagnostics ?? (() => undefined);
     this.onError = options.onError ?? ((error) => console.warn("[codex-app-server] session error:", error));
     this.clientInfo = options.clientInfo ?? { name: "decky-bridge", version: "0.1.0" };
     this.autoResumeCwd = typeof options.autoResumeCwd === "string" && options.autoResumeCwd.trim().length > 0
       ? options.autoResumeCwd.trim()
       : null;
+    this.autoResumeDiagnostics = {
+      state: this.autoResumeCwd ? "skipped" : "disabled",
+      at: Date.now(),
+      cwd: this.autoResumeCwd,
+      selectedThreadId: null,
+      strategy: null,
+      loadedCount: null,
+      listedCount: null,
+      reason: this.autoResumeCwd ? "awaiting initialize" : "auto-resume disabled by configuration",
+      error: null,
+    };
   }
 
   startHandshake(): void {
@@ -266,6 +405,15 @@ export class CodexAppServerSession {
     this.pendingByItemId.clear();
     this.autoResumeLoadedThreadIds = null;
     this.handshakeInitializedSent = false;
+    this.emitAutoResumeDiagnostics({
+      state: this.autoResumeCwd ? "skipped" : "disabled",
+      reason: this.autoResumeCwd ? "session stopped" : "auto-resume disabled by configuration",
+      error: null,
+      selectedThreadId: null,
+      strategy: null,
+      loadedCount: null,
+      listedCount: null,
+    });
   }
 
   pendingCount(): number {
@@ -336,6 +484,13 @@ export class CodexAppServerSession {
         this.onError(res.error);
         return;
       }
+      const compatibility = validateInitializeResult(res.result);
+      this.onCompatibility(compatibility);
+      this.onDebugLog(`[codex-app-server] ${compatibility.detail}`);
+      if (compatibility.status === "incompatible") {
+        this.onError(new Error(`codex app-server compatibility check failed: ${compatibility.detail}`));
+        return;
+      }
       this.handshakeInitializedSent = true;
       this.onHandshakeReady();
       this.onOutgoingMessage({ method: "initialized" });
@@ -352,9 +507,23 @@ export class CodexAppServerSession {
     }
     if (typeof res.id === "string" && res.id.startsWith(AUTO_RESUME_RESUME_REQUEST_PREFIX)) {
       if (res.error) {
+        const threadId = this.parseAutoResumeThreadIdFromRequestId(res.id);
+        this.emitAutoResumeDiagnostics({
+          state: "failed",
+          selectedThreadId: threadId,
+          error: JSON.stringify(res.error),
+          reason: "thread/resume returned error",
+        });
         this.onError(res.error);
         return;
       }
+      const threadId = this.parseAutoResumeThreadIdFromRequestId(res.id);
+      this.emitAutoResumeDiagnostics({
+        state: "resumed",
+        selectedThreadId: threadId,
+        error: null,
+        reason: "thread/resume succeeded",
+      });
       this.onDebugLog("[codex-app-server] auto-resume succeeded");
     }
   }
@@ -398,8 +567,26 @@ export class CodexAppServerSession {
   }
 
   private startAutoResumeIfConfigured(): void {
-    if (!this.autoResumeCwd) return;
+    if (!this.autoResumeCwd) {
+      this.emitAutoResumeDiagnostics({
+        state: "disabled",
+        reason: "auto-resume disabled by configuration",
+        error: null,
+        selectedThreadId: null,
+        strategy: null,
+      });
+      return;
+    }
     this.onDebugLog(`[codex-app-server] auto-resume scanning threads for cwd=${this.autoResumeCwd}`);
+    this.emitAutoResumeDiagnostics({
+      state: "scanning",
+      reason: "requesting thread/loaded/list",
+      error: null,
+      selectedThreadId: null,
+      strategy: null,
+      loadedCount: null,
+      listedCount: null,
+    });
     this.autoResumeLoadedThreadIds = null;
     this.onOutgoingMessage({
       id: AUTO_RESUME_LOADED_LIST_REQUEST_ID,
@@ -409,6 +596,11 @@ export class CodexAppServerSession {
   }
 
   private requestAutoResumeThreadList(): void {
+    this.emitAutoResumeDiagnostics({
+      state: "thread-list",
+      reason: "requesting thread/list",
+      error: null,
+    });
     this.onOutgoingMessage({
       id: AUTO_RESUME_LIST_REQUEST_ID,
       method: "thread/list",
@@ -418,6 +610,12 @@ export class CodexAppServerSession {
 
   private handleAutoResumeLoadedListResponse(res: JsonRpcResponse): void {
     if (res.error) {
+      this.emitAutoResumeDiagnostics({
+        state: "failed",
+        reason: "thread/loaded/list returned error",
+        error: JSON.stringify(res.error),
+        loadedCount: null,
+      });
       this.onError(res.error);
       this.autoResumeLoadedThreadIds = null;
       this.requestAutoResumeThreadList();
@@ -427,22 +625,46 @@ export class CodexAppServerSession {
     const rawIds = Array.isArray(result?.data) ? result.data : [];
     const ids = rawIds.filter((value): value is string => typeof value === "string" && value.trim().length > 0);
     this.autoResumeLoadedThreadIds = new Set(ids);
+    this.emitAutoResumeDiagnostics({
+      state: "loaded-list",
+      reason: "loaded thread ids received",
+      error: null,
+      loadedCount: ids.length,
+    });
     this.onDebugLog(`[codex-app-server] auto-resume loaded threads=${ids.length}`);
     this.requestAutoResumeThreadList();
   }
 
   private handleAutoResumeListResponse(res: JsonRpcResponse): void {
     if (res.error) {
+      this.emitAutoResumeDiagnostics({
+        state: "failed",
+        reason: "thread/list returned error",
+        error: JSON.stringify(res.error),
+      });
       this.onError(res.error);
       return;
     }
     const result = asRecord(res.result);
     const rows = Array.isArray(result?.data) ? result.data : [];
     const threads = rows.map((value) => parseAutoResumeThread(value)).filter((value): value is AutoResumeThread => value !== null);
+    this.emitAutoResumeDiagnostics({
+      state: "thread-list",
+      reason: "thread/list response processed",
+      error: null,
+      listedCount: threads.length,
+    });
     if (threads.length === 0) {
       const fallbackLoaded = this.autoResumeLoadedThreadIds?.values().next().value ?? null;
       if (typeof fallbackLoaded === "string" && fallbackLoaded.trim().length > 0) {
         this.onDebugLog(`[codex-app-server] auto-resume selecting loaded thread ${fallbackLoaded}`);
+        this.emitAutoResumeDiagnostics({
+          state: "resume-requested",
+          selectedThreadId: fallbackLoaded,
+          strategy: "loaded-fallback",
+          reason: "no thread/list rows; using loaded-thread fallback",
+          error: null,
+        });
         this.onOutgoingMessage({
           id: `${AUTO_RESUME_RESUME_REQUEST_PREFIX}${fallbackLoaded}`,
           method: "thread/resume",
@@ -450,6 +672,13 @@ export class CodexAppServerSession {
         });
         return;
       }
+      this.emitAutoResumeDiagnostics({
+        state: "skipped",
+        selectedThreadId: null,
+        strategy: "none",
+        reason: "no existing threads available for auto-resume",
+        error: null,
+      });
       this.onDebugLog("[codex-app-server] auto-resume found no existing threads");
       return;
     }
@@ -463,6 +692,13 @@ export class CodexAppServerSession {
         const fallbackLoaded = this.autoResumeLoadedThreadIds.values().next().value ?? null;
         if (typeof fallbackLoaded === "string" && fallbackLoaded.trim().length > 0) {
           this.onDebugLog(`[codex-app-server] auto-resume selecting loaded thread ${fallbackLoaded}`);
+          this.emitAutoResumeDiagnostics({
+            state: "resume-requested",
+            selectedThreadId: fallbackLoaded,
+            strategy: "loaded-fallback",
+            reason: "loaded threads did not overlap thread/list; using loaded fallback",
+            error: null,
+          });
           this.onOutgoingMessage({
             id: `${AUTO_RESUME_RESUME_REQUEST_PREFIX}${fallbackLoaded}`,
             method: "thread/resume",
@@ -477,6 +713,13 @@ export class CodexAppServerSession {
     const chosen = selectPreferredAutoResumeThread(candidatePool, this.autoResumeCwd);
     const threadId = chosen?.id ?? null;
     if (!threadId) {
+      this.emitAutoResumeDiagnostics({
+        state: "failed",
+        selectedThreadId: null,
+        strategy: "none",
+        reason: "chosen auto-resume thread id was missing",
+        error: "selected thread id missing",
+      });
       this.onDebugLog("[codex-app-server] auto-resume thread id missing");
       return;
     }
@@ -484,11 +727,34 @@ export class CodexAppServerSession {
     this.onDebugLog(
       `[codex-app-server] auto-resume selecting thread ${threadId} (cwd=${chosen?.cwd ?? "unknown"} status=${chosen?.statusType ?? "unknown"})`,
     );
+    this.emitAutoResumeDiagnostics({
+      state: "resume-requested",
+      selectedThreadId: threadId,
+      strategy: "preferred-thread",
+      reason: `selected preferred thread (cwd=${chosen?.cwd ?? "unknown"} status=${chosen?.statusType ?? "unknown"})`,
+      error: null,
+    });
     this.onOutgoingMessage({
       id: `${AUTO_RESUME_RESUME_REQUEST_PREFIX}${threadId}`,
       method: "thread/resume",
       params: { threadId },
     });
+  }
+
+  private parseAutoResumeThreadIdFromRequestId(id: string): string | null {
+    if (!id.startsWith(AUTO_RESUME_RESUME_REQUEST_PREFIX)) return null;
+    const threadId = id.slice(AUTO_RESUME_RESUME_REQUEST_PREFIX.length).trim();
+    return threadId.length > 0 ? threadId : null;
+  }
+
+  private emitAutoResumeDiagnostics(update: Partial<CodexAutoResumeDiagnostics>): void {
+    this.autoResumeDiagnostics = {
+      ...this.autoResumeDiagnostics,
+      ...update,
+      at: Date.now(),
+      cwd: this.autoResumeCwd,
+    };
+    this.onAutoResumeDiagnostics({ ...this.autoResumeDiagnostics });
   }
 }
 
@@ -528,6 +794,8 @@ export class CodexAppServerProvider {
       onOutgoingMessage: (msg) => this.sendMessage(msg),
       onDebugLog: this.onDebugLog,
       onHandshakeReady: () => this.handleHandshakeReady(),
+      onCompatibility: options.onCompatibility,
+      onAutoResumeDiagnostics: options.onAutoResumeDiagnostics,
       onError: this.onError,
       clientInfo: options.clientInfo,
       autoResumeCwd: options.autoResumeCwd,
