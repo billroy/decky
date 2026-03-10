@@ -2,10 +2,11 @@ node_modules/
 dist/
 *.tsbuildinfo
 .DS_Store
-bridge/.decky-test/
+.decky-test/
 plugin/test-results/
 plugin/.oracle/
 plugin/com.decky.controller.sdPlugin/logs/
 .worktrees/
 .claude/
 .obsidian/
+docs/debug/
