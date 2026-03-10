@@ -3,6 +3,8 @@ import {
   getSlotConfig,
   getLayout,
   getLayoutStates,
+  slideInFrame,
+  blackSVG,
   setTheme,
   setThemeSeed,
   setDefaultColors,
@@ -560,6 +562,52 @@ describe("layouts", () => {
       expect(config.action).toBe("widget-refresh");
       expect(config.svg).toContain("Bridge:OK");
       expect(config.svg).toContain("State:idle");
+    });
+  });
+
+  describe("animation frame helpers", () => {
+    it("slideInFrame wraps content with translate and overflow hidden", () => {
+      const svg = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+        <rect width="144" height="144" fill="#22c55e"/>
+      </svg>`;
+      const frame = slideInFrame(svg, 72);
+      expect(frame).toContain('overflow="hidden"');
+      expect(frame).toContain('translate(72, 0)');
+      expect(frame).toContain('fill="#22c55e"');
+      expect(frame).toContain('fill="#000000"');
+    });
+
+    it("slideInFrame at offset 0 has translate(0, 0)", () => {
+      const svg = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg"><rect/></svg>`;
+      const frame = slideInFrame(svg, 0);
+      expect(frame).toContain("translate(0, 0)");
+    });
+
+    it("slideInFrame at offset 144 has translate(144, 0)", () => {
+      const svg = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg"><rect/></svg>`;
+      const frame = slideInFrame(svg, 144);
+      expect(frame).toContain("translate(144, 0)");
+    });
+
+    it("slideInFrame preserves inner SVG content", () => {
+      const svg = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="72" cy="72" r="50" fill="red"/>
+        <text x="72" y="72">Hello</text>
+      </svg>`;
+      const frame = slideInFrame(svg, 50);
+      expect(frame).toContain('<circle cx="72" cy="72" r="50" fill="red"/>');
+      expect(frame).toContain("Hello");
+    });
+
+    it("blackSVG produces a 144x144 black SVG", () => {
+      const svg = blackSVG();
+      expect(svg).toContain('width="144"');
+      expect(svg).toContain('height="144"');
+      expect(svg).toContain('fill="#000000"');
+      // Should not contain any visible content (no text, no icons)
+      expect(svg).not.toContain("<text");
+      expect(svg).not.toContain("<circle");
+      expect(svg).not.toContain("<g ");
     });
   });
 });

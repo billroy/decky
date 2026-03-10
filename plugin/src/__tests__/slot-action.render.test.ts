@@ -633,3 +633,122 @@ describe("SlotAction render path", () => {
     expect(payload.selectedMacroIndex).toBeUndefined();
   });
 });
+
+describe("approval slide-in animation", () => {
+  async function setupWithSlots(slotCount: number) {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge(baseConfig());
+    setSlotClient(bridge as any);
+
+    const actions: ReturnType<typeof makeKeyAction>[] = [];
+    const slot = new SlotAction();
+
+    for (let i = 0; i < slotCount; i++) {
+      const a = makeKeyAction(`action-${i}`);
+      actions.push(a);
+      (slot as any).actions = actions;
+      await slot.onWillAppear({
+        action: a,
+        payload: { isInMultiAction: false, coordinates: { row: 0, column: i } },
+      } as any);
+    }
+
+    // Clear initial render call counts
+    for (const a of actions) {
+      a.setImage.mockClear();
+      a.setTitle.mockClear();
+    }
+
+    return { slot, bridge, actions };
+  }
+
+  it("transition to awaiting-approval calls setImage many times (animation frames)", async () => {
+    const { bridge, actions } = await setupWithSlots(4);
+
+    bridge.snapshot = {
+      state: "awaiting-approval",
+      previousState: null,
+      tool: "Bash" as any,
+      lastEvent: null,
+      timestamp: Date.now(),
+      approval: { pending: 1, position: 1, targetApp: "claude", flow: "mirror", requestId: "r1" },
+    } as any;
+    for (const cb of bridge.stateListeners) cb(bridge.snapshot);
+
+    // Allow animation frames to complete (500ms + overhead)
+    await new Promise((r) => setTimeout(r, 700));
+
+    // Each approval slot should have many more setImage calls than a single render
+    for (const a of actions) {
+      expect(a.setImage.mock.calls.length).toBeGreaterThan(2);
+    }
+
+    // First call should be the black clear phase
+    const firstSvg = decodeImageData(actions[0].setImage.mock.calls[0][0]);
+    expect(firstSvg).toContain('fill="#000000"');
+    expect(firstSvg).not.toContain("Approve");
+
+    // Last call should be the final approval button
+    const calls = actions[0].setImage.mock.calls;
+    const lastSvg = decodeImageData(calls[calls.length - 1][0]);
+    expect(lastSvg).toContain("Approve");
+  });
+
+  it("re-render within awaiting-approval does NOT re-animate", async () => {
+    const { bridge, actions } = await setupWithSlots(4);
+
+    // First transition: triggers animation
+    bridge.snapshot = {
+      state: "awaiting-approval",
+      previousState: null,
+      tool: "Bash" as any,
+      lastEvent: null,
+      timestamp: Date.now(),
+      approval: { pending: 1, position: 1, targetApp: "claude", flow: "mirror", requestId: "r1" },
+    } as any;
+    for (const cb of bridge.stateListeners) cb(bridge.snapshot);
+    await new Promise((r) => setTimeout(r, 700));
+
+    // Second event while still in awaiting-approval: normal render, no animation
+    actions[0].setImage.mockClear();
+    for (const cb of bridge.stateListeners) cb(bridge.snapshot);
+    await new Promise((r) => setTimeout(r, 100));
+
+    // Should be just 1 setImage call (instant render), not many frames
+    expect(actions[0].setImage.mock.calls.length).toBeLessThanOrEqual(2);
+  });
+
+  it("state change during animation aborts it", async () => {
+    const { bridge, actions } = await setupWithSlots(4);
+
+    // Start animation
+    bridge.snapshot = {
+      state: "awaiting-approval",
+      previousState: null,
+      tool: "Bash" as any,
+      lastEvent: null,
+      timestamp: Date.now(),
+      approval: { pending: 1, position: 1, targetApp: "claude", flow: "mirror", requestId: "r1" },
+    } as any;
+    for (const cb of bridge.stateListeners) cb(bridge.snapshot);
+
+    // Immediately change state to idle (simulating quick approve)
+    await new Promise((r) => setTimeout(r, 100));
+    actions[0].setImage.mockClear();
+    bridge.snapshot = {
+      state: "idle",
+      previousState: null,
+      tool: null,
+      lastEvent: null,
+      timestamp: Date.now(),
+    };
+    for (const cb of bridge.stateListeners) cb(bridge.snapshot);
+    await new Promise((r) => setTimeout(r, 700));
+
+    // Final SVG should be the idle state, not approval
+    const finalSvg = latestSvg(actions[0]);
+    expect(finalSvg).not.toContain("Approve");
+  });
+});

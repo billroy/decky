@@ -20,6 +20,8 @@ import type { JsonValue, JsonObject } from "@elgato/utils";
 import { type BridgeClient, type ConnectionStatus, type StateSnapshot } from "../bridge-client.js";
 import {
   getSlotConfig,
+  slideInFrame,
+  blackSVG,
   setTheme,
   setThemeSeed,
   setDefaultColors,
@@ -96,6 +98,8 @@ export class SlotAction extends SingletonAction {
   private unsubBridgeEvent?: () => void;
   private activePiActionId?: string;
   private widgetInterval?: ReturnType<typeof setInterval>;
+  private animationAbort: AbortController | null = null;
+  private lastRenderedState: string = "";
   private getRenderableActions(): Map<string, WillAppearEvent["action"]> {
     const all = new Map<string, WillAppearEvent["action"]>(activeKeyActions);
     for (const action of this.actions) {
@@ -410,6 +414,23 @@ export class SlotAction extends SingletonAction {
     const toolName = snapshot?.tool;
     const macros = this.getMacros();
 
+    // Detect transition INTO awaiting-approval → run slide-in animation
+    const isNewApproval =
+      state === "awaiting-approval" &&
+      this.lastRenderedState !== "awaiting-approval";
+    this.lastRenderedState = state;
+
+    if (isNewApproval) {
+      await this.animateApprovalSlideIn(snapshot, macros);
+      return;
+    }
+
+    // Cancel any in-progress animation (e.g., user approved during slide-in)
+    if (this.animationAbort) {
+      this.animationAbort.abort();
+      this.animationAbort = null;
+    }
+
     for (const instance of this.getRenderableActions().values()) {
       const slotIndex = getSlotIndex(instance.id);
       if (slotIndex === -1) continue;
@@ -430,6 +451,108 @@ export class SlotAction extends SingletonAction {
         pushDebug("renderAll:setImage:err", instance.id, slotIndex, { state });
         // SDK may throw if the action disappeared mid-render; safe to ignore.
       }
+    }
+  }
+
+  /**
+   * Animated slide-in for approval buttons (slots 0-3).
+   * Phase 1: Clear all keys to black.
+   * Phase 2: Slide each approval button in from the right over ~500ms.
+   */
+  private async animateApprovalSlideIn(
+    snapshot: StateSnapshot | null,
+    macros: MacroInput[] | undefined,
+  ): Promise<void> {
+    // Cancel any in-progress animation
+    this.animationAbort?.abort();
+    const abort = new AbortController();
+    this.animationAbort = abort;
+
+    const approval = snapshot?.approval ?? null;
+    const toolName = snapshot?.tool;
+    const allActions = this.getRenderableActions();
+
+    // --- Phase 1: Clear all keys to black ---
+    const blackImg = `data:image/svg+xml,${encodeURIComponent(blackSVG())}`;
+    await Promise.all(
+      [...allActions.values()].map(async (instance) => {
+        try {
+          await instance.setImage(blackImg);
+          await instance.setTitle("");
+        } catch { /* key may have disappeared */ }
+      }),
+    );
+
+    if (abort.signal.aborted) return;
+    await new Promise((r) => setTimeout(r, 50));
+    if (abort.signal.aborted) return;
+
+    // --- Phase 2: Slide-in for slots 0-3 ---
+    const approvalSlots: Array<{
+      instance: WillAppearEvent["action"];
+      finalSvg: string;
+      slotIndex: number;
+    }> = [];
+
+    for (const [actionId, instance] of allActions) {
+      const slotIndex = getSlotIndex(actionId);
+      if (slotIndex >= 0 && slotIndex <= 3) {
+        const config = getSlotConfig("awaiting-approval", slotIndex, toolName, macros, approval);
+        approvalSlots.push({ instance, finalSvg: config.svg, slotIndex });
+      }
+    }
+
+    const TOTAL_DURATION = 500;
+    const FRAME_COUNT = 8;
+    const STAGGER_DELAY = 40; // ms between each slot starting
+    const FRAME_INTERVAL = TOTAL_DURATION / FRAME_COUNT;
+
+    function easeOutCubic(t: number): number {
+      return 1 - Math.pow(1 - t, 3);
+    }
+
+    for (let frame = 0; frame <= FRAME_COUNT; frame++) {
+      if (abort.signal.aborted) return;
+      const frameStart = Date.now();
+
+      await Promise.all(
+        approvalSlots.map(async ({ instance, finalSvg, slotIndex }) => {
+          if (abort.signal.aborted) return;
+
+          const slotProgress = frame / FRAME_COUNT - (slotIndex * STAGGER_DELAY) / TOTAL_DURATION;
+          const clamped = Math.max(0, Math.min(1, slotProgress));
+          const eased = easeOutCubic(clamped);
+          const xOffset = Math.round(144 * (1 - eased));
+
+          const svg = xOffset === 0 ? finalSvg : slideInFrame(finalSvg, xOffset);
+          const imageData = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+          try { await instance.setImage(imageData); } catch { /* */ }
+        }),
+      );
+
+      if (frame < FRAME_COUNT) {
+        const elapsed = Date.now() - frameStart;
+        const wait = Math.max(0, FRAME_INTERVAL - elapsed);
+        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+      }
+    }
+
+    if (abort.signal.aborted) return;
+
+    // --- Restore non-approval slots (4+) to their proper state ---
+    await Promise.all(
+      [...allActions.entries()]
+        .filter(([id]) => getSlotIndex(id) > 3)
+        .map(async ([id, instance]) => {
+          const slotIndex = getSlotIndex(id);
+          const config = getSlotConfig("awaiting-approval", slotIndex, toolName, macros, approval);
+          const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
+          try { await instance.setImage(imageData); } catch { /* */ }
+        }),
+    );
+
+    if (this.animationAbort === abort) {
+      this.animationAbort = null;
     }
   }
 }

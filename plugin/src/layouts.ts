@@ -638,6 +638,36 @@ function emptySVG(slotIndex = 0, colors?: ColorOverrides): string {
 </svg>`;
 }
 
+// --- Animation frame helpers ---
+
+/** Extract the inner content between the outer <svg> and </svg> tags. */
+function extractSvgContent(svg: string): string {
+  const match = svg.match(/^<svg[^>]*>([\s\S]*)<\/svg>\s*$/);
+  return match ? match[1] : svg;
+}
+
+/**
+ * Generate a slide-in animation frame.
+ * Wraps the inner content of `targetSvg` at the given horizontal offset,
+ * clipped to the 144×144 viewport over a black background.
+ */
+export function slideInFrame(targetSvg: string, xOffset: number): string {
+  const inner = extractSvgContent(targetSvg);
+  return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg" overflow="hidden">
+  <rect width="144" height="144" fill="#000000"/>
+  <g transform="translate(${xOffset}, 0)">
+    ${inner}
+  </g>
+</svg>`;
+}
+
+/** Pure black 144×144 SVG with no content — used for the clear phase before animations. */
+export function blackSVG(): string {
+  return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+  <rect width="144" height="144" fill="#000000"/>
+</svg>`;
+}
+
 // --- Approval button SVG generator ---
 // Uses the same Lucide + label pipeline as macroSVG for uniform appearance.
 
