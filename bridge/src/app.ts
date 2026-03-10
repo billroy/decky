@@ -688,9 +688,14 @@ export function createApp(): DeckyApp {
   // the StreamDeck — even though the user was actively using Codex.
   const codexMonitorEnabled = !isTestRuntime && !codexForceDisable;
   const codexAppServerCommand = parseOptionalEnvString(process.env.DECKY_CODEX_APP_SERVER_COMMAND);
-  const codexAutoResumeCwd = process.env.DECKY_CODEX_AUTO_RESUME === "1"
-    ? (process.env.DECKY_CODEX_CWD || process.cwd())
-    : null;
+  // Always auto-resume by default — the app-server subprocess only forwards
+  // approval requests for threads it has attached to via thread/resume.
+  // Without auto-resume the subprocess sits idle and approvals never arrive.
+  // Set DECKY_CODEX_AUTO_RESUME=0 to disable.
+  const codexAutoResumeDisabled = process.env.DECKY_CODEX_AUTO_RESUME === "0";
+  const codexAutoResumeCwd = codexAutoResumeDisabled
+    ? null
+    : (process.env.DECKY_CODEX_CWD || process.cwd());
   codexRestartMaxAttempts = parseNonNegativeIntEnv(
     process.env.DECKY_CODEX_RESTART_MAX_ATTEMPTS,
     CODEX_RESTART_MAX_ATTEMPTS_DEFAULT,
