@@ -401,3 +401,43 @@ setInterval(() => {}, 1000);
     );
   });
 });
+
+describe("codex app-server session auto-resume defaults", () => {
+  it("auto-resume is disabled when autoResumeCwd is not provided", () => {
+    const diagnostics: string[] = [];
+    const session = new CodexAppServerSession({
+      onOutgoingMessage: () => undefined,
+      onHookEvent: () => undefined,
+      onAutoResumeDiagnostics: (diag) => diagnostics.push(diag.state),
+    });
+
+    // Complete handshake
+    session.startHandshake();
+    session.ingestMessage({
+      id: "decky-init",
+      result: { protocolVersion: "1.0" },
+    });
+
+    // Should emit "disabled" — no auto-resume scanning
+    expect(diagnostics).toContain("disabled");
+    expect(diagnostics).not.toContain("scanning");
+  });
+
+  it("auto-resume starts scanning when autoResumeCwd is provided", () => {
+    const diagnostics: string[] = [];
+    const session = new CodexAppServerSession({
+      onOutgoingMessage: () => undefined,
+      onHookEvent: () => undefined,
+      onAutoResumeDiagnostics: (diag) => diagnostics.push(diag.state),
+      autoResumeCwd: "/my/project",
+    });
+
+    session.startHandshake();
+    session.ingestMessage({
+      id: "decky-init",
+      result: { protocolVersion: "1.0" },
+    });
+
+    expect(diagnostics).toContain("scanning");
+  });
+});

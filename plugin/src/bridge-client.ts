@@ -50,6 +50,9 @@ export type Theme =
   | "solarized-light"
   | "nord"
   | "github-dark"
+  | "candy-cane"
+  | "gradient-blue"
+  | "wormhole"
   | "rainbow"
   | "random";
 

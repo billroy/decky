@@ -858,6 +858,10 @@ export class CodexAppServerProvider {
         this.failStartup(errorMessage, { killProcess: false, preserveSession: false });
       });
 
+      child.stdin.on("error", (error) => {
+        this.onError(error);
+      });
+
       child.stdout.setEncoding("utf8");
       child.stdout.on("data", (chunk: string) => {
         this.ingestStdout(chunk);
@@ -950,12 +954,16 @@ export class CodexAppServerProvider {
     }
   }
 
-  private sendMessage(message: Record<string, unknown>): void {
+  private sendMessage(message: Record<string, unknown>): boolean {
     const payload = `${JSON.stringify(message)}\n`;
     if (!this.process || this.process.stdin.destroyed) {
       throw new Error("codex app-server transport unavailable");
     }
-    this.process.stdin.write(payload);
+    const ok = this.process.stdin.write(payload);
+    if (!ok) {
+      this.onDebugLog("stdin backpressure — write buffered but may be delayed");
+    }
+    return ok;
   }
 
   private handleHandshakeReady(): void {
