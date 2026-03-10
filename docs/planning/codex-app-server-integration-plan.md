@@ -10,16 +10,16 @@ Implemented in this branch:
 - App Server provider/session scaffolding (`CodexAppServerProvider`, `CodexAppServerSession`).
 - JSON-RPC request correlation by request ID with queue-safe public request IDs.
 - Decision routing primitives for approve/deny/cancel responses (v2 + legacy request methods).
-- Bridge integration switch via `DECKY_CODEX_INTEGRATION=app-server|sqlite` (default remains `sqlite`).
-- Mirror-flow action routing now uses App Server decision responses when request IDs are present.
-- Fallback behavior remains in place (existing Codex UI automation path) when request IDs/provider are unavailable.
+- Bridge integration switch via `DECKY_CODEX_INTEGRATION=app-server|sqlite`, with `app-server` default.
+- SQLite mode is now legacy/opt-in only (`DECKY_ENABLE_CODEX_SQLITE=1` required).
+- Mirror-flow action routing now requires App Server request correlation in `app-server` mode; missing request IDs fail fast instead of falling back to UI automation.
 - Unit tests for App Server helper/session behavior.
 
 Still open before full cutover:
 - Production validation against real Codex App Server runtime and lifecycle edge cases.
 - Session ownership policy (`single active` enforced behavior and multi-session handling).
 - Final fail-open/fail-closed behavior confirmation for provider disconnect scenarios.
-- Controlled default switch from `sqlite` to `app-server` after soak.
+- Soak validation before removing legacy SQLite opt-in path.
 
 ## Context
 

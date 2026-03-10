@@ -165,8 +165,14 @@ function createActionId(prefix = "bridge"): string {
 }
 
 function parseCodexIntegrationMode(value: unknown): CodexIntegrationMode {
-  if (typeof value !== "string") return "sqlite";
-  return value.trim().toLowerCase() === "app-server" ? "app-server" : "sqlite";
+  const requested = typeof value === "string" ? value.trim().toLowerCase() : "";
+  if (requested === "sqlite") {
+    if (process.env.DECKY_ENABLE_CODEX_SQLITE === "1") return "sqlite";
+    console.warn(
+      "[codex] sqlite integration is disabled by default; set DECKY_ENABLE_CODEX_SQLITE=1 to re-enable",
+    );
+  }
+  return "app-server";
 }
 
 function isCodexAppServerHookEvent(event: HookPayload | CodexAppServerHookEvent): event is CodexAppServerHookEvent {
@@ -521,7 +527,10 @@ export function createApp(): DeckyApp {
     (process.env.DECKY_HOME ?? "").includes(".decky-test");
   const codexMonitorEnabled = !isTestRuntime && process.env.DECKY_ENABLE_CODEX_MONITOR !== "0";
   const codexIntegrationMode = parseCodexIntegrationMode(process.env.DECKY_CODEX_INTEGRATION);
-  const codexCompareEnabled = codexIntegrationMode === "app-server" && process.env.DECKY_CODEX_COMPARE_MODE === "1";
+  const codexCompareEnabled =
+    codexIntegrationMode === "app-server" &&
+    process.env.DECKY_CODEX_COMPARE_MODE === "1" &&
+    process.env.DECKY_ENABLE_CODEX_SQLITE === "1";
   let codexMonitor: { start: () => Promise<boolean>; stop: () => void } | null = null;
   let codexShadowMonitor: CodexMonitor | null = null;
   let resolveCodexApproval: ((requestId: string, decision: CodexApprovalDecision) => Promise<void>) | null = null;
@@ -580,7 +589,10 @@ export function createApp(): DeckyApp {
     }
 
     void codexMonitor.start().then((started) => {
-      if (!started) return;
+      if (!started) {
+        console.warn(`[codex] failed to start integration provider (mode=${codexIntegrationMode})`);
+        return;
+      }
       if (codexIntegrationMode === "app-server") {
         console.log("[codex-app-server] connected using app-server stdio transport");
         if (codexCompareEnabled && codexShadowMonitor) {
@@ -873,6 +885,11 @@ export function createApp(): DeckyApp {
                   console.error("[io] approve action failed in app-server flow:", err);
                   settleFailed("Failed to approve in Codex", "approve action failed in app-server flow");
                 });
+              } else if (codexIntegrationMode === "app-server") {
+                settleFailed(
+                  "Failed to approve in Codex (missing app-server request ID)",
+                  "approve action missing codex app-server request correlation",
+                );
               } else {
                 withApprovalAttemptContext(actionId, () => approveInTargetApp(approvalTargetApp)).catch((err) => {
                   console.error("[io] approve action failed in mirror flow:", err);
@@ -923,6 +940,11 @@ export function createApp(): DeckyApp {
                   console.error("[io] deny/cancel action failed in app-server flow:", err);
                   settleFailed("Failed to dismiss Codex approval", "deny/cancel action failed in app-server flow");
                 });
+              } else if (codexIntegrationMode === "app-server") {
+                settleFailed(
+                  "Failed to dismiss Codex approval (missing app-server request ID)",
+                  "deny/cancel action missing codex app-server request correlation",
+                );
               } else {
                 withApprovalAttemptContext(actionId, () => dismissApprovalInTargetApp(approvalTargetApp)).then(() => {
                   approvalTrace.append(actionId, "bridge.dismiss.dispatched", "dismiss sent to codex host", {
