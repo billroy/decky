@@ -144,6 +144,14 @@ const APPROVAL_METHODS = new Set<string>([
   LEGACY_PATCH_APPROVAL_METHOD,
 ]);
 
+function isApprovalLikeMethod(method: string): boolean {
+  if (APPROVAL_METHODS.has(method)) return true;
+  if (method.endsWith("/requestApproval")) return true;
+  const lower = method.toLowerCase();
+  if (lower.endsWith("approval")) return true;
+  return false;
+}
+
 export function resolveDefaultCodexAppServerCommand(
   pathExists: (path: string) => boolean = existsSync,
 ): string {
@@ -325,7 +333,13 @@ function inferToolFromCommandActions(params: Record<string, unknown>): string | 
 }
 
 export function inferToolFromApprovalRequest(method: string, params: unknown): string {
-  if (method === FILE_CHANGE_APPROVAL_METHOD || method === LEGACY_PATCH_APPROVAL_METHOD) {
+  const methodLower = method.toLowerCase();
+  if (
+    method === FILE_CHANGE_APPROVAL_METHOD ||
+    method === LEGACY_PATCH_APPROVAL_METHOD ||
+    methodLower.includes("file") ||
+    methodLower.includes("patch")
+  ) {
     return "Write";
   }
   const obj = asRecord(params);
@@ -342,7 +356,8 @@ export function mapApprovalDecisionToResult(method: string, decision: CodexAppro
   if (method === LEGACY_COMMAND_APPROVAL_METHOD || method === LEGACY_PATCH_APPROVAL_METHOD) {
     return { decision: decision === "approve" ? "approved" : decision === "deny" ? "denied" : "abort" };
   }
-  throw new Error(`Unsupported approval method: ${method}`);
+  // Default to modern decision payload for unrecognized requestApproval variants.
+  return { decision: decision === "approve" ? "accept" : decision === "deny" ? "decline" : "cancel" };
 }
 
 export class CodexAppServerSession {
@@ -447,7 +462,7 @@ export class CodexAppServerSession {
   }
 
   private handleRequest(req: JsonRpcRequest): void {
-    if (!APPROVAL_METHODS.has(req.method)) {
+    if (!isApprovalLikeMethod(req.method)) {
       this.onOutgoingMessage({
         id: req.id,
         error: { code: -32601, message: `Unsupported method: ${req.method}` },
@@ -488,8 +503,7 @@ export class CodexAppServerSession {
       this.onCompatibility(compatibility);
       this.onDebugLog(`[codex-app-server] ${compatibility.detail}`);
       if (compatibility.status === "incompatible") {
-        this.onError(new Error(`codex app-server compatibility check failed: ${compatibility.detail}`));
-        return;
+        this.onError(new Error(`codex app-server compatibility warning: ${compatibility.detail}`));
       }
       this.handshakeInitializedSent = true;
       this.onHandshakeReady();
