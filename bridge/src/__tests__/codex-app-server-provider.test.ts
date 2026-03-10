@@ -307,4 +307,23 @@ setInterval(() => {}, 1000);
     expect(started).toBe(true);
     expect(lifecycleStates).toContain("ready");
   });
+
+  it("fails resolveApproval when transport is unavailable", async () => {
+    const provider = new CodexAppServerProvider({
+      onHookEvent: () => undefined,
+    });
+
+    provider.ingestMessageForTest({
+      id: 42,
+      method: "item/commandExecution/requestApproval",
+      params: {
+        itemId: "cmd-1",
+        commandActions: [{ type: "search" }],
+      },
+    });
+
+    await expect(provider.resolveApproval(toPublicRequestId(42), "approve")).rejects.toThrow(
+      "transport unavailable",
+    );
+  });
 });

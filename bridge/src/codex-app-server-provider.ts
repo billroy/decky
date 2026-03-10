@@ -637,6 +637,9 @@ export class CodexAppServerProvider {
   }
 
   async resolveApproval(requestId: string, decision: CodexApprovalDecision): Promise<void> {
+    if (!this.process || this.process.stdin.destroyed || !this.ready) {
+      throw new Error("codex app-server transport unavailable while resolving approval");
+    }
     await this.session.resolveApproval(requestId, decision);
   }
 
@@ -664,7 +667,9 @@ export class CodexAppServerProvider {
 
   private sendMessage(message: Record<string, unknown>): void {
     const payload = `${JSON.stringify(message)}\n`;
-    if (!this.process || this.process.stdin.destroyed) return;
+    if (!this.process || this.process.stdin.destroyed) {
+      throw new Error("codex app-server transport unavailable");
+    }
     this.process.stdin.write(payload);
   }
 

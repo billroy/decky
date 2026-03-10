@@ -43,6 +43,9 @@ import { ApprovalTraceStore } from "./approval-trace.js";
 
 const MAX_MACRO_ACTION_TEXT = 2000;
 const MIRROR_SETTLE_TIMEOUT_MS = 8000;
+const CODEX_RESTART_MAX_ATTEMPTS_DEFAULT = 3;
+const CODEX_RESTART_BASE_DELAY_MS_DEFAULT = 350;
+const CODEX_RESTART_MAX_DELAY_MS_DEFAULT = 4000;
 
 const VALID_EVENTS: Set<string> = new Set([
   "PreToolUse",
@@ -144,6 +147,12 @@ interface StatePayload {
       lastExitCode: number | null;
       lastExitSignal: string | null;
     };
+    supervisor: {
+      retries: number;
+      maxRetries: number;
+      nextRetryAt: number | null;
+      lastFailure: string | null;
+    };
   };
 }
 
@@ -207,6 +216,16 @@ function parseOptionalEnvString(value: unknown): string | undefined {
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function parseNonNegativeIntEnv(value: unknown, fallback: number): number {
+  if (typeof value === "number" && Number.isFinite(value) && value >= 0) return Math.floor(value);
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim();
+  if (!trimmed) return fallback;
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed) || parsed < 0) return fallback;
+  return Math.floor(parsed);
+}
+
 function isCodexAppServerHookEvent(event: HookPayload | CodexAppServerHookEvent): event is CodexAppServerHookEvent {
   const candidate = event as Record<string, unknown>;
   const payload = candidate.payload;
@@ -242,6 +261,15 @@ export function createApp(): DeckyApp {
     lastExitCode: null,
     lastExitSignal: null,
   };
+  let codexRestartAttempts = 0;
+  let codexRestartMaxAttempts = CODEX_RESTART_MAX_ATTEMPTS_DEFAULT;
+  let codexNextRetryAt: number | null = null;
+  let codexLastFailure: string | null = null;
+  let codexRestartTimer: NodeJS.Timeout | null = null;
+  let codexStartInFlight = false;
+  let codexShuttingDown = false;
+  let codexMonitor: { start: () => Promise<boolean>; stop: () => void } | null = null;
+  let resolveCodexApproval: ((requestId: string, decision: CodexApprovalDecision) => Promise<void>) | null = null;
 
   const io = new SocketIOServer(httpServer, {
     cors: {
@@ -261,6 +289,12 @@ export function createApp(): DeckyApp {
       mode: codexIntegrationMode,
       enabled: codexMonitorEnabled,
       provider: { ...codexProviderHealth },
+      supervisor: {
+        retries: codexRestartAttempts,
+        maxRetries: codexRestartMaxAttempts,
+        nextRetryAt: codexNextRetryAt,
+        lastFailure: codexLastFailure,
+      },
     };
   }
 
@@ -458,6 +492,48 @@ export function createApp(): DeckyApp {
     pendingMirrorSettlement = null;
   }
 
+  function failPendingMirrorSettlementFromProvider(reason: string): void {
+    if (!pendingMirrorSettlement) return;
+    const active = pendingMirrorSettlement;
+    approvalTrace.append(active.actionId, "settlement.provider_unavailable", "codex provider unavailable", { reason });
+    approvalTrace.settle({
+      actionId: active.actionId,
+      status: "failed",
+      finalState: sm.getSnapshot().state,
+      finalReason: reason,
+    });
+    io.to(active.socketId).emit("error", {
+      error: "Codex provider became unavailable while settling approval",
+    });
+    clearPendingMirrorSettlement(reason);
+  }
+
+  function clearCodexOriginApprovals(reason: string): number {
+    if (approvalQueue.length === 0) return 0;
+    let removed = 0;
+    for (let idx = approvalQueue.length - 1; idx >= 0; idx -= 1) {
+      if (approvalQueue[idx].source !== "codex-monitor") continue;
+      approvalQueue.splice(idx, 1);
+      removed += 1;
+    }
+    if (removed > 0) {
+      applyPendingFromQueue();
+      io.emit("error", { error: `Codex provider unavailable: ${reason}` });
+      const snapshot = sm.getSnapshot();
+      if (snapshot.state === "awaiting-approval") {
+        const next = currentApproval();
+        if (next) {
+          sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+        } else {
+          sm.forceState("idle", `codex provider unavailable: ${reason}`);
+        }
+      } else {
+        emitState(snapshot);
+      }
+    }
+    return removed;
+  }
+
   function startMirrorSettlement(actionId: string, socketId: string, reason: "approve" | "dismiss"): void {
     clearPendingMirrorSettlement("replaced by newer action");
     const timer = setTimeout(() => {
@@ -617,10 +693,80 @@ export function createApp(): DeckyApp {
   const codexCompareEnabled = false;
   const codexAppServerCommand = parseOptionalEnvString(process.env.DECKY_CODEX_APP_SERVER_COMMAND);
   const codexAutoResumeCwd = process.env.DECKY_CODEX_AUTO_RESUME === "0" ? null : process.cwd();
+  codexRestartMaxAttempts = parseNonNegativeIntEnv(
+    process.env.DECKY_CODEX_RESTART_MAX_ATTEMPTS,
+    CODEX_RESTART_MAX_ATTEMPTS_DEFAULT,
+  );
+  const codexRestartBaseDelayMs = parseNonNegativeIntEnv(
+    process.env.DECKY_CODEX_RESTART_BASE_DELAY_MS,
+    CODEX_RESTART_BASE_DELAY_MS_DEFAULT,
+  );
+  const codexRestartMaxDelayMs = Math.max(
+    codexRestartBaseDelayMs,
+    parseNonNegativeIntEnv(process.env.DECKY_CODEX_RESTART_MAX_DELAY_MS, CODEX_RESTART_MAX_DELAY_MS_DEFAULT),
+  );
   codexProviderHealth.state = codexMonitorEnabled ? "starting" : "disabled";
   codexProviderHealth.lastStateAt = codexMonitorEnabled ? Date.now() : null;
-  let codexMonitor: { start: () => Promise<boolean>; stop: () => void } | null = null;
-  let resolveCodexApproval: ((requestId: string, decision: CodexApprovalDecision) => Promise<void>) | null = null;
+
+  function clearCodexRestartTimer(reason?: string): void {
+    if (!codexRestartTimer) return;
+    clearTimeout(codexRestartTimer);
+    codexRestartTimer = null;
+    codexNextRetryAt = null;
+    if (reason) console.log(`[codex] cleared restart timer (${reason})`);
+  }
+
+  async function startCodexMonitor(reason: string): Promise<void> {
+    if (!codexMonitor || codexStartInFlight || codexShuttingDown) return;
+    codexStartInFlight = true;
+    clearCodexRestartTimer("starting");
+    try {
+      const started = await codexMonitor.start();
+      if (!started) {
+        codexLastFailure = `provider start() returned false (${reason})`;
+        console.warn(`[codex] provider failed to start (reason=${reason})`);
+        emitState();
+        return;
+      }
+      codexRestartAttempts = 0;
+      codexNextRetryAt = null;
+      codexLastFailure = null;
+      console.log(`[codex-app-server] connected using app-server stdio transport (${reason})`);
+      emitState();
+    } finally {
+      codexStartInFlight = false;
+    }
+  }
+
+  function scheduleCodexRestart(reason: string): void {
+    if (!codexMonitorEnabled || !codexMonitor || codexShuttingDown) return;
+    if (codexRestartMaxAttempts <= 0) return;
+    if (codexRestartAttempts >= codexRestartMaxAttempts) {
+      console.warn(`[codex] restart budget exhausted (${codexRestartAttempts}/${codexRestartMaxAttempts})`);
+      io.emit("error", { error: "Codex provider restart budget exhausted" });
+      emitState();
+      return;
+    }
+    if (codexRestartTimer) return;
+    codexRestartAttempts += 1;
+    const expDelay = codexRestartBaseDelayMs * (2 ** Math.max(0, codexRestartAttempts - 1));
+    const delay = Math.min(codexRestartMaxDelayMs, expDelay);
+    codexNextRetryAt = Date.now() + delay;
+    console.warn(`[codex] scheduling restart attempt ${codexRestartAttempts}/${codexRestartMaxAttempts} in ${delay}ms (${reason})`);
+    codexRestartTimer = setTimeout(() => {
+      codexRestartTimer = null;
+      codexNextRetryAt = null;
+      void startCodexMonitor(`retry-${codexRestartAttempts}`);
+    }, delay);
+    emitState();
+  }
+
+  function onCodexProviderUnavailable(reason: string): void {
+    codexLastFailure = reason;
+    failPendingMirrorSettlementFromProvider(reason);
+    clearCodexOriginApprovals(reason);
+  }
+
   if (!codexMonitorEnabled && !isTestRuntime) {
     console.warn(
       `[codex] integration disabled (VITEST=${process.env.VITEST ?? ""}, DECKY_ENABLE_CODEX_MONITOR=${process.env.DECKY_ENABLE_CODEX_MONITOR ?? ""})`,
@@ -656,6 +802,7 @@ export function createApp(): DeckyApp {
       onError: (error) => {
         const detail = error instanceof Error ? error.message : String(error);
         updateCodexHealthFromLifecycle({ state: "error", at: Date.now(), detail });
+        codexLastFailure = detail;
         console.warn("[codex-app-server] error:", error);
         emitState();
       },
@@ -668,31 +815,37 @@ export function createApp(): DeckyApp {
         const exitInfo =
           event.state === "exit" ? ` code=${event.code ?? "null"} signal=${event.signal ?? "null"}` : "";
         console.log(`[codex-app-server] lifecycle state=${event.state}${exitInfo}${detail}`);
+        if (event.state === "ready") {
+          codexRestartAttempts = 0;
+          codexNextRetryAt = null;
+          codexLastFailure = null;
+          clearCodexRestartTimer("provider ready");
+        }
+        if (event.state === "start-failed" || event.state === "exit") {
+          const reason =
+            event.detail ??
+            (event.state === "exit"
+              ? `process exited (code=${event.code ?? "null"}, signal=${event.signal ?? "null"})`
+              : "startup failed");
+          onCodexProviderUnavailable(reason);
+          scheduleCodexRestart(event.state);
+        }
         emitState();
       },
     });
     codexMonitor = codexAppServer;
     resolveCodexApproval = (requestId, decision) => codexAppServer.resolveApproval(requestId, decision);
 
-    void codexMonitor.start().then((started) => {
-      if (!started) {
-        updateCodexHealthFromLifecycle({
-          state: "start-failed",
-          at: Date.now(),
-          detail: "provider start() returned false",
-        });
-        console.warn(`[codex] failed to start integration provider (mode=${codexIntegrationMode})`);
-        emitState();
-        return;
-      }
-      console.log("[codex-app-server] connected using app-server stdio transport");
-    });
+    void startCodexMonitor("initial");
     httpServer.on("close", () => {
+      codexShuttingDown = true;
+      clearCodexRestartTimer("server closing");
       codexMonitor?.stop();
     });
   }
   httpServer.on("close", () => {
     clearPendingMirrorSettlement("server closed");
+    clearCodexRestartTimer("server closed");
     setApprovalAttemptLogger(null);
   });
 
