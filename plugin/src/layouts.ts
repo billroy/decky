@@ -1008,7 +1008,7 @@ export function getSlotConfig(
     return { svg: toolInfoSVG(toolName), title: toolName };
   }
 
-  // Awaiting-approval: dynamic rendering with Lucide icons + labels
+  // Awaiting-approval: slots 0-3 show approval buttons, slots 4+ keep macro content
   if (state === "awaiting-approval") {
     if (slotIndex === 0) return approveSlot(approval);
     if (slotIndex === 1) return denySlot(approval);
@@ -1017,7 +1017,10 @@ export function getSlotConfig(
       const title = toolName && toolName.trim().length > 0 ? toolName : "Tool Approval";
       return { svg: approvalInfoSVG(toolName, approval), title };
     }
-    return emptySlot(slotIndex);
+    // Slots beyond the approval buttons preserve their idle/macro content
+    const macroList = macros ?? DEFAULT_MACROS;
+    const idleLayout = buildIdleLayout(macroList);
+    return idleLayout[slotIndex] ?? emptySlot(slotIndex);
   }
 
   const layout = LAYOUTS[state];
@@ -1031,7 +1034,9 @@ export function getLayout(state: string, macros?: MacroInput[]): LayoutDef {
     return buildIdleLayout(macros ?? DEFAULT_MACROS);
   }
   if (state === "awaiting-approval") {
-    return { 0: approveSlot(), 1: denySlot(), 2: stopSlot() };
+    const idle = buildIdleLayout(macros ?? DEFAULT_MACROS);
+    // Approval buttons override slots 0-3; slots 4+ keep macro content
+    return { ...idle, 0: approveSlot(), 1: denySlot(), 2: stopSlot() };
   }
   return LAYOUTS[state] ?? {};
 }

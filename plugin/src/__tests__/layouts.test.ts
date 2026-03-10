@@ -237,6 +237,36 @@ describe("layouts", () => {
       expect(config.title).toBe("Tool Approval");
       expect(config.svg).toContain("Info");
     });
+
+    it("slots beyond approval buttons (4+) show macro content instead of empty", () => {
+      const macros: MacroInput[] = [
+        { label: "M0", text: "t0" },
+        { label: "M1", text: "t1" },
+        { label: "M2", text: "t2" },
+        { label: "M3", text: "t3" },
+        { label: "M4", text: "t4" },
+        { label: "M5", text: "t5" },
+      ];
+      const slot4 = getSlotConfig("awaiting-approval", 4, null, macros);
+      expect(slot4.title).toBe("M4");
+      const slot5 = getSlotConfig("awaiting-approval", 5, null, macros);
+      expect(slot5.title).toBe("M5");
+    });
+
+    it("getLayout for awaiting-approval includes macro slots beyond 3", () => {
+      const macros: MacroInput[] = [
+        { label: "M0", text: "t0" },
+        { label: "M1", text: "t1" },
+        { label: "M2", text: "t2" },
+        { label: "M3", text: "t3" },
+        { label: "M4", text: "t4" },
+      ];
+      const layout = getLayout("awaiting-approval", macros);
+      expect(layout[0]?.action).toBe("approve");
+      expect(layout[1]?.action).toBe("deny");
+      expect(layout[2]?.action).toBe("cancel");
+      expect(layout[4]?.title).toBe("M4");
+    });
   });
 
   describe("thinking layout", () => {

@@ -604,7 +604,7 @@ export class SlotAction extends SingletonAction {
 
   /**
    * Animated slide-in for approval buttons (slots 0-3).
-   * Phase 1: Clear all keys to black.
+   * Phase 1: Clear only the approval slots (0-3) to black; slots 4+ keep macro content.
    * Phase 2: Slide each approval button in from the right over ~500ms.
    */
   private async animateApprovalSlideIn(
