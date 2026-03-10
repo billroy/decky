@@ -129,7 +129,7 @@ export class SlotAction extends SingletonAction {
       const snapshot = bridgeRef.getLastSnapshot();
       const state = connStatus === "connected" ? (snapshot?.state ?? "idle") : "stopped";
       const macros = this.getMacros();
-      const config = getSlotConfig(state, assignedSlot, snapshot?.tool, macros);
+      const config = getSlotConfig(state, assignedSlot, snapshot?.tool, macros, snapshot?.approval ?? null);
       const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
       pushDebug("initialRender", ev.action.id, assignedSlot, {
         state,
@@ -206,7 +206,7 @@ export class SlotAction extends SingletonAction {
     const snapshot = bridgeRef.getLastSnapshot();
     const state = snapshot?.state ?? "idle";
     const macros = this.getMacros();
-    const config = getSlotConfig(state, slotIndex, snapshot?.tool, macros);
+    const config = getSlotConfig(state, slotIndex, snapshot?.tool, macros, snapshot?.approval ?? null);
 
     if (config.action === "widget-refresh") {
       await this.renderAll(bridgeRef.getConnectionStatus(), snapshot);
@@ -248,6 +248,7 @@ export class SlotAction extends SingletonAction {
           label: m.label,
           text: m.text,
           icon: m.icon,
+          fontSize: m.fontSize,
           targetApp: m.targetApp,
           submit: m.submit,
           type: m.type,
@@ -376,6 +377,7 @@ export class SlotAction extends SingletonAction {
       label: m.label,
       text: m.text,
       icon: m.icon,
+      fontSize: m.fontSize,
       colors: m.colors,
       targetApp: m.targetApp,
       submit: m.submit,
@@ -412,7 +414,7 @@ export class SlotAction extends SingletonAction {
       const slotIndex = getSlotIndex(instance.id);
       if (slotIndex === -1) continue;
 
-      const config = getSlotConfig(state, slotIndex, toolName, macros);
+      const config = getSlotConfig(state, slotIndex, toolName, macros, snapshot?.approval ?? null);
       const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
 
       try {

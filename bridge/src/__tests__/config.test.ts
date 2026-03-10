@@ -207,6 +207,32 @@ describe("config endpoints", () => {
     expect(data.config.macros[0].submit).toBe(false);
   });
 
+  it("PUT /config persists macro font size", async () => {
+    const res = await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
+      body: JSON.stringify({
+        macros: [{ label: "Big", text: "big", fontSize: 34 }],
+      }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.config.macros[0].fontSize).toBe(34);
+  });
+
+  it("PUT /config normalizes legacy icon aliases", async () => {
+    const res = await fetch(`${baseUrl}/config`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json", "x-decky-token": token },
+      body: JSON.stringify({
+        macros: [{ label: "Stop", text: "stop", icon: "stop" }],
+      }),
+    });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.config.macros[0].icon).toBe("octagon-x");
+  });
+
   it("PUT /config persists page defaults and per-macro colors", async () => {
     const res = await fetch(`${baseUrl}/config`, {
       method: "PUT",

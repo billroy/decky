@@ -185,12 +185,11 @@ const TARGET_CODES: Record<TargetApp, string> = {
 };
 
 const TARGET_BADGE_COLORS: Record<TargetApp, { bg: string; text: string }> = {
-  // Functional provider-identification colors (not official logo assets/colors).
-  claude: { bg: "#b45309", text: "#ffffff" },
-  codex: { bg: "#0f766e", text: "#ffffff" },
-  chatgpt: { bg: "#15803d", text: "#ffffff" },
-  cursor: { bg: "#1d4ed8", text: "#ffffff" },
-  windsurf: { bg: "#6d28d9", text: "#ffffff" },
+  claude: { bg: "#C1502A", text: "#ffffff" },
+  codex: { bg: "#5B6FD6", text: "#ffffff" },
+  chatgpt: { bg: "#000000", text: "#ffffff" },
+  cursor: { bg: "#3B2F8F", text: "#ffffff" },
+  windsurf: { bg: "#0C6E6E", text: "#ffffff" },
 };
 
 export function setTheme(theme: Theme): void {
@@ -454,6 +453,13 @@ const ICON_COLORS: Record<string, string> = {
   exclamation: "#f59e0b",
 };
 
+const ICON_ALIASES: Readonly<Record<string, string>> = {
+  checkmark: "check",
+  stop: "octagon-x",
+  exclamation: "triangle-alert",
+  "circle-stop": "octagon-x",
+};
+
 /** Unicode symbols for legacy icon types. */
 const ICON_SYMBOLS: Record<string, string> = {
   checkmark: "\u2713",
@@ -469,7 +475,16 @@ const ICON_SYMBOLS: Record<string, string> = {
 const LUCIDE_ICONS: Record<string, string> = {
   "check": '<path d="M20 6 9 17l-5-5" />',
   "x": '<path d="M18 6 6 18" /><path d="m6 6 12 12" />',
-  "circle-stop": '<circle cx="12" cy="12" r="10" /><rect x="9" y="9" width="6" height="6" rx="1" />',
+  "octagon-x": '<path d="m7.86 2 8.28.01L22 7.86v8.28L16.14 22H7.86L2 16.14V7.86z" /><path d="m15 9-6 6" /><path d="m9 9 6 6" />',
+  "ban": '<circle cx="12" cy="12" r="10" /><path d="m4.9 4.9 14.2 14.2" />',
+  "shield-off": '<path d="M20.42 4.58A1.94 1.94 0 0 0 19 4h-1V2" /><path d="M16.38 8.38A1 1 0 0 1 17 9.3V11a7 7 0 0 1-4.28 6.44" /><path d="M3.58 3.58 20.42 20.42" /><path d="M8 4H5a2 2 0 0 0-2 2v5a9 9 0 0 0 9 9 8.8 8.8 0 0 0 2-.23" />',
+  "hand": '<path d="M18 11V6a2 2 0 0 0-4 0" /><path d="M14 10V4a2 2 0 0 0-4 0v6" /><path d="M10 10.5V5a2 2 0 0 0-4 0V14" /><path d="M6 14a2 2 0 0 0-2-2H3a1 1 0 0 0-1 1v1a8 8 0 0 0 8 8h2a8 8 0 0 0 8-8v-1.5a2.5 2.5 0 0 0-5 0V11" />',
+  "clock-3": '<circle cx="12" cy="12" r="10" /><path d="M12 6v6h4" />',
+  "timer-reset": '<path d="M10 2h4" /><path d="M12 14v-4" /><path d="M12 14l3 2" /><circle cx="12" cy="14" r="8" /><path d="M4 4 2 6" /><path d="M2 2 6 6" />',
+  "message-square-warning": '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /><path d="M12 7v4" /><path d="M12 14h.01" />',
+  "file-warning": '<path d="M14 2H6a2 2 0 0 0-2 2v16l4-2 4 2 4-2 4 2V8z" /><path d="M12 8v5" /><path d="M12 16h.01" />',
+  "slash": '<circle cx="12" cy="12" r="10" /><path d="M4.5 19.5 19.5 4.5" />',
+  "bell-off": '<path d="M8.56 2.31A6 6 0 0 1 18 7v4.2l1.8 3.6a1 1 0 0 1-.9 1.45H6.1" /><path d="M3 3 21 21" /><path d="M14.73 21a2 2 0 0 1-3.46 0" />',
   "triangle-alert": '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3" /><path d="M12 9v4" /><path d="M12 17h.01" />',
   "zap": '<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z" />',
   "settings": '<path d="M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915" /><circle cx="12" cy="12" r="3" />',
@@ -495,10 +510,33 @@ export function getLucideIconNames(): string[] {
   return Object.keys(LUCIDE_ICONS);
 }
 
-function macroSVG(slotIndex: number, label: string, icon?: string, colors?: ColorOverrides, targetApp?: TargetApp): string {
+function normalizeIcon(icon?: string): string | undefined {
+  if (!icon) return undefined;
+  const trimmed = icon.trim();
+  if (!trimmed) return undefined;
+  return ICON_ALIASES[trimmed] ?? trimmed;
+}
+
+function resolveLabelFontSize(displayLabel: string, fontSize?: number): number {
+  if (typeof fontSize === "number" && Number.isFinite(fontSize)) {
+    return Math.max(16, Math.min(42, Math.floor(fontSize)));
+  }
+  return displayLabel.length > 6 ? 26 : 32;
+}
+
+function macroSVG(
+  slotIndex: number,
+  label: string,
+  icon?: string,
+  fontSizeOverride?: number,
+  colors?: ColorOverrides,
+  targetApp?: TargetApp,
+): string {
   const p = resolveThemePaletteForSlot(currentTheme, slotIndex);
   const displayLabel = label.length > 10 ? label.slice(0, 9) + "\u2026" : label;
-  const fontSize = displayLabel.length > 6 ? 26 : 32;
+  const fontSize = resolveLabelFontSize(displayLabel, fontSizeOverride);
+  const labelY = fontSize >= 36 ? 126 : 122;
+  const normalizedIcon = normalizeIcon(icon);
   const dynamicTheme = currentTheme === "rainbow" || currentTheme === "random";
   const pageBg = defaultColors.bg;
   const pageText = defaultColors.text;
@@ -513,25 +551,25 @@ function macroSVG(slotIndex: number, label: string, icon?: string, colors?: Colo
   const iconColor = resolveColor(p.macroLabel, pageIcon, macroIconOverride);
 
   // Lucide SVG path icon
-  if (icon && LUCIDE_ICONS[icon]) {
+  if (normalizedIcon && LUCIDE_ICONS[normalizedIcon]) {
     return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
       <rect width="144" height="144" rx="16" fill="${bg}" />
-      <g transform="translate(36, 10) scale(3)" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${LUCIDE_ICONS[icon]}</g>
-      <text x="72" y="122" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${textColor}">${displayLabel}</text>
+      <g transform="translate(30, 16) scale(3.5)" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${LUCIDE_ICONS[normalizedIcon]}</g>
+      <text x="72" y="${labelY}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${textColor}">${displayLabel}</text>
       ${targetBadge(targetApp)}
     </svg>`;
   }
 
   // Legacy Unicode icon (checkmark, stop, exclamation)
-  if (icon && ICON_SYMBOLS[icon]) {
-    const symbol = ICON_SYMBOLS[icon];
-    const legacyDefaultIcon = dynamicTheme ? p.defaultIcon : (ICON_COLORS[icon] ?? p.defaultIcon);
+  if (normalizedIcon && ICON_SYMBOLS[normalizedIcon]) {
+    const symbol = ICON_SYMBOLS[normalizedIcon];
+    const legacyDefaultIcon = dynamicTheme ? p.defaultIcon : (ICON_COLORS[normalizedIcon] ?? p.defaultIcon);
     const resolvedIcon = resolveColor(legacyDefaultIcon, pageIcon, macroIconOverride);
-    const fontWeight = icon === "exclamation" ? ' font-weight="bold"' : "";
+    const fontWeight = normalizedIcon === "exclamation" ? ' font-weight="bold"' : "";
     return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
       <rect width="144" height="144" rx="16" fill="${bg}" />
       <text x="72" y="82" font-size="100" font-family="sans-serif" text-anchor="middle" fill="${resolvedIcon}"${fontWeight}>${symbol}</text>
-      <text x="72" y="122" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${textColor}">${displayLabel}</text>
+      <text x="72" y="${labelY}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${textColor}">${displayLabel}</text>
       ${targetBadge(targetApp)}
     </svg>`;
   }
@@ -544,7 +582,7 @@ function macroSVG(slotIndex: number, label: string, icon?: string, colors?: Colo
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <rect width="144" height="144" rx="16" fill="${resolvedBg}" />
     <text x="72" y="72" font-size="60" font-family="sans-serif" text-anchor="middle" fill="${resolvedIcon}">\u25B6</text>
-    <text x="72" y="122" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${resolvedText}">${displayLabel}</text>
+    <text x="72" y="${labelY}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${resolvedText}">${displayLabel}</text>
     ${targetBadge(targetApp)}
   </svg>`;
 }
@@ -555,6 +593,29 @@ function toolInfoSVG(toolName: string): string {
     <rect width="144" height="144" rx="16" fill="#1e293b" />
     <text x="72" y="48" font-size="20" font-family="sans-serif" text-anchor="middle" fill="#94a3b8">Tool</text>
     <text x="72" y="86" font-size="32" font-family="sans-serif" text-anchor="middle" fill="#e2e8f0">${displayName}</text>
+  </svg>`;
+}
+
+interface ApprovalUiMeta {
+  pending: number;
+  position: number;
+  targetApp: "claude" | "codex";
+  flow: "gate" | "mirror";
+  requestId: string;
+}
+
+function approvalInfoSVG(toolName: string | null | undefined, approval: ApprovalUiMeta | null | undefined): string {
+  const app: TargetApp = approval?.targetApp === "codex" ? "codex" : "claude";
+  const palette = TARGET_BADGE_COLORS[app];
+  const label = toolName && toolName.trim().length > 0 ? toolName.trim() : "Tool Approval";
+  const display = label.length > 10 ? `${label.slice(0, 9)}…` : label;
+  const pending = Math.max(1, Math.floor(approval?.pending ?? 1));
+  const summary = pending > 1 ? `1/${pending}` : "1/1";
+  return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+    <rect width="144" height="144" rx="16" fill="${palette.bg}" />
+    <text x="72" y="34" font-size="14" font-family="sans-serif" text-anchor="middle" fill="#ffffff" opacity="0.95">${TARGET_CODES[app]} · ${summary}</text>
+    <text x="72" y="80" font-size="24" font-family="sans-serif" text-anchor="middle" fill="#ffffff">${display}</text>
+    <text x="72" y="114" font-size="14" font-family="sans-serif" text-anchor="middle" fill="#ffffff" opacity="0.9">Info</text>
   </svg>`;
 }
 
@@ -633,6 +694,7 @@ export interface MacroInput {
   label: string;
   text: string;
   icon?: string;
+  fontSize?: number;
   colors?: ColorOverrides;
   targetApp?: TargetApp;
   submit?: boolean;
@@ -683,7 +745,7 @@ function macroSlot(index: number, macro: MacroInput): SlotConfig {
     const targetApp = resolveApprovalTargetApp(macro.targetApp);
     return {
       ...APPROVE,
-      svg: macroSVG(index, macro.label, macro.icon, macro.colors, targetApp),
+      svg: macroSVG(index, macro.label, macro.icon, macro.fontSize, macro.colors, targetApp),
       title: macro.label || APPROVE.title,
       data: { targetApp },
     };
@@ -692,7 +754,7 @@ function macroSlot(index: number, macro: MacroInput): SlotConfig {
     const targetApp = resolveApprovalTargetApp(macro.targetApp);
     return {
       ...DENY,
-      svg: macroSVG(index, macro.label, macro.icon, macro.colors, targetApp),
+      svg: macroSVG(index, macro.label, macro.icon, macro.fontSize, macro.colors, targetApp),
       title: macro.label || DENY.title,
       data: { targetApp },
     };
@@ -701,23 +763,23 @@ function macroSlot(index: number, macro: MacroInput): SlotConfig {
     const targetApp = resolveApprovalTargetApp(macro.targetApp);
     return {
       ...CANCEL,
-      svg: macroSVG(index, macro.label, macro.icon, macro.colors, targetApp),
+      svg: macroSVG(index, macro.label, macro.icon, macro.fontSize, macro.colors, targetApp),
       title: macro.label || CANCEL.title,
       data: { targetApp },
     };
   }
-  if (macro.type === "restart") return { ...RESTART, svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"), title: macro.label || RESTART.title };
-  if (macro.type === "openConfig") return { ...OPEN_CONFIG, svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"), title: macro.label || OPEN_CONFIG.title };
+  if (macro.type === "restart") return { ...RESTART, svg: macroSVG(index, macro.label, macro.icon, macro.fontSize, macro.colors, "claude"), title: macro.label || RESTART.title };
+  if (macro.type === "openConfig") return { ...OPEN_CONFIG, svg: macroSVG(index, macro.label, macro.icon, macro.fontSize, macro.colors, "claude"), title: macro.label || OPEN_CONFIG.title };
   if (macro.type === "approveOnceInClaude") {
     return {
-      svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"),
+      svg: macroSVG(index, macro.label, macro.icon, macro.fontSize, macro.colors, "claude"),
       title: macro.label || "Approve Once",
       action: "approveOnceInClaude",
     };
   }
   if (macro.type === "startDictationForClaude") {
     return {
-      svg: macroSVG(index, macro.label, macro.icon, macro.colors, "claude"),
+      svg: macroSVG(index, macro.label, macro.icon, macro.fontSize, macro.colors, "claude"),
       title: macro.label || "Talk to Claude",
       action: "startDictationForClaude",
     };
@@ -728,7 +790,7 @@ function macroSlot(index: number, macro: MacroInput): SlotConfig {
   const targetApp = macro.targetApp ?? "claude";
   const submit = macro.submit !== false;
   return {
-    svg: macroSVG(index, macro.label, macro.icon, macro.colors, targetApp),
+    svg: macroSVG(index, macro.label, macro.icon, macro.fontSize, macro.colors, targetApp),
     title: macro.label,
     action: "macro",
     data: { text: macro.text, targetApp, submit },
@@ -839,6 +901,7 @@ export function getSlotConfig(
   slotIndex: number,
   toolName?: string | null,
   macros?: MacroInput[],
+  approval?: ApprovalUiMeta | null,
 ): SlotConfig {
   // Idle state: render from macros (config-driven or defaults)
   if (state === "idle") {
@@ -853,8 +916,9 @@ export function getSlotConfig(
   }
 
   // Special case: awaiting-approval slot 3 shows tool name
-  if (state === "awaiting-approval" && slotIndex === 3 && toolName) {
-    return { svg: toolInfoSVG(toolName), title: toolName };
+  if (state === "awaiting-approval" && slotIndex === 3) {
+    const title = toolName && toolName.trim().length > 0 ? toolName : "Tool Approval";
+    return { svg: approvalInfoSVG(toolName, approval), title };
   }
 
   const layout = LAYOUTS[state];

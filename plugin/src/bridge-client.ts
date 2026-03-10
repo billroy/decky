@@ -16,6 +16,13 @@ export interface StateSnapshot {
   tool: string | null;
   lastEvent: string | null;
   timestamp: number;
+  approval?: {
+    pending: number;
+    position: number;
+    targetApp: "claude" | "codex";
+    flow: "gate" | "mirror";
+    requestId: string;
+  } | null;
 }
 
 export interface ColorOverrides {
@@ -50,6 +57,7 @@ export interface MacroDef {
   label: string;
   text: string;
   icon?: string;
+  fontSize?: number;
   colors?: ColorOverrides;
   targetApp?: TargetApp;
   submit?: boolean;

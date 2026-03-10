@@ -98,6 +98,31 @@ type ApprovalFlow = "gate" | "mirror";
 type ApprovalTargetApp = "claude" | "codex";
 type HookSource = "hook" | "codex-monitor";
 
+interface ApprovalQueueItem {
+  id: string;
+  flow: ApprovalFlow;
+  targetApp: ApprovalTargetApp;
+  nonce: string | null;
+  tool: string | null;
+  source: HookSource;
+  createdAt: number;
+}
+
+interface StatePayload {
+  state: string;
+  previousState: string | null;
+  tool: string | null;
+  lastEvent: string | null;
+  timestamp: number;
+  approval: {
+    pending: number;
+    position: number;
+    targetApp: ApprovalTargetApp;
+    flow: ApprovalFlow;
+    requestId: string;
+  } | null;
+}
+
 function parseApprovalTargetApp(value: unknown): ApprovalTargetApp {
   return value === "codex" ? "codex" : "claude";
 }
@@ -120,11 +145,12 @@ export function createApp(): DeckyApp {
   const httpServer = createServer(app);
   const bridgeToken = getBridgeToken();
   const approvalTrace = new ApprovalTraceStore();
+  const approvalQueue: ApprovalQueueItem[] = [];
   let pendingGateNonce: string | null = null;
   let pendingApprovalFlow: ApprovalFlow = "gate";
   let pendingApprovalTargetApp: ApprovalTargetApp = "claude";
   let pendingMirrorSettlement:
-    | { actionId: string; socketId: string; timer: NodeJS.Timeout }
+    | { actionId: string; socketId: string; timer: NodeJS.Timeout; reason: "approve" | "dismiss" }
     | null = null;
 
   const io = new SocketIOServer(httpServer, {
@@ -159,9 +185,70 @@ export function createApp(): DeckyApp {
   // Load config from ~/.decky/config.json
   loadConfig();
 
+  function currentApproval(): ApprovalQueueItem | null {
+    return approvalQueue.length > 0 ? approvalQueue[0] : null;
+  }
+
+  function applyPendingFromQueue(): void {
+    const active = currentApproval();
+    if (!active) {
+      pendingGateNonce = null;
+      return;
+    }
+    pendingApprovalFlow = active.flow;
+    pendingApprovalTargetApp = active.targetApp;
+    pendingGateNonce = active.nonce;
+  }
+
+  function enqueueApprovalRequest(item: Omit<ApprovalQueueItem, "id" | "createdAt">): ApprovalQueueItem {
+    const queued: ApprovalQueueItem = {
+      id: createActionId("req"),
+      createdAt: Date.now(),
+      ...item,
+    };
+    approvalQueue.push(queued);
+    applyPendingFromQueue();
+    return queued;
+  }
+
+  function shiftApprovalRequest(): ApprovalQueueItem | null {
+    if (approvalQueue.length === 0) {
+      applyPendingFromQueue();
+      return null;
+    }
+    const removed = approvalQueue.shift() ?? null;
+    applyPendingFromQueue();
+    return removed;
+  }
+
+  function statePayload(snapshot = sm.getSnapshot()): StatePayload {
+    const active = currentApproval();
+    return {
+      ...snapshot,
+      approval: active
+        ? {
+          pending: approvalQueue.length,
+          position: 1,
+          targetApp: active.targetApp,
+          flow: active.flow,
+          requestId: active.id,
+        }
+        : null,
+    };
+  }
+
+  function emitState(snapshot = sm.getSnapshot()): void {
+    io.emit("stateChange", statePayload(snapshot));
+  }
+
   // Broadcast state changes to all connected Socket.io clients
   sm.onStateChange((snapshot) => {
-    io.emit("stateChange", snapshot);
+    if ((snapshot.state === "idle" || snapshot.state === "stopped") && approvalQueue.length > 0) {
+      approvalQueue.splice(0, approvalQueue.length);
+      applyPendingFromQueue();
+      clearPendingMirrorSettlement(`state=${snapshot.state} queue reset`);
+    }
+    emitState(snapshot);
   });
 
   function clearPendingMirrorSettlement(reason?: string): void {
@@ -178,7 +265,7 @@ export function createApp(): DeckyApp {
     pendingMirrorSettlement = null;
   }
 
-  function startMirrorSettlement(actionId: string, socketId: string): void {
+  function startMirrorSettlement(actionId: string, socketId: string, reason: "approve" | "dismiss"): void {
     clearPendingMirrorSettlement("replaced by newer action");
     const timer = setTimeout(() => {
       if (!pendingMirrorSettlement || pendingMirrorSettlement.actionId !== actionId) return;
@@ -186,6 +273,7 @@ export function createApp(): DeckyApp {
       approvalTrace.append(actionId, "settlement.timeout", "no monitor settlement observed", {
         state: snap.state,
         timeoutMs: MIRROR_SETTLE_TIMEOUT_MS,
+        reason: pendingMirrorSettlement.reason,
       });
       approvalTrace.settle({
         actionId,
@@ -193,15 +281,34 @@ export function createApp(): DeckyApp {
         finalState: snap.state,
         finalReason: "timeout waiting for codex monitor settlement",
       });
-      io.to(socketId).emit("error", { error: "Dismiss timed out waiting for Codex settlement" });
+      io.to(socketId).emit("error", {
+        error:
+          pendingMirrorSettlement.reason === "approve"
+            ? "Approve timed out waiting for Codex settlement"
+            : "Dismiss timed out waiting for Codex settlement",
+      });
       if (snap.state === "awaiting-approval") {
-        sm.forceState("stopped", "dismiss timed out via StreamDeck");
+        if (pendingMirrorSettlement.reason === "approve") {
+          // Fallback reconciliation: if monitor events are delayed/missed, avoid
+          // wedging the deck in awaiting-approval and continue the execution flow.
+          sm.forceState("tool-executing", "approve timed out via StreamDeck (fallback)");
+        } else {
+          sm.forceState("stopped", "dismiss timed out via StreamDeck");
+        }
+      }
+      shiftApprovalRequest();
+      const next = currentApproval();
+      if (next) {
+        sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+      } else {
+        emitState();
       }
       clearPendingMirrorSettlement("timeout");
     }, MIRROR_SETTLE_TIMEOUT_MS);
-    pendingMirrorSettlement = { actionId, socketId, timer };
+    pendingMirrorSettlement = { actionId, socketId, timer, reason };
     approvalTrace.setStatus(actionId, "settling", "waiting for codex monitor settlement", {
       timeoutMs: MIRROR_SETTLE_TIMEOUT_MS,
+      reason,
     });
   }
 
@@ -218,11 +325,22 @@ export function createApp(): DeckyApp {
     // Clear any stale gate file when a new tool-approval cycle starts
     if (payload.event === "PreToolUse") {
       clearGateFile();
-      pendingApprovalFlow = options?.approvalFlow ?? "gate";
-      pendingApprovalTargetApp = options?.targetApp ?? "claude";
-      pendingGateNonce = options?.nonce ?? null;
+      const flow = options?.approvalFlow ?? "gate";
+      const targetApp = options?.targetApp ?? "claude";
+      const nonce = options?.nonce ?? null;
+      const current = sm.getSnapshot();
+      const duplicateHookPre = source === "hook" && current.state === "awaiting-approval";
+      if (!duplicateHookPre) {
+        enqueueApprovalRequest({
+          flow,
+          targetApp,
+          nonce,
+          tool: payload.tool ?? null,
+          source,
+        });
+      }
     }
-    const snapshot = sm.processEvent(payload);
+    let snapshot = sm.processEvent(payload);
 
     if (pendingMirrorSettlement && source === "codex-monitor") {
       approvalTrace.append(
@@ -236,6 +354,13 @@ export function createApp(): DeckyApp {
         },
       );
       if (payload.event !== "PreToolUse") {
+        shiftApprovalRequest();
+        const next = currentApproval();
+        if (next && snapshot.state !== "awaiting-approval") {
+          snapshot = sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+        } else {
+          emitState(snapshot);
+        }
         approvalTrace.settle({
           actionId: pendingMirrorSettlement.actionId,
           status: "settled",
@@ -244,6 +369,31 @@ export function createApp(): DeckyApp {
         });
         clearPendingMirrorSettlement("settled by monitor event");
       }
+    }
+
+    if (
+      source === "hook" &&
+      (payload.event === "PostToolUse" || payload.event === "Stop" || payload.event === "SubagentStop")
+    ) {
+      const active = currentApproval();
+      if (active) {
+        const toolMatches = !payload.tool || !active.tool || payload.tool === active.tool;
+        if (toolMatches) {
+          shiftApprovalRequest();
+          const next = currentApproval();
+          if (next && snapshot.state !== "awaiting-approval") {
+            snapshot = sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+          } else {
+            emitState(snapshot);
+          }
+        }
+      }
+    }
+
+    if (payload.event === "PreToolUse" && approvalQueue.length > 1) {
+      // State may remain "awaiting-approval" with no transition callback, but
+      // queue metadata changed and the plugin should reflect it.
+      emitState(snapshot);
     }
 
     return snapshot;
@@ -344,11 +494,11 @@ export function createApp(): DeckyApp {
           )
         : undefined;
     const snapshot = applyHookPayload(payload, { approvalFlow, nonce, targetApp });
-    res.json({ ok: true, state: snapshot });
+    res.json({ ok: true, state: statePayload(snapshot) });
   });
 
   app.get("/status", (_req, res) => {
-    res.json(sm.getSnapshot());
+    res.json(statePayload());
   });
 
   app.get("/debug/approval-trace", (req, res) => {
@@ -359,6 +509,15 @@ export function createApp(): DeckyApp {
       pendingMirrorSettlement: pendingMirrorSettlement
         ? { actionId: pendingMirrorSettlement.actionId, socketId: pendingMirrorSettlement.socketId }
         : null,
+      approvalQueue: approvalQueue.map((entry, idx) => ({
+        id: entry.id,
+        index: idx + 1,
+        flow: entry.flow,
+        targetApp: entry.targetApp,
+        tool: entry.tool,
+        source: entry.source,
+        createdAt: entry.createdAt,
+      })),
       now: Date.now(),
     });
   });
@@ -424,7 +583,7 @@ export function createApp(): DeckyApp {
     }
     console.log(`[io] client connected: ${socket.id}`);
 
-    socket.emit("stateChange", sm.getSnapshot());
+    socket.emit("stateChange", statePayload());
     socket.emit("configUpdate", getConfig());
 
     socket.on("action", (data: { action: string; [key: string]: unknown }) => {
@@ -440,18 +599,21 @@ export function createApp(): DeckyApp {
       const entry = validActions[data.action];
       if (entry) {
         const currentState = sm.getSnapshot().state;
+        const activeApproval = currentApproval();
+        const activeFlow = activeApproval?.flow ?? pendingApprovalFlow;
         const approvalTargetApp =
-          pendingApprovalTargetApp === "codex"
+          activeApproval?.targetApp === "codex" || pendingApprovalTargetApp === "codex"
             ? "codex"
             : parseApprovalTargetApp(data.targetApp);
         approvalTrace.start({ actionId, action: data.action, targetApp: approvalTargetApp });
         approvalTrace.append(actionId, "bridge.action.received", "approval action received", {
           action: data.action,
           state: currentState,
-          pendingApprovalFlow,
-          pendingApprovalTargetApp,
+          pendingApprovalFlow: activeFlow,
+          pendingApprovalTargetApp: activeApproval?.targetApp ?? pendingApprovalTargetApp,
           resolvedTargetApp: approvalTargetApp,
           socketId: socket.id,
+          queued: approvalQueue.length,
         });
 
         const settleFailed = (errorText: string, reason: string): void => {
@@ -505,7 +667,7 @@ export function createApp(): DeckyApp {
           socket.emit("error", { error: "Approval action ignored: not awaiting approval" });
           return;
         }
-        if (pendingApprovalFlow === "mirror") {
+        if (activeFlow === "mirror") {
           pendingGateNonce = null;
           if (entry.result === "approve") {
             if (approvalTargetApp === "claude") {
@@ -514,6 +676,7 @@ export function createApp(): DeckyApp {
                 settleFailed("Failed to approve in Claude", "approve action failed in mirror flow");
               });
             } else {
+              startMirrorSettlement(actionId, socket.id, "approve");
               withApprovalAttemptContext(actionId, () => approveInTargetApp(approvalTargetApp)).catch((err) => {
                 console.error("[io] approve action failed in mirror flow:", err);
                 settleFailed("Failed to approve in Codex", "approve action failed in mirror flow");
@@ -524,16 +687,22 @@ export function createApp(): DeckyApp {
             if (approvalTargetApp === "claude") {
               const mirrorDismissReason = `${entry.result} via StreamDeck (mirror)`;
               withApprovalAttemptContext(actionId, () => dismissClaudeApproval()).then(() => {
-                sm.forceState("idle", mirrorDismissReason);
+                shiftApprovalRequest();
+                const next = currentApproval();
+                if (next) {
+                  sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+                } else {
+                  sm.forceState("idle", mirrorDismissReason);
+                }
                 approvalTrace.append(actionId, "state.force", "forced state", {
-                  state: "idle",
-                  reason: mirrorDismissReason,
+                  state: next ? "awaiting-approval" : "idle",
+                  reason: next ? "queued approval pending" : mirrorDismissReason,
                 });
                 approvalTrace.settle({
                   actionId,
                   status: "settled",
-                  finalState: "idle",
-                  finalReason: mirrorDismissReason,
+                  finalState: next ? "awaiting-approval" : "idle",
+                  finalReason: next ? "queued approval pending" : mirrorDismissReason,
                 });
               }).catch((err) => {
                 console.error("[io] deny/cancel action failed in mirror flow:", err);
@@ -542,7 +711,7 @@ export function createApp(): DeckyApp {
             } else {
               // For Codex mirror flow, rely on mirrored Codex events to advance state
               // so the Deck never reports idle before the host app actually settles.
-              startMirrorSettlement(actionId, socket.id);
+              startMirrorSettlement(actionId, socket.id, "dismiss");
               withApprovalAttemptContext(actionId, () => dismissApprovalInTargetApp(approvalTargetApp)).then(() => {
                 approvalTrace.append(actionId, "bridge.dismiss.dispatched", "dismiss sent to codex host", {
                   targetApp: approvalTargetApp,
@@ -557,17 +726,23 @@ export function createApp(): DeckyApp {
         }
         writeGateFile(entry.result, pendingGateNonce ?? undefined);
         pendingGateNonce = null;
-        sm.forceState(entry.state as Parameters<typeof sm.forceState>[0], entry.reason);
+        shiftApprovalRequest();
+        const next = currentApproval();
+        if (next) {
+          sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+        } else {
+          sm.forceState(entry.state as Parameters<typeof sm.forceState>[0], entry.reason);
+        }
         approvalTrace.append(actionId, "gate.write", "wrote gate result", { result: entry.result });
         approvalTrace.append(actionId, "state.force", "forced state", {
-          state: entry.state,
-          reason: entry.reason,
+          state: next ? "awaiting-approval" : entry.state,
+          reason: next ? "queued approval pending" : entry.reason,
         });
         approvalTrace.settle({
           actionId,
           status: "settled",
-          finalState: entry.state,
-          finalReason: entry.reason,
+          finalState: next ? "awaiting-approval" : entry.state,
+          finalReason: next ? "queued approval pending" : entry.reason,
         });
       } else if (data.action === "restart") {
         sm.forceState("idle", "restarted via StreamDeck");
@@ -594,7 +769,13 @@ export function createApp(): DeckyApp {
         if (sm.getSnapshot().state === "awaiting-approval") {
           writeGateFile("approve", pendingGateNonce ?? undefined);
           pendingGateNonce = null;
-          sm.forceState("tool-executing", "approved via StreamDeck (approve once)");
+          shiftApprovalRequest();
+          const next = currentApproval();
+          if (next) {
+            sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+          } else {
+            sm.forceState("tool-executing", "approved via StreamDeck (approve once)");
+          }
         }
         approveOnceInClaude().catch((err) => {
           console.error("[io] approveOnceInClaude failed:", err);
