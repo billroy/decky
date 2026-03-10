@@ -658,7 +658,7 @@
       { value: "widget", label: "Widget" },
       { value: "approve", label: "Approve" },
       { value: "deny", label: "Deny" },
-      { value: "cancel", label: "Cancel" },
+      { value: "stop", label: "Stop" },
       { value: "restart", label: "Restart" },
       { value: "openConfig", label: "Open Config" },
       { value: "approveOnceInClaude", label: "Approve Once (Claude)" },
@@ -674,7 +674,7 @@
     const SLOT_ACTION_TYPES = {
       approve: true,
       deny: true,
-      cancel: true,
+      stop: true,
       restart: true,
       openConfig: true,
       approveOnceInClaude: true,
@@ -683,7 +683,7 @@
     const APPROVAL_TARGET_TYPES = {
       approve: true,
       deny: true,
-      cancel: true,
+      stop: true,
     };
     const APPROVAL_TARGETS = [
       { value: "claude", label: "Claude (CLD)" },
@@ -691,8 +691,8 @@
     ];
     const SLOT_ACTION_DEFAULTS = {
       approve: { label: "Approve", icon: "check" },
-      deny: { label: "Deny", icon: "octagon-x" },
-      cancel: { label: "Cancel", icon: "octagon-x" },
+      deny: { label: "Deny", icon: "x" },
+      stop: { label: "Stop", icon: "octagon-x" },
       restart: { label: "Restart", icon: "refresh-cw" },
       openConfig: { label: "Config", icon: "settings" },
       approveOnceInClaude: { label: "Approve Once", icon: "check" },
@@ -1038,7 +1038,7 @@
             icon: normalizeIcon(m.icon || ""),
             fontSize: normalizeFontSize(m.fontSize),
             targetApp:
-              m.type === "approve" || m.type === "deny" || m.type === "cancel"
+              m.type === "approve" || m.type === "deny" || m.type === "cancel" || m.type === "stop"
                 ? normalizeApprovalTarget(m.targetApp || "")
                 : (m.targetApp || ""),
             submit: m.submit !== false,

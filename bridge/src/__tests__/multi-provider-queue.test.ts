@@ -12,6 +12,7 @@ import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest
 import { io as ioClient, type Socket as ClientSocket } from "socket.io-client";
 import { getBridgeToken } from "../security.js";
 import { clearGateFile } from "../approval-gate.js";
+import { saveConfig } from "../config.js";
 
 const macroMocks = vi.hoisted(() => ({
   approve: vi.fn<() => Promise<void>>().mockResolvedValue(undefined),
@@ -41,6 +42,7 @@ let client: ClientSocket;
 const token = getBridgeToken();
 
 beforeAll(async () => {
+  saveConfig({ popUpApp: true }); // enable app surfacing for these tests
   decky = createApp();
   await new Promise<void>((resolve) => {
     decky.httpServer.listen(0, "127.0.0.1", () => resolve());
@@ -60,6 +62,7 @@ afterAll(async () => {
 afterEach(() => {
   clearGateFile();
   decky.sm.forceState("idle", "test cleanup");
+  saveConfig({ popUpApp: true }); // keep surfacing enabled for these tests
   macroMocks.approve.mockClear();
   macroMocks.dismiss.mockClear();
   macroMocks.approveTarget.mockClear();

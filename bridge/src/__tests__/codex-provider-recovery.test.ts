@@ -1,9 +1,23 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { chmodSync, mkdtempSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { createApp, type DeckyApp } from "../app.js";
 import { getBridgeToken } from "../security.js";
+
+vi.mock("../macro-exec.js", () => ({
+  executeMacro: vi.fn().mockResolvedValue(undefined),
+  approveOnceInClaude: vi.fn().mockResolvedValue(undefined),
+  dismissClaudeApproval: vi.fn().mockResolvedValue(undefined),
+  approveInTargetApp: vi.fn().mockResolvedValue(undefined),
+  dismissApprovalInTargetApp: vi.fn().mockResolvedValue(undefined),
+  surfaceTargetApp: vi.fn().mockResolvedValue(undefined),
+  setApprovalAttemptLogger: vi.fn(),
+  withApprovalAttemptContext: vi.fn(async (_actionId: string, fn: () => Promise<void>) => await fn()),
+  startDictationForClaude: vi.fn().mockResolvedValue(undefined),
+}));
+
+const { createApp } = await import("../app.js");
+type DeckyApp = ReturnType<typeof createApp>;
 
 const token = getBridgeToken();
 const ENV_KEYS = [

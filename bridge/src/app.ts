@@ -401,8 +401,9 @@ export function createApp(): DeckyApp {
     return removed;
   }
 
-  /** Surface the target app for the currently active approval request. */
+  /** Surface the target app for the currently active approval request (if popUpApp is enabled). */
   function surfaceActiveApproval(): void {
+    if (!getConfig().popUpApp) return;
     const active = currentApproval();
     if (active) {
       surfaceTargetApp(active.targetApp).catch((err) => {
@@ -595,7 +596,7 @@ export function createApp(): DeckyApp {
           source,
         });
         // Surface the target app when this request becomes the active one
-        if (currentApproval()?.id === queued.id) {
+        if (getConfig().popUpApp && currentApproval()?.id === queued.id) {
           surfaceTargetApp(queued.targetApp).catch((err) => {
             console.error("[queue] surfaceTargetApp on arrival failed:", err);
           });

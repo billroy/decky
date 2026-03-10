@@ -1,6 +1,20 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import { createApp, type DeckyApp } from "../app.js";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { getBridgeToken } from "../security.js";
+
+vi.mock("../macro-exec.js", () => ({
+  executeMacro: vi.fn().mockResolvedValue(undefined),
+  approveOnceInClaude: vi.fn().mockResolvedValue(undefined),
+  dismissClaudeApproval: vi.fn().mockResolvedValue(undefined),
+  approveInTargetApp: vi.fn().mockResolvedValue(undefined),
+  dismissApprovalInTargetApp: vi.fn().mockResolvedValue(undefined),
+  surfaceTargetApp: vi.fn().mockResolvedValue(undefined),
+  setApprovalAttemptLogger: vi.fn(),
+  withApprovalAttemptContext: vi.fn(async (_actionId: string, fn: () => Promise<void>) => await fn()),
+  startDictationForClaude: vi.fn().mockResolvedValue(undefined),
+}));
+
+const { createApp } = await import("../app.js");
+type DeckyApp = ReturnType<typeof createApp>;
 
 let decky: DeckyApp;
 let baseUrl: string;

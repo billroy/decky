@@ -620,10 +620,15 @@ export class SlotAction extends SingletonAction {
     const toolName = snapshot?.tool;
     const allActions = this.getRenderableActions();
 
-    // --- Phase 1: Clear all keys to black ---
+    // --- Phase 1: Clear only the approval slots (layout 0-3) to black ---
     const blackImg = `data:image/svg+xml,${encodeURIComponent(blackSVG())}`;
     await Promise.all(
-      [...allActions.values()].map(async (instance) => {
+      [...allActions.entries()].map(async ([actionId, instance]) => {
+        const si = getSlotIndex(actionId);
+        if (si < 0) return;
+        const dk = getDeviceKey(actionId);
+        const li = resolveLayoutSlotIndex("awaiting-approval", si, dk);
+        if (li < 0 || li > 3) return;
         try {
           await instance.setImage(blackImg);
           await instance.setTitle("");
