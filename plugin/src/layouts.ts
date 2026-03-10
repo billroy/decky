@@ -638,43 +638,89 @@ function emptySVG(slotIndex = 0, colors?: ColorOverrides): string {
 </svg>`;
 }
 
+// --- Approval button SVG generator ---
+// Uses the same Lucide + label pipeline as macroSVG for uniform appearance.
+
+function approvalButtonSVG(bg: string, iconName: string, label: string): string {
+  const iconPath = LUCIDE_ICONS[iconName];
+  const labelFontSize = resolveLabelFontSize(label);
+  const labelY = labelFontSize >= 36 ? 126 : 122;
+  if (iconPath) {
+    return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+      <rect width="144" height="144" rx="16" fill="${bg}" />
+      <g transform="translate(30, 16) scale(3.5)" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconPath}</g>
+      <text x="72" y="${labelY}" font-size="${labelFontSize}" font-family="sans-serif" text-anchor="middle" fill="#ffffff">${label}</text>
+    </svg>`;
+  }
+  // Fallback to roundedRect if icon missing
+  return roundedRect(bg, label, 32);
+}
+
 // --- Slot config factories ---
 
+function approveSlot(): SlotConfig {
+  return {
+    svg: approvalButtonSVG("#22c55e", "check", "Approve"),
+    title: "Approve",
+    action: "approve",
+    data: { targetApp: "claude" },
+  };
+}
+
+function denySlot(): SlotConfig {
+  return {
+    svg: approvalButtonSVG("#ef4444", "x", "Deny"),
+    title: "Deny",
+    action: "deny",
+    data: { targetApp: "claude" },
+  };
+}
+
+function cancelSlot(): SlotConfig {
+  return {
+    svg: approvalButtonSVG("#f59e0b", "ban", "Cancel"),
+    title: "Cancel",
+    action: "cancel",
+    data: { targetApp: "claude" },
+  };
+}
+
+// Static references kept for action/data defaults used by macroSlot
 const APPROVE: SlotConfig = {
-  svg: roundedRect("#22c55e", "\u2713"),
+  svg: "",
   title: "Approve",
   action: "approve",
   data: { targetApp: "claude" },
 };
 
 const DENY: SlotConfig = {
-  svg: roundedRect("#ef4444", "\u2717"),
+  svg: "",
   title: "Deny",
   action: "deny",
   data: { targetApp: "claude" },
 };
 
 const CANCEL: SlotConfig = {
-  svg: roundedRect("#f59e0b", "\u23F9"),
+  svg: "",
   title: "Cancel",
   action: "cancel",
   data: { targetApp: "claude" },
 };
 
 const STOP: SlotConfig = {
-  svg: roundedRect("#ef4444", "\u23F9"),
+  svg: approvalButtonSVG("#ef4444", "octagon-x", "Stop"),
   title: "Stop",
   action: "cancel",
 };
 
 const RESTART: SlotConfig = {
-  svg: roundedRect("#22c55e", "\u21BB"),
+  svg: approvalButtonSVG("#22c55e", "refresh-cw", "Restart"),
   title: "Restart",
   action: "restart",
 };
 
 const OPEN_CONFIG: SlotConfig = {
-  svg: roundedRect("#1e293b", "\u2699"),
+  svg: approvalButtonSVG("#0f172a", "settings", "Config"),
   title: "Config",
   action: "openConfig",
 };
@@ -875,11 +921,8 @@ const LAYOUTS: Record<string, LayoutDef> = {
     1: STOP,
   },
 
-  "awaiting-approval": {
-    0: APPROVE,
-    1: DENY,
-    2: CANCEL,
-  },
+  // awaiting-approval is built dynamically by getSlotConfig (approval buttons
+  // use the same Lucide + label pipeline as macros for uniform appearance).
 
   "tool-executing": {
     0: STOP,
@@ -915,10 +958,16 @@ export function getSlotConfig(
     return { svg: toolInfoSVG(toolName), title: toolName };
   }
 
-  // Special case: awaiting-approval slot 3 shows tool name
-  if (state === "awaiting-approval" && slotIndex === 3) {
-    const title = toolName && toolName.trim().length > 0 ? toolName : "Tool Approval";
-    return { svg: approvalInfoSVG(toolName, approval), title };
+  // Awaiting-approval: dynamic rendering with Lucide icons + labels
+  if (state === "awaiting-approval") {
+    if (slotIndex === 0) return approveSlot();
+    if (slotIndex === 1) return denySlot();
+    if (slotIndex === 2) return cancelSlot();
+    if (slotIndex === 3) {
+      const title = toolName && toolName.trim().length > 0 ? toolName : "Tool Approval";
+      return { svg: approvalInfoSVG(toolName, approval), title };
+    }
+    return emptySlot(slotIndex);
   }
 
   const layout = LAYOUTS[state];
@@ -931,10 +980,13 @@ export function getLayout(state: string, macros?: MacroInput[]): LayoutDef {
   if (state === "idle") {
     return buildIdleLayout(macros ?? DEFAULT_MACROS);
   }
+  if (state === "awaiting-approval") {
+    return { 0: approveSlot(), 1: denySlot(), 2: cancelSlot() };
+  }
   return LAYOUTS[state] ?? {};
 }
 
 /** List all known states that have layout definitions. */
 export function getLayoutStates(): string[] {
-  return ["idle", ...Object.keys(LAYOUTS)];
+  return ["idle", "awaiting-approval", ...Object.keys(LAYOUTS)];
 }
