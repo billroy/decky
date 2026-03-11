@@ -142,6 +142,19 @@ interface StatePayload {
 }
 
 /** Classify a tool name against configured risk rules (first match wins). */
+function matchesAlwaysAllow(toolName: string | null): boolean {
+  if (!toolName) return false;
+  for (const rule of getAlwaysAllowRules()) {
+    const p = rule.pattern;
+    if (p.endsWith("*")) {
+      if (toolName.startsWith(p.slice(0, -1))) return true;
+    } else {
+      if (toolName === p) return true;
+    }
+  }
+  return false;
+}
+
 function classifyToolRisk(toolName: string | null): RiskLevel | null {
   if (!toolName) return null;
   const rules = getToolRiskRules();
@@ -325,24 +338,38 @@ export function createApp(): DeckyApp {
       const cwd = options?.cwd ?? null;
       // Dedup: with a nonce, dedup by exact nonce (concurrent sessions use different nonces).
       // Without a nonce (legacy/simple hooks), fall back to single-queue mode (cap at 1).
-      const alreadyQueued = nonce != null
-        ? approvalQueue.some((item) => item.nonce === nonce)
-        : approvalQueue.length > 0;
-      if (!alreadyQueued) {
-        const toolName = payload.tool ?? null;
-        const queued = enqueueApprovalRequest({
-          flow,
-          nonce,
-          sessionId,
-          cwd,
-          tool: toolName,
-          riskLevel: classifyToolRisk(toolName),
-        });
-        // Surface the target app when this request becomes the active one
-        if (getConfig().popUpApp && currentApproval()?.id === queued.id) {
-          surfaceTargetApp("claude").catch((err) => {
-            console.error("[queue] surfaceTargetApp on arrival failed:", err);
+      const toolName = payload.tool ?? null;
+      // Auto-approve tools that match an alwaysAllowRule.
+      // Return early — do not enqueue and do not advance the state machine.
+      if (matchesAlwaysAllow(toolName)) {
+        console.log(`[hook] auto-approve tool=${toolName ?? "?"} (alwaysAllow match)`);
+        if (flow === "gate" && options?.nonce) {
+          writeGateFile("approve", options.nonce);
+        } else {
+          approveOnceInClaude().catch((err) => {
+            console.error("[auto-approve] approveOnceInClaude failed:", err);
           });
+        }
+        return sm.getSnapshot();
+      } else {
+        const alreadyQueued = nonce != null
+          ? approvalQueue.some((item) => item.nonce === nonce)
+          : approvalQueue.length > 0;
+        if (!alreadyQueued) {
+          const queued = enqueueApprovalRequest({
+            flow,
+            nonce,
+            sessionId,
+            cwd,
+            tool: toolName,
+            riskLevel: classifyToolRisk(toolName),
+          });
+          // Surface the target app when this request becomes the active one
+          if (getConfig().popUpApp && currentApproval()?.id === queued.id) {
+            surfaceTargetApp("claude").catch((err) => {
+              console.error("[queue] surfaceTargetApp on arrival failed:", err);
+            });
+          }
         }
       }
     }
