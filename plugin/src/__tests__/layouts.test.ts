@@ -681,6 +681,29 @@ describe("layouts", () => {
       expect(config.svg).toContain("Bridge:OK");
       expect(config.svg).toContain("State:idle");
     });
+
+    it("rate-limit widget renders token gauge instead of bridge status", () => {
+      setTheme("dark");
+      setWidgetRenderContext({
+        connectionStatus: "connected",
+        state: "idle",
+        timestamp: Date.now(),
+        rateLimit: { totalTokens5h: 50000, percentUsed: 42, resetAt: null },
+      });
+      const macros: MacroInput[] = [
+        {
+          label: "Tokens",
+          text: "",
+          type: "widget",
+          widget: { kind: "rate-limit", refreshMode: "onClick" },
+        },
+      ];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.action).toBe("widget-refresh");
+      expect(config.svg).toContain("42%");
+      expect(config.svg).toContain("50.0k");
+      expect(config.svg).not.toContain("Bridge:OK");
+    });
   });
 
   describe("animation frame helpers", () => {

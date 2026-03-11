@@ -78,14 +78,14 @@ function buildFeedback(snapshot: StateSnapshot, previewIdx: number): FeedbackPay
 }
 
 async function refreshAllDials(snapshot: StateSnapshot): Promise<void> {
-  // Iterate via the singleton's .actions enumerable
-  for (const act of (encoderInstance?.actions ?? [])) {
+  const acts = [...(encoderInstance?.actions ?? [])];
+  for (const act of acts) {
     const dialAct = act as DialAction<JsonObject>;
     try {
-      const fb = buildFeedback(snapshot, previewOffset);
-      await dialAct.setFeedback(fb);
+      await dialAct.setFeedbackLayout("layouts/encoder.json");
+      await dialAct.setFeedback(buildFeedback(snapshot, previewOffset));
     } catch {
-      // Encoder not on current page or SD+ not connected — ignore
+      // SDK may throw if the dial disappeared mid-render; safe to ignore.
     }
   }
 }
@@ -100,11 +100,11 @@ export class EncoderAction extends SingletonAction {
   }
 
   override onWillAppear(ev: WillAppearEvent): void {
-    // Render current snapshot immediately when dial appears
     if (lastSnapshot) {
       const dial = ev.action as DialAction<JsonObject>;
-      const fb = buildFeedback(lastSnapshot, previewOffset);
-      dial.setFeedback(fb).catch(() => { /* not a dial or not connected */ });
+      dial.setFeedbackLayout("layouts/encoder.json")
+        .then(() => dial.setFeedback(buildFeedback(lastSnapshot!, previewOffset)))
+        .catch(() => {});
     }
   }
 

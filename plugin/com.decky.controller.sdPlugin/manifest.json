@@ -37,7 +37,7 @@
         { "Image": "imgs/actions/slot/key", "Title": "Encoder" }
       ],
       "Encoder": {
-        "layout": "$B1",
+        "layout": "layouts/encoder.json",
         "TriggerDescription": {
           "Rotate": "Preview next queued approval",
           "Push": "Approve current request",

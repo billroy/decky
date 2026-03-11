@@ -231,6 +231,32 @@ describe("config write tools", () => {
     await callTool(client, "decky_reload_config");
     expect(mockBridge.post).toHaveBeenCalledWith("/config/reload");
   });
+
+  it("decky_reorder_slots reorders macros correctly", async () => {
+    mockBridge.get.mockResolvedValue({ ...baseConfig });
+    const reordered = [baseConfig.macros[1], baseConfig.macros[0]];
+    mockBridge.put.mockResolvedValue({ config: { ...baseConfig, macros: reordered } });
+    const text = await callTool(client, "decky_reorder_slots", { newOrder: [1, 0] });
+    const data = parseJson(text) as Record<string, unknown>;
+    expect(data.success).toBe(true);
+    // Verify put was called with swapped order
+    const putCall = mockBridge.put.mock.calls[0];
+    const config = putCall[1] as { macros: Array<{ label: string }> };
+    expect(config.macros[0].label).toBe("Status");
+    expect(config.macros[1].label).toBe("Push");
+  });
+
+  it("decky_reorder_slots rejects wrong-length permutation", async () => {
+    mockBridge.get.mockResolvedValue({ ...baseConfig });
+    const text = await callTool(client, "decky_reorder_slots", { newOrder: [0] });
+    expect(text).toContain("Error:");
+  });
+
+  it("decky_reorder_slots rejects permutation with duplicate index", async () => {
+    mockBridge.get.mockResolvedValue({ ...baseConfig });
+    const text = await callTool(client, "decky_reorder_slots", { newOrder: [0, 0] });
+    expect(text).toContain("Error:");
+  });
 });
 
 describe("color tools", () => {

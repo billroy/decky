@@ -1102,4 +1102,78 @@ describe("SlotAction drag-swap", () => {
     );
     expect(swapCall).toBeUndefined();
   });
+
+  it("emits slotHeartbeat on onWillAppear when connected", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge(baseConfig());
+    bridge.connection = "connected";
+    setSlotClient(bridge as any);
+
+    const action = makeKeyAction("action-hb", { columns: 5, rows: 3, deviceId: "device-hb" });
+    const slot = new SlotAction();
+    (slot as any).actions = [action];
+
+    bridge.sendEvent.mockClear();
+
+    await slot.onWillAppear({
+      action,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+
+    expect(bridge.sendEvent).toHaveBeenCalledWith(
+      "slotHeartbeat",
+      expect.objectContaining({ deviceId: "device-hb", rows: 3, cols: 5 }),
+    );
+  });
+
+  it("emits slotHeartbeat on onWillDisappear when connected", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge(baseConfig());
+    bridge.connection = "connected";
+    setSlotClient(bridge as any);
+
+    const action = makeKeyAction("action-hb2", { columns: 5, rows: 3, deviceId: "device-hb2" });
+    const slot = new SlotAction();
+    (slot as any).actions = [action];
+
+    await slot.onWillAppear({
+      action,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+
+    bridge.sendEvent.mockClear();
+
+    await slot.onWillDisappear({ action } as any);
+
+    expect(bridge.sendEvent).toHaveBeenCalledWith(
+      "slotHeartbeat",
+      expect.objectContaining({ deviceId: "device-hb2" }),
+    );
+  });
+
+  it("does not emit slotHeartbeat when disconnected", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge(baseConfig());
+    bridge.connection = "disconnected";
+    setSlotClient(bridge as any);
+
+    const action = makeKeyAction("action-hb3", { columns: 5, rows: 3, deviceId: "device-hb3" });
+    const slot = new SlotAction();
+    (slot as any).actions = [action];
+
+    bridge.sendEvent.mockClear();
+
+    await slot.onWillAppear({
+      action,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+
+    expect(bridge.sendEvent).not.toHaveBeenCalledWith("slotHeartbeat", expect.anything());
+  });
 });

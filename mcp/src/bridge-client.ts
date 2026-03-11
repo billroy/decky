@@ -39,7 +39,13 @@ function readToken(): string {
         `[decky-mcp] WARNING: ${TOKEN_PATH} is world-readable. Run: chmod 600 ${TOKEN_PATH}\n`,
       );
     }
-    return readFileSync(TOKEN_PATH, "utf-8").trim();
+    const token = readFileSync(TOKEN_PATH, "utf-8").trim();
+    if (!token) {
+      process.stderr.write(
+        `[decky-mcp] WARNING: ${TOKEN_PATH} is empty — requests will be unauthorized.\n`,
+      );
+    }
+    return token;
   } catch {
     return "";
   }

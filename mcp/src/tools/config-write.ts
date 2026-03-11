@@ -336,7 +336,7 @@ export function registerConfigWriteTools(server: McpServer): void {
     async ({ newOrder }) => {
       try {
         const config = await bridge.get<DeckyConfig>("/config");
-        const macros = Array.isArray(config.macros) ? config.macros : [];
+        const macros = Array.isArray(config.macros) ? [...config.macros] : [];
         const n = macros.length;
 
         const sorted = [...newOrder].sort((a, b) => a - b);

@@ -24,10 +24,10 @@ export async function resolveSlotIndex(
     try {
       const status = await bridge.get<Record<string, unknown>>("/status");
       const deck = status.deck as { cols: number } | null;
-      if (!deck) {
+      if (!deck || deck.cols <= 0) {
         return {
           error:
-            "No deck heartbeat data available. Provide an index or ensure the Stream Deck plugin is running.",
+            "No deck heartbeat data available (or deck cols=0). Provide an index or ensure the Stream Deck plugin is connected.",
         };
       }
       return { index: input.row * deck.cols + input.col };

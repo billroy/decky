@@ -90,9 +90,15 @@ export interface DeckyApp {
   httpServer: HttpServer;
   io: SocketIOServer;
   sm: StateMachine;
-  /** Restore console.log/warn/error to the originals captured at createApp() time. Call in test teardown. */
+  /** Restore console.log/warn/error to the originals captured at module-load time. Call in test teardown. */
   restoreConsole: () => void;
 }
+
+// Capture true console originals at module-load time (before any createApp() interception).
+// This prevents double-interception when createApp() is called more than once in the same process.
+const _origConsoleLog = console.log.bind(console);
+const _origConsoleWarn = console.warn.bind(console);
+const _origConsoleError = console.error.bind(console);
 
 type ApprovalFlow = "gate" | "mirror";
 
@@ -211,6 +217,7 @@ export function createApp(): DeckyApp {
   const rateLimitStore = new RateLimitStore();
   const startedAt = Date.now();
   const deckState = new Map<string, SlotHeartbeatPayload>();
+  let lastHeartbeatDeviceId: string | null = null;
   const logBuffer: LogEntry[] = [];
   let pendingGateNonce: string | null = null;
   let pendingQuestion: { text: string | null; options: QuestionOption[] } | null = null;
@@ -221,24 +228,21 @@ export function createApp(): DeckyApp {
   }
 
   // Intercept console output so bridge log lines appear in GET /logs.
-  // Store originals so tests can restore them.
-  const _origLog = console.log.bind(console);
-  const _origWarn = console.warn.bind(console);
-  const _origError = console.error.bind(console);
+  // Uses module-level originals so multiple createApp() calls don't chain interceptors.
   console.log = (...args: unknown[]) => {
     const msg = args.map(String).join(" ");
     pushLog("info", msg);
-    _origLog(...args);
+    _origConsoleLog(...args);
   };
   console.warn = (...args: unknown[]) => {
     const msg = args.map(String).join(" ");
     pushLog("warn", msg);
-    _origWarn(...args);
+    _origConsoleWarn(...args);
   };
   console.error = (...args: unknown[]) => {
     const msg = args.map(String).join(" ");
     pushLog("error", msg);
-    _origError(...args);
+    _origConsoleError(...args);
   };
 
   const io = new SocketIOServer(httpServer, {
@@ -319,8 +323,8 @@ export function createApp(): DeckyApp {
 
   function statePayload(snapshot = sm.getSnapshot()): StatePayload {
     const active = currentApproval();
-    // Most recent deck heartbeat (first deviceId seen, or null)
-    const deckEntry = deckState.size > 0 ? deckState.values().next().value ?? null : null;
+    // Most recently heartbeated deck (or null)
+    const deckEntry = lastHeartbeatDeviceId ? (deckState.get(lastHeartbeatDeviceId) ?? null) : null;
     return {
       ...snapshot,
       capabilities: platformCapabilities,
@@ -603,6 +607,12 @@ export function createApp(): DeckyApp {
     const rawLines = typeof req.query.lines === "string" ? Number(req.query.lines) : 50;
     const maxLines = Number.isFinite(rawLines) ? Math.max(1, Math.min(500, Math.floor(rawLines))) : 50;
     const level = typeof req.query.level === "string" ? req.query.level : "all";
+
+    const validLevels = new Set(["all", "error", "warn"]);
+    if (!validLevels.has(level)) {
+      res.status(400).json({ error: `Invalid level '${level}'. Valid values: all, error, warn` });
+      return;
+    }
 
     let entries = logBuffer.slice();
     if (level === "error") {
@@ -1115,7 +1125,7 @@ export function createApp(): DeckyApp {
         const row = typeof slot.row === "number" ? Math.floor(slot.row) : -1;
         const col = typeof slot.col === "number" ? Math.floor(slot.col) : -1;
         const index = typeof slot.index === "number" ? Math.floor(slot.index) : -1;
-        if (row < 0 || col < 0 || index < 0) return [];
+        if (row < 0 || col < 0 || index < 0 || (rows > 0 && cols > 0 && index >= rows * cols)) return [];
         const entry: SlotHeartbeatPayload["activeSlots"][number] = { row, col, index };
         if (typeof slot.label === "string") entry.label = slot.label.slice(0, 64);
         return [entry];
@@ -1123,6 +1133,7 @@ export function createApp(): DeckyApp {
 
       const sanitized: SlotHeartbeatPayload = { deviceId, model, rows, cols, buttonCount, activeSlots };
       deckState.set(deviceId, sanitized);
+      lastHeartbeatDeviceId = deviceId;
     });
 
     socket.on("disconnect", () => {
@@ -1131,9 +1142,9 @@ export function createApp(): DeckyApp {
   });
 
   function restoreConsole(): void {
-    console.log = _origLog;
-    console.warn = _origWarn;
-    console.error = _origError;
+    console.log = _origConsoleLog;
+    console.warn = _origConsoleWarn;
+    console.error = _origConsoleError;
   }
 
   return { app, httpServer, io, sm, restoreConsole };

@@ -143,7 +143,7 @@ export function resetSlots(): void {
  * Called on willAppear and willDisappear so the bridge always has an up-to-date
  * picture of which physical buttons have Decky slots assigned.
  */
-function emitSlotHeartbeat(triggerAction: WillAppearEvent["action"]): void {
+function emitSlotHeartbeat(triggerAction: WillAppearEvent["action"] | WillDisappearEvent["action"]): void {
   if (!bridgeRef) return;
   const device = triggerAction.device;
   const deviceId = device?.id ?? "unknown";
@@ -300,7 +300,7 @@ export class SlotAction extends SingletonAction {
 
     // Emit updated heartbeat (slot removed) if still connected.
     if (bridgeRef?.getConnectionStatus() === "connected") {
-      emitSlotHeartbeat(ev.action as unknown as WillAppearEvent["action"]);
+      emitSlotHeartbeat(ev.action);
     }
 
     // If no more instances, clean up listeners

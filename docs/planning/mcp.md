@@ -705,7 +705,7 @@ The MCP server runs on the same machine as the bridge, launched by Claude.app. T
 - **Rate limiting on MCP calls:** Bridge already rate-limits its HTTP endpoints. MCP calls go through those same endpoints, so rate limiting is inherited.
 
 ---
-
+f
 ## 7. Bridge additions required
 
 The base MCP server needs only these changes to the existing bridge:

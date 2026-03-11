@@ -142,4 +142,42 @@ describe("GET /logs", () => {
     const res = await fetch(`${baseUrl}/logs`);
     expect(res.status).toBe(401);
   });
+
+  it("returns 400 for unknown level value", async () => {
+    const res = await get("/logs?level=debug");
+    expect(res.status).toBe(400);
+    const data = await res.json() as Record<string, unknown>;
+    expect(typeof data.error).toBe("string");
+  });
+});
+
+describe("slotHeartbeat bounds validation", () => {
+  it("rejects activeSlots entries with index >= rows*cols", async () => {
+    // Use a unique deviceId that won't collide with earlier test devices.
+    // We then poll /status until the bridge reports this specific device.
+    const deviceId = `bounds-device-${Date.now()}`;
+    const heartbeat = {
+      deviceId,
+      model: "20",
+      rows: 2,
+      cols: 3,
+      buttonCount: 6,
+      activeSlots: [
+        { row: 0, col: 0, index: 0 },
+        { row: 0, col: 1, index: 99 }, // out of range: 99 >= 2*3=6
+      ],
+    };
+    client.emit("slotHeartbeat", heartbeat);
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // The bridge returns the most-recently-heartbeated device; since we just
+    // emitted for our unique deviceId it should be first in the Map now.
+    const res = await get("/status");
+    const data = await res.json() as Record<string, unknown>;
+    const deck = data.deck as Record<string, unknown> | null;
+    expect(deck?.deviceId).toBe(deviceId);
+    const activeSlots = deck?.activeSlots as Array<{ index: number }> | undefined;
+    expect(activeSlots?.every((s) => s.index < 6)).toBe(true);
+    expect(activeSlots?.length).toBe(1); // only the valid slot
+  });
 });

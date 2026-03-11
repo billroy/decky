@@ -6,7 +6,7 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { bridge, BridgeUnreachableError, formatBridgeError } from "../bridge-client.js";
+import { bridge, BridgeError, BridgeUnreachableError, formatBridgeError } from "../bridge-client.js";
 import { ok, fail } from "./helpers.js";
 
 export function registerDebugTools(server: McpServer): void {
@@ -54,13 +54,12 @@ export function registerDebugTools(server: McpServer): void {
         if (e instanceof BridgeUnreachableError) {
           return fail("Bridge is not running.");
         }
-        const msg = formatBridgeError(e);
-        if (msg.includes("403")) {
+        if (e instanceof BridgeError && e.status === 403) {
           return fail(
             "Debug mode is off. Start the bridge with DECKY_DEBUG=1 to enable approval traces.",
           );
         }
-        return fail(msg);
+        return fail(formatBridgeError(e));
       }
     },
   );

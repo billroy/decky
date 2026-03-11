@@ -889,7 +889,7 @@
               if (n >= 1 && n <= 60) intervalMinutes = n;
             }
             o.widget = {
-              kind: "bridge-status",
+              kind: (m.widget && m.widget.kind) || "bridge-status",
               refreshMode: refreshMode,
               intervalMinutes: intervalMinutes,
             };

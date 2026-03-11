@@ -931,7 +931,7 @@ function macroSlot(index: number, macro: MacroInput): SlotConfig {
       action: "startDictationForClaude",
     };
   }
-  if (macro.type === "widget" && macro.widget?.kind === "bridge-status") {
+  if (macro.type === "widget") {
     return widgetSlot(index, macro);
   }
   const targetApp = macro.targetApp ?? "claude";
