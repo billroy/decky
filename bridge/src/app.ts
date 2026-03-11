@@ -119,6 +119,15 @@ const platformCapabilities: PlatformCapabilities = {
   platform: process.platform,
 };
 
+interface SlotHeartbeatPayload {
+  deviceId: string;
+  model: string;
+  rows: number;
+  cols: number;
+  buttonCount: number;
+  activeSlots: Array<{ row: number; col: number; index: number; label?: string }>;
+}
+
 interface StatePayload {
   state: string;
   previousState: string | null;
@@ -139,7 +148,17 @@ interface StatePayload {
     options: QuestionOption[];
   } | null;
   rateLimit: RateLimitSummary | null;
+  uptimeSeconds: number;
+  deck: SlotHeartbeatPayload | null;
 }
+
+interface LogEntry {
+  ts: number;
+  level: string;
+  msg: string;
+}
+
+const LOG_BUFFER_MAX = 500;
 
 /** Classify a tool name against configured risk rules (first match wins). */
 function matchesAlwaysAllow(toolName: string | null): boolean {
@@ -188,8 +207,37 @@ export function createApp(): DeckyApp {
   const approvalTrace = new ApprovalTraceStore();
   const approvalQueue: ApprovalQueueItem[] = [];
   const rateLimitStore = new RateLimitStore();
+  const startedAt = Date.now();
+  const deckState = new Map<string, SlotHeartbeatPayload>();
+  const logBuffer: LogEntry[] = [];
   let pendingGateNonce: string | null = null;
   let pendingQuestion: { text: string | null; options: QuestionOption[] } | null = null;
+
+  function pushLog(level: string, msg: string): void {
+    if (logBuffer.length >= LOG_BUFFER_MAX) logBuffer.shift();
+    logBuffer.push({ ts: Date.now(), level, msg });
+  }
+
+  // Intercept console output so bridge log lines appear in GET /logs.
+  // Store originals so tests can restore them.
+  const _origLog = console.log.bind(console);
+  const _origWarn = console.warn.bind(console);
+  const _origError = console.error.bind(console);
+  console.log = (...args: unknown[]) => {
+    const msg = args.map(String).join(" ");
+    pushLog("info", msg);
+    _origLog(...args);
+  };
+  console.warn = (...args: unknown[]) => {
+    const msg = args.map(String).join(" ");
+    pushLog("warn", msg);
+    _origWarn(...args);
+  };
+  console.error = (...args: unknown[]) => {
+    const msg = args.map(String).join(" ");
+    pushLog("error", msg);
+    _origError(...args);
+  };
 
   const io = new SocketIOServer(httpServer, {
     maxHttpBufferSize: 100_000,
@@ -269,6 +317,8 @@ export function createApp(): DeckyApp {
 
   function statePayload(snapshot = sm.getSnapshot()): StatePayload {
     const active = currentApproval();
+    // Most recent deck heartbeat (first deviceId seen, or null)
+    const deckEntry = deckState.size > 0 ? deckState.values().next().value ?? null : null;
     return {
       ...snapshot,
       capabilities: platformCapabilities,
@@ -284,6 +334,8 @@ export function createApp(): DeckyApp {
         : null,
       question: pendingQuestion,
       rateLimit: rateLimitStore.getSummary(),
+      uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
+      deck: deckEntry,
     };
   }
 
@@ -544,6 +596,22 @@ export function createApp(): DeckyApp {
       });
     });
   }
+
+  app.get("/logs", (req, res) => {
+    const rawLines = typeof req.query.lines === "string" ? Number(req.query.lines) : 50;
+    const maxLines = Number.isFinite(rawLines) ? Math.max(1, Math.min(500, Math.floor(rawLines))) : 50;
+    const level = typeof req.query.level === "string" ? req.query.level : "all";
+
+    let entries = logBuffer.slice();
+    if (level === "error") {
+      entries = entries.filter((e) => e.level === "error");
+    } else if (level === "warn") {
+      entries = entries.filter((e) => e.level === "error" || e.level === "warn");
+    }
+    const sliced = entries.slice(-maxLines);
+    const lines = sliced.map((e) => `[${new Date(e.ts).toISOString()}] [${e.level}] ${e.msg}`);
+    res.json({ lines });
+  });
 
   app.get("/config", (_req, res) => {
     res.json(getConfig());
@@ -1024,6 +1092,13 @@ export function createApp(): DeckyApp {
       } else {
         console.log(`[io] unknown action: ${data.action}`);
       }
+    });
+
+    socket.on("slotHeartbeat", (payload: unknown) => {
+      if (!payload || typeof payload !== "object") return;
+      const p = payload as Record<string, unknown>;
+      const deviceId = typeof p.deviceId === "string" ? p.deviceId : "unknown";
+      deckState.set(deviceId, p as unknown as SlotHeartbeatPayload);
     });
 
     socket.on("disconnect", () => {

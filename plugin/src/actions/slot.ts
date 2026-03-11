@@ -138,6 +138,43 @@ export function resetSlots(): void {
   recentMoves.clear();
 }
 
+/**
+ * Emit a slotHeartbeat to the bridge with the current active slot layout.
+ * Called on willAppear and willDisappear so the bridge always has an up-to-date
+ * picture of which physical buttons have Decky slots assigned.
+ */
+function emitSlotHeartbeat(triggerAction: WillAppearEvent["action"]): void {
+  if (!bridgeRef) return;
+  const device = triggerAction.device;
+  const deviceId = device?.id ?? "unknown";
+  const size = device?.size;
+  const rows = typeof size?.rows === "number" ? size.rows : 0;
+  const cols = typeof size?.columns === "number" ? size.columns : 0;
+  const buttonCount = rows * cols;
+  // device.type is a numeric enum; convert to string for the heartbeat payload
+  const model = device?.type !== undefined ? String(device.type) : "unknown";
+
+  const activeSlots: Array<{ row: number; col: number; index: number; label?: string }> = [];
+  const cfg = bridgeRef.getLastConfig();
+  for (const [, physicalIndex] of slotAssignments.entries()) {
+    if (physicalIndex < 0) continue;
+    const row = cols > 0 ? Math.floor(physicalIndex / cols) : 0;
+    const col = cols > 0 ? physicalIndex % cols : 0;
+    const label = cfg?.macros?.[physicalIndex]?.label ?? undefined;
+    activeSlots.push({ row, col, index: physicalIndex, ...(label !== undefined ? { label } : {}) });
+  }
+  activeSlots.sort((a, b) => a.index - b.index);
+
+  bridgeRef.sendEvent("slotHeartbeat", {
+    deviceId,
+    model,
+    rows,
+    cols,
+    buttonCount,
+    activeSlots,
+  });
+}
+
 @action({ UUID: "com.decky.controller.slot" })
 export class SlotAction extends SingletonAction {
   private unsubConnection?: () => void;
@@ -186,6 +223,11 @@ export class SlotAction extends SingletonAction {
 
       // Persist current physical position so future drags are detected.
       ev.action.setSettings({ macroIndex: physicalIndex } as JsonObject).catch(() => {});
+
+      // Emit slot heartbeat so the bridge can report deck layout via /status.
+      if (bridgeRef?.getConnectionStatus() === "connected") {
+        emitSlotHeartbeat(ev.action);
+      }
     }
 
     if (!bridgeRef) return;
@@ -255,6 +297,11 @@ export class SlotAction extends SingletonAction {
     activeKeyActions.delete(ev.action.id);
     slotAssignments.delete(ev.action.id);
     actionDeviceKeys.delete(ev.action.id);
+
+    // Emit updated heartbeat (slot removed) if still connected.
+    if (bridgeRef?.getConnectionStatus() === "connected") {
+      emitSlotHeartbeat(ev.action as unknown as WillAppearEvent["action"]);
+    }
 
     // If no more instances, clean up listeners
     if (activeKeyActions.size === 0) {

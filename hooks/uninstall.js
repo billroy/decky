@@ -6,6 +6,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 const os = require("node:os");
+const { execSync } = require("node:child_process");
 
 const DEST = path.join(os.homedir(), ".decky", "hooks");
 const SETTINGS = path.join(os.homedir(), ".claude", "settings.json");
@@ -68,6 +69,13 @@ if (settings.hooks && typeof settings.hooks === "object") {
   }
   fs.writeFileSync(SETTINGS, JSON.stringify(settings, null, 2) + "\n", "utf-8");
   console.log(`\nUpdated ${SETTINGS} (removed Decky hook entries).`);
+}
+
+try {
+  execSync("claude mcp remove decky", { stdio: "pipe" });
+  console.log("Removed Decky MCP server registration.");
+} catch {
+  console.log("  'claude' not found or MCP server not registered — skipping.");
 }
 
 console.log("Done.");

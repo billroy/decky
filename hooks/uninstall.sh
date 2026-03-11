@@ -48,4 +48,11 @@ CLEANED=$(jq '
 echo "$CLEANED" > "$SETTINGS"
 echo ""
 echo "Updated $SETTINGS (removed Decky hook entries)."
+
+if command -v claude &>/dev/null; then
+  claude mcp remove decky 2>/dev/null && echo "Removed Decky MCP server registration." || true
+else
+  echo "'claude' not found. To remove manually: claude mcp remove decky"
+fi
+
 echo "Done."

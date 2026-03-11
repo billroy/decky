@@ -76,6 +76,7 @@ class FakeBridge {
   }
 
   sendAction = vi.fn();
+  sendEvent = vi.fn();
 
   triggerConfig(config: any) {
     this.config = config;

@@ -273,6 +273,13 @@ export class BridgeClient {
     return null;
   }
 
+  /** Emit an arbitrary named Socket.io event (fire-and-forget). */
+  sendEvent(eventName: string, data: Record<string, unknown>): void {
+    if (this.socket?.connected) {
+      this.socket.emit(eventName, data);
+    }
+  }
+
   getConnectionStatus(): ConnectionStatus {
     return this.connectionStatus;
   }

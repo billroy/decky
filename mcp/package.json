@@ -1,0 +1,35 @@
+{
+  "name": "@decky/mcp",
+  "version": "0.1.0",
+  "description": "MCP server for Decky — gives Claude.app natural-language control over the Decky StreamDeck controller",
+  "type": "module",
+  "bin": {
+    "decky-mcp": "./bin/decky-mcp.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx src/server.ts",
+    "test": "vitest run src/__tests__"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "zod": "^3.25.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^4.0.18"
+  },
+  "keywords": ["claude", "claude-code", "streamdeck", "decky", "mcp"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/billroy/decky.git"
+  },
+  "homepage": "https://github.com/billroy/decky",
+  "license": "MIT"
+}
