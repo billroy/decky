@@ -31,6 +31,8 @@ export interface StateSnapshot {
     flow: "gate" | "mirror";
     requestId: string;
     riskLevel?: "safe" | "warning" | "critical" | null;
+    sessionId?: string | null;
+    cwd?: string | null;
   } | null;
 }
 

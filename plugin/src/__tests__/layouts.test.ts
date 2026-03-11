@@ -252,6 +252,33 @@ describe("layouts", () => {
       expect(config.svg).toContain("Info");
     });
 
+    describe("approvalInfoSVG project name from cwd", () => {
+      it("shows 'Info' when pending=1 regardless of cwd", () => {
+        const config = getSlotConfig("awaiting-approval", 3, "Bash", undefined, {
+          pending: 1, position: 1, targetApp: "claude", flow: "mirror", requestId: "r1",
+          cwd: "/repos/myproject",
+        });
+        expect(config.svg).toContain(">Info<");
+      });
+
+      it("shows cwd basename when pending>1 and cwd is provided", () => {
+        const config = getSlotConfig("awaiting-approval", 3, "Bash", undefined, {
+          pending: 2, position: 1, targetApp: "claude", flow: "mirror", requestId: "r1",
+          cwd: "/repos/my-project",
+        });
+        expect(config.svg).toContain(">my-project<");
+        expect(config.svg).not.toContain(">Info<");
+      });
+
+      it("shows 'Info' when pending>1 but cwd is null", () => {
+        const config = getSlotConfig("awaiting-approval", 3, "Bash", undefined, {
+          pending: 2, position: 1, targetApp: "claude", flow: "mirror", requestId: "r1",
+          cwd: null,
+        });
+        expect(config.svg).toContain(">Info<");
+      });
+    });
+
     it("slots beyond approval buttons (4+) show macro content instead of empty", () => {
       const macros: MacroInput[] = [
         { label: "M0", text: "t0" },

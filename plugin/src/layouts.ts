@@ -596,6 +596,8 @@ interface ApprovalUiMeta {
   flow: "gate" | "mirror";
   requestId: string;
   riskLevel?: "safe" | "warning" | "critical" | null;
+  sessionId?: string | null;
+  cwd?: string | null;
 }
 
 function approvalInfoSVG(toolName: string | null | undefined, approval: ApprovalUiMeta | null | undefined): string {
@@ -605,11 +607,16 @@ function approvalInfoSVG(toolName: string | null | undefined, approval: Approval
   const display = label.length > 10 ? `${label.slice(0, 9)}…` : label;
   const pending = Math.max(1, Math.floor(approval?.pending ?? 1));
   const summary = pending > 1 ? `1/${pending}` : "1/1";
+  // When multiple sessions are queued, show the project name (cwd basename) as context.
+  const project =
+    pending > 1 && approval?.cwd
+      ? (approval.cwd.split("/").filter(Boolean).at(-1) ?? "Info")
+      : "Info";
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <rect width="144" height="144" rx="16" fill="${palette.bg}" />
     <text x="72" y="34" font-size="14" font-family="sans-serif" text-anchor="middle" fill="#ffffff" opacity="0.95">${TARGET_CODES[app]} · ${summary}</text>
     <text x="72" y="80" font-size="24" font-family="sans-serif" text-anchor="middle" fill="#ffffff">${display}</text>
-    <text x="72" y="114" font-size="14" font-family="sans-serif" text-anchor="middle" fill="#ffffff" opacity="0.9">Info</text>
+    <text x="72" y="114" font-size="14" font-family="sans-serif" text-anchor="middle" fill="#ffffff" opacity="0.9">${project}</text>
   </svg>`;
 }
 
