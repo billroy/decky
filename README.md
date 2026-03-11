@@ -32,48 +32,25 @@ You drag **Decky Slot** actions onto your Stream Deck keys. Each slot dynamicall
 
 ## Installation
 
-### 1. Clone and build
+### 1. Clone and install
 
 ```bash
 git clone https://github.com/billroy/decky.git
 cd decky
-cd bridge && npm ci && npm run build && cd ..
-cd plugin && npm ci && npm run build && cd ..
+./install.sh
 ```
 
-### 2. Install hooks
+The install script handles everything: installs dependencies, builds the plugin, copies hook scripts to `~/.decky/hooks/`, registers hooks in `~/.claude/settings.json`, and links the plugin into the Stream Deck app (requires the `streamdeck` CLI — install with `npm install -g @elgato/cli`).
+
+### 2. Start the bridge
 
 ```bash
-node hooks/install.js
-```
-
-This copies hook scripts to `~/.decky/hooks/` and registers them in `~/.claude/settings.json`. The hooks intercept Claude Code tool-use events and forward them to the bridge.
-
-### 3. Start the bridge
-
-```bash
-cd bridge && npm start
+./start.sh
 ```
 
 The bridge listens on `http://localhost:9130`.
 
-### 4. Install the plugin
-
-Copy the plugin bundle into your Stream Deck plugins directory:
-
-**macOS:**
-```bash
-cp -r plugin/com.decky.controller.sdPlugin ~/Library/Application\ Support/com.elgato.StreamDeck/Plugins/
-```
-
-**Windows:**
-```bash
-xcopy /E /I plugin\com.decky.controller.sdPlugin "%APPDATA%\Elgato\StreamDeck\Plugins\com.decky.controller.sdPlugin"
-```
-
-Then restart the Stream Deck app.
-
-### 5. Add slots to your Stream Deck
+### 3. Add slots to your Stream Deck
 
 In the Stream Deck app, find **Decky Slot** under Custom actions and drag it onto every key you want Decky to control. Click each key to configure it in the Property Inspector.
 
