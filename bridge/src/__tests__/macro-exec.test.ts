@@ -1,8 +1,9 @@
 /**
- * Tests for macro-exec.ts — specifically the quick-focus-steal behaviour
+ * Tests for macro-exec-darwin.ts — specifically the quick-focus-steal behaviour
  * in executeMacro().
  *
  * We mock child_process.execFile so no real AppleScript or pbcopy runs.
+ * Skipped on non-darwin platforms (the darwin backend is macOS-only).
  */
 
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
@@ -58,8 +59,8 @@ vi.mock("node:child_process", () => ({
   execFile: vi.fn(makeMock(PREV_SNAPSHOT)),
 }));
 
-// Import after mocks are installed.
-const { executeMacro } = await import("../macro-exec.js");
+// Import the darwin backend directly (not the router, which throws on non-darwin).
+const { executeMacro } = await import("../macro-exec-darwin.js");
 
 const childProcess = await import("node:child_process");
 
@@ -71,7 +72,7 @@ beforeEach(() => {
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe("executeMacro quick-focus-steal", () => {
+describe.skipIf(process.platform !== "darwin")("executeMacro quick-focus-steal (darwin)", () => {
   it("restores focus to previous app and window after injection", async () => {
     await executeMacro("hello", { targetApp: "claude", submit: true });
 

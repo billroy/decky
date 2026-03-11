@@ -112,8 +112,8 @@ interface PlatformCapabilities {
 }
 
 const platformCapabilities: PlatformCapabilities = {
-  textInjection: process.platform === "darwin",
-  approveInApp: process.platform === "darwin",
+  textInjection: process.platform === "darwin" || process.platform === "win32",
+  approveInApp: process.platform === "darwin" || process.platform === "win32",
   dictation: process.platform === "darwin",
   platform: process.platform,
 };
