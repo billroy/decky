@@ -267,6 +267,30 @@ describe("layouts", () => {
       expect(slot5.title).toBe("M5");
     });
 
+    describe("risk level colors", () => {
+      const baseApproval = { pending: 1, position: 1, targetApp: "claude" as const, flow: "mirror" as const, requestId: "req-1" };
+
+      it("defaults to green when riskLevel is null", () => {
+        const config = getSlotConfig("awaiting-approval", 0, null, undefined, { ...baseApproval, riskLevel: null });
+        expect(config.svg).toContain("#22c55e");
+      });
+
+      it("stays green when riskLevel is safe", () => {
+        const config = getSlotConfig("awaiting-approval", 0, null, undefined, { ...baseApproval, riskLevel: "safe" });
+        expect(config.svg).toContain("#22c55e");
+      });
+
+      it("turns amber when riskLevel is warning", () => {
+        const config = getSlotConfig("awaiting-approval", 0, null, undefined, { ...baseApproval, riskLevel: "warning" });
+        expect(config.svg).toContain("#f59e0b");
+      });
+
+      it("turns red when riskLevel is critical", () => {
+        const config = getSlotConfig("awaiting-approval", 0, null, undefined, { ...baseApproval, riskLevel: "critical" });
+        expect(config.svg).toContain("#ef4444");
+      });
+    });
+
     it("getLayout for awaiting-approval includes macro slots beyond 3", () => {
       const macros: MacroInput[] = [
         { label: "M0", text: "t0" },

@@ -30,6 +30,7 @@ export interface StateSnapshot {
     targetApp: "claude" | "codex";
     flow: "gate" | "mirror";
     requestId: string;
+    riskLevel?: "safe" | "warning" | "critical" | null;
   } | null;
 }
 

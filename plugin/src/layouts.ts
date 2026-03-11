@@ -595,6 +595,7 @@ interface ApprovalUiMeta {
   targetApp: "claude" | "codex";
   flow: "gate" | "mirror";
   requestId: string;
+  riskLevel?: "safe" | "warning" | "critical" | null;
 }
 
 function approvalInfoSVG(toolName: string | null | undefined, approval: ApprovalUiMeta | null | undefined): string {
@@ -693,10 +694,18 @@ function approvalButtonSVG(bg: string, iconName: string, label: string): string 
 
 // --- Slot config factories ---
 
+const RISK_COLORS: Record<"safe" | "warning" | "critical", string> = {
+  safe: "#22c55e",    // green — same as default
+  warning: "#f59e0b", // amber
+  critical: "#ef4444", // red
+};
+
 function approveSlot(approval?: ApprovalUiMeta | null): SlotConfig {
   const targetApp = approval?.targetApp ?? "claude";
+  const risk = approval?.riskLevel;
+  const bg = risk ? RISK_COLORS[risk] : "#22c55e";
   return {
-    svg: approvalButtonSVG("#22c55e", "check", "Approve"),
+    svg: approvalButtonSVG(bg, "check", "Approve"),
     title: "Approve",
     action: "approve",
     data: { targetApp },
