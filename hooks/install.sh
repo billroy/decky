@@ -43,7 +43,7 @@ if ! command -v jq &>/dev/null; then
   echo "Install jq (brew install jq / apt install jq) and re-run, or manually add"
   echo "the following hooks to $SETTINGS:"
   echo ""
-  echo "$DECKY_HOOKS" | jq .
+  echo "$DECKY_HOOKS"
   echo ""
   echo "Done (hooks installed, settings NOT updated)."
   exit 0

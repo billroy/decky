@@ -266,13 +266,8 @@ describe("dismissClaudeApproval (win32)", () => {
 });
 
 describe("startDictationForClaude (win32)", () => {
-  it("activates Claude and sends Ctrl+H", async () => {
-    await startDictationForClaude();
-
-    expect(powershellCalls).toHaveLength(1);
-    expect(powershellCalls[0]).toContain("Get-Process -Name 'Claude'");
-    expect(powershellCalls[0]).toContain("SendKeys");
-    expect(powershellCalls[0]).toContain("^h");
+  it("rejects with unsupported error", async () => {
+    await expect(startDictationForClaude()).rejects.toThrow("not supported on Windows");
   });
 });
 

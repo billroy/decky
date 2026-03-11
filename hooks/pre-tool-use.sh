@@ -84,8 +84,16 @@ while [ ! -f "$GATE_FILE" ]; do
 done
 
 # Ensure gate file has strict owner/permissions before trusting content.
-FILE_UID="$(stat -f '%u' "$GATE_FILE" 2>/dev/null || echo '')"
-FILE_MODE="$(stat -f '%OLp' "$GATE_FILE" 2>/dev/null || echo '')"
+# BSD stat (macOS) vs GNU stat (Linux) have different flag syntax.
+if stat -f '%u' /dev/null &>/dev/null; then
+  # BSD stat (macOS)
+  FILE_UID="$(stat -f '%u' "$GATE_FILE" 2>/dev/null || echo '')"
+  FILE_MODE="$(stat -f '%OLp' "$GATE_FILE" 2>/dev/null || echo '')"
+else
+  # GNU stat (Linux)
+  FILE_UID="$(stat -c '%u' "$GATE_FILE" 2>/dev/null || echo '')"
+  FILE_MODE="$(stat -c '%a' "$GATE_FILE" 2>/dev/null || echo '')"
+fi
 if [ "$FILE_UID" != "$(id -u)" ] || [ "$FILE_MODE" != "600" ]; then
   rm -f "$GATE_FILE"
   echo '{"decision":"block","reason":"Decky approval gate integrity check failed"}'

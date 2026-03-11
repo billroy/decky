@@ -175,6 +175,7 @@ const PALETTES: Record<Theme, ThemePalette> = {
 let currentTheme: Theme = "light";
 let currentThemeSeed = 0;
 let showTargetBadge = false;
+let currentDefaultTargetApp: TargetApp = "claude";
 
 const TARGET_CODES: Record<TargetApp, string> = {
   claude: "CLD",
@@ -193,7 +194,7 @@ const TARGET_BADGE_COLORS: Record<TargetApp, { bg: string; text: string }> = {
 };
 
 export function setTheme(theme: Theme): void {
-  currentTheme = PALETTES[theme] ? theme : (theme === "rainbow" || theme === "random" ? theme : "light");
+  currentTheme = theme;
 }
 
 export function setThemeSeed(seed: number): void {
@@ -419,11 +420,12 @@ export function setTargetBadgeOptions(options: {
   defaultTargetApp?: TargetApp;
 }): void {
   showTargetBadge = options.showTargetBadge;
+  currentDefaultTargetApp = options.defaultTargetApp ?? "claude";
 }
 
 function targetBadge(targetApp?: TargetApp): string {
   if (!showTargetBadge) return "";
-  if (!targetApp || targetApp === "claude") return "";
+  if (!targetApp || targetApp === currentDefaultTargetApp) return "";
   const target = targetApp;
   const palette = TARGET_BADGE_COLORS[target];
   return `<g>
@@ -620,9 +622,9 @@ function thinkingSVG(): string {
 }
 
 function emptySVG(slotIndex = 0, colors?: ColorOverrides): string {
-  const p = resolveThemePaletteForSlot(currentTheme, slotIndex) ?? PALETTES.light;
-  const emptyBg = resolveColor(p.emptyBg ?? PALETTES.light.emptyBg, defaultColors.bg, colors?.bg);
-  const emptyText = resolveColor(p.emptyText ?? PALETTES.light.emptyText, defaultColors.text, colors?.text);
+  const p = resolveThemePaletteForSlot(currentTheme, slotIndex);
+  const emptyBg = resolveColor(p.emptyBg, defaultColors.bg, colors?.bg);
+  const emptyText = resolveColor(p.emptyText, defaultColors.text, colors?.text);
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
   <rect width="144" height="144" rx="16" fill="${emptyBg}" />
   <text x="72" y="70" font-size="36" font-family="sans-serif" text-anchor="middle" fill="${emptyText}">\u2022\u2022\u2022</text>

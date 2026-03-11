@@ -152,7 +152,7 @@ export interface ConfigBackupInfo {
   size: number;
 }
 
-function normalizeTheme(value: unknown, fallback: Theme): Theme {
+export function normalizeTheme(value: unknown, fallback: Theme): Theme {
   return value === "light" ||
     value === "dark" ||
     value === "dracula" ||
@@ -503,10 +503,6 @@ export function getConfig(): DeckyConfig {
   return currentConfig;
 }
 
-/** Reload config from disk. Returns the new config. */
-export function reloadConfig(): DeckyConfig {
-  return loadConfig();
-}
 
 /** Save config to disk and update in-memory copy. Returns the saved config. */
 export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {

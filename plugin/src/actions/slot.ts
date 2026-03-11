@@ -327,13 +327,13 @@ export class SlotAction extends SingletonAction {
     const cfg = bridgeRef.getLastConfig();
     if (!cfg?.macros) return;
 
+    if (indexA < 0 || indexB < 0) return;
     const macros = [...cfg.macros];
     // Pad with empty macros if needed
     const maxIndex = Math.max(indexA, indexB);
     while (macros.length <= maxIndex) {
       macros.push({ label: "", text: "" });
     }
-    if (indexA < 0 || indexB < 0) return;
 
     // Swap
     const temp = macros[indexA];

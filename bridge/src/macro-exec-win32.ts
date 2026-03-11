@@ -533,17 +533,14 @@ export function dismissClaudeApproval(): Promise<void> {
 // ── Dictation ─────────────────────────────────────────────────────────────────
 
 /**
- * Start dictation in Claude. On Windows, triggers Win+H (Windows Speech
- * Recognition) after activating Claude. This is best-effort — depends on
- * Windows speech services being enabled.
+ * Start dictation in Claude. Not supported on Windows — the Win+H shortcut
+ * for Windows Speech Recognition cannot be sent reliably via SendKeys (which
+ * uses Ctrl, not the Windows key). Reject explicitly rather than sending the
+ * wrong keystroke.
  */
 export async function startDictationForClaude(): Promise<void> {
-  const script = `
-${WIN_API_TYPE}
-Add-Type -AssemblyName System.Windows.Forms
-${buildActivateScript("claude")}
-Start-Sleep -Milliseconds 200
-[System.Windows.Forms.SendKeys]::SendWait("^h")
-`;
-  await runPowerShell(script);
+  throw new Error(
+    "Dictation is not supported on Windows. " +
+    "Windows Speech Recognition (Win+H) cannot be triggered programmatically via SendKeys.",
+  );
 }

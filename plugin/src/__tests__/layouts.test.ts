@@ -475,11 +475,11 @@ describe("layouts", () => {
       expect(config.data).toEqual({ text: "ship it", targetApp: "claude", submit: true });
     });
 
-    it("does not hide codex badge even if configured defaultTargetApp is codex", () => {
+    it("hides badge when macro target matches configured defaultTargetApp", () => {
       setTargetBadgeOptions({ showTargetBadge: true, defaultTargetApp: "codex" });
       const macros: MacroInput[] = [{ label: "Ship", text: "ship it", targetApp: "codex" }];
       const config = getSlotConfig("idle", 0, null, macros);
-      expect(config.svg).toContain("CDX");
+      expect(config.svg).not.toContain("CDX");
     });
 
     it("shows badge when explicit target is non-claude", () => {

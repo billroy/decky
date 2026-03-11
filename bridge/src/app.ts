@@ -16,10 +16,9 @@ import {
   loadConfig,
   getConfig,
   listConfigBackups,
-  reloadConfig,
+  normalizeTheme,
   restoreConfigBackup,
   saveConfig,
-  type Theme,
   ConfigValidationError,
 } from "./config.js";
 import {
@@ -71,21 +70,6 @@ function extractToolName(body: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
-function isTheme(value: unknown): value is Theme {
-  return value === "light" ||
-    value === "dark" ||
-    value === "dracula" ||
-    value === "monokai" ||
-    value === "solarized-dark" ||
-    value === "solarized-light" ||
-    value === "nord" ||
-    value === "github-dark" ||
-    value === "candy-cane" ||
-    value === "gradient-blue" ||
-    value === "wormhole" ||
-    value === "rainbow" ||
-    value === "random";
-}
 
 export interface DeckyApp {
   app: express.Express;
@@ -152,7 +136,6 @@ export function createApp(): DeckyApp {
   const approvalTrace = new ApprovalTraceStore();
   const approvalQueue: ApprovalQueueItem[] = [];
   let pendingGateNonce: string | null = null;
-  let pendingApprovalFlow: ApprovalFlow = "gate";
 
   const io = new SocketIOServer(httpServer, {
     maxHttpBufferSize: 100_000,
@@ -197,7 +180,6 @@ export function createApp(): DeckyApp {
       pendingGateNonce = null;
       return;
     }
-    pendingApprovalFlow = active.flow;
     pendingGateNonce = active.nonce;
   }
 
@@ -238,7 +220,7 @@ export function createApp(): DeckyApp {
       approval: active
         ? {
           pending: approvalQueue.length,
-          position: approvalQueue.findIndex((item) => item.id === active.id) + 1,
+          position: 1, // active is always approvalQueue[0]
           flow: active.flow,
         }
         : null,
@@ -445,7 +427,7 @@ export function createApp(): DeckyApp {
   });
 
   app.post("/config/reload", (_req, res) => {
-    const config = reloadConfig();
+    const config = loadConfig();
     io.emit("configUpdate", config);
     res.json({ ok: true, config });
   });
@@ -516,7 +498,7 @@ export function createApp(): DeckyApp {
       if (entry) {
         const currentState = sm.getSnapshot().state;
         const activeApproval = currentApproval();
-        const activeFlow = activeApproval?.flow ?? pendingApprovalFlow;
+        const activeFlow = activeApproval?.flow ?? "gate";
         approvalTrace.start({ actionId, action: data.action, targetApp: "claude" });
         approvalTrace.append(actionId, "bridge.action.received", "approval action received", {
           action: data.action,
@@ -572,7 +554,7 @@ export function createApp(): DeckyApp {
             actionId,
             "bridge.action.ignored",
             "awaiting approval without active queue context",
-            { state: currentState, pendingApprovalFlow },
+            { state: currentState, approvalFlow: activeFlow },
           );
           approvalTrace.settle({
             actionId,
@@ -678,11 +660,11 @@ export function createApp(): DeckyApp {
           } else {
             sm.forceState("tool-executing", "approved via StreamDeck (approve once)");
           }
+          approveOnceInClaude().catch((err) => {
+            console.error("[io] approveOnceInClaude failed:", err);
+            socket.emit("error", { error: "Failed to activate Claude for approve once" });
+          });
         }
-        approveOnceInClaude().catch((err) => {
-          console.error("[io] approveOnceInClaude failed:", err);
-          socket.emit("error", { error: "Failed to activate Claude for approve once" });
-        });
       } else if (data.action === "startDictationForClaude") {
         startDictationForClaude().catch((err) => {
           console.error("[io] startDictationForClaude failed:", err);
@@ -695,7 +677,10 @@ export function createApp(): DeckyApp {
             : undefined;
         let macros = Array.isArray(data.macros) ? data.macros : undefined;
         const timeout = typeof data.approvalTimeout === "number" ? data.approvalTimeout : undefined;
-        const theme = isTheme(data.theme) ? data.theme : undefined;
+        const currentConfig = getConfig();
+        const theme = typeof data.theme === "string"
+          ? normalizeTheme(data.theme, currentConfig.theme)
+          : undefined;
         let themeSeed =
           typeof data.themeSeed === "number" && Number.isFinite(data.themeSeed)
             ? Math.floor(data.themeSeed)
