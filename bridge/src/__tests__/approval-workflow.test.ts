@@ -8,7 +8,7 @@
  *   3. State transitions match the expected approval flow
  */
 
-import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach, beforeEach, vi } from "vitest";
 import { io as ioClient, type Socket as ClientSocket } from "socket.io-client";
 import {
   clearGateFile,
@@ -324,5 +324,48 @@ describe("approval workflow — mirror full cycle (PermissionRequest)", () => {
     // PostToolUse arrives — stays idle (thinking state disabled)
     const { data: s1 } = await postHook({ event: "PostToolUse", tool: "Read" });
     expect(s1.state.state).toBe("idle");
+  });
+
+  describe("tool risk classification", () => {
+    beforeEach(() => {
+      decky.sm.forceState("idle", "test reset");
+    });
+
+    it("riskLevel is null when no rules are configured", async () => {
+      saveConfig({ toolRiskRules: [] });
+      const { data } = await postHook({ event: "PermissionRequest", tool: "Bash" });
+      expect(data.state.approval).not.toBeNull();
+      expect(data.state.approval!.riskLevel).toBeNull();
+    });
+
+    it("riskLevel matches configured pattern (warning for Bash)", async () => {
+      saveConfig({ toolRiskRules: [{ pattern: "Bash", risk: "warning" }] });
+      const { data } = await postHook({ event: "PermissionRequest", tool: "Bash" });
+      expect(data.state.approval!.riskLevel).toBe("warning");
+    });
+
+    it("riskLevel matches critical pattern (WriteFile → critical)", async () => {
+      saveConfig({ toolRiskRules: [
+        { pattern: "^Write", risk: "critical" },
+        { pattern: "Bash", risk: "warning" },
+      ] });
+      const { data } = await postHook({ event: "PermissionRequest", tool: "WriteFile" });
+      expect(data.state.approval!.riskLevel).toBe("critical");
+    });
+
+    it("riskLevel is null for unmatched tool", async () => {
+      saveConfig({ toolRiskRules: [{ pattern: "Bash", risk: "warning" }] });
+      const { data } = await postHook({ event: "PermissionRequest", tool: "Read" });
+      expect(data.state.approval!.riskLevel).toBeNull();
+    });
+
+    it("first matching rule wins", async () => {
+      saveConfig({ toolRiskRules: [
+        { pattern: "Bash", risk: "safe" },
+        { pattern: "Bash", risk: "critical" },
+      ] });
+      const { data } = await postHook({ event: "PermissionRequest", tool: "Bash" });
+      expect(data.state.approval!.riskLevel).toBe("safe");
+    });
   });
 });

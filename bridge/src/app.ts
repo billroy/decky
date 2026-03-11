@@ -15,11 +15,13 @@ import { writeGateFile, clearGateFile, type ApprovalResult } from "./approval-ga
 import {
   loadConfig,
   getConfig,
+  getToolRiskRules,
   listConfigBackups,
   normalizeTheme,
   restoreConfigBackup,
   saveConfig,
   ConfigValidationError,
+  type RiskLevel,
 } from "./config.js";
 import {
   executeMacro,
@@ -85,6 +87,7 @@ interface ApprovalQueueItem {
   flow: ApprovalFlow;
   nonce: string | null;
   tool: string | null;
+  riskLevel: RiskLevel | null;
   createdAt: number;
 }
 
@@ -113,7 +116,22 @@ interface StatePayload {
     pending: number;
     position: number;
     flow: ApprovalFlow;
+    riskLevel: RiskLevel | null;
   } | null;
+}
+
+/** Classify a tool name against configured risk rules (first match wins). */
+function classifyToolRisk(toolName: string | null): RiskLevel | null {
+  if (!toolName) return null;
+  const rules = getToolRiskRules();
+  for (const rule of rules) {
+    try {
+      if (new RegExp(rule.pattern, "i").test(toolName)) return rule.risk;
+    } catch {
+      // Invalid regex — skip
+    }
+  }
+  return null;
 }
 
 function normalizeActionId(value: unknown): string | null {
@@ -222,6 +240,7 @@ export function createApp(): DeckyApp {
           pending: approvalQueue.length,
           position: 1, // active is always approvalQueue[0]
           flow: active.flow,
+          riskLevel: active.riskLevel,
         }
         : null,
     };
@@ -269,10 +288,12 @@ export function createApp(): DeckyApp {
       const current = sm.getSnapshot();
       const duplicatePre = current.state === "awaiting-approval";
       if (!duplicatePre) {
+        const toolName = payload.tool ?? null;
         const queued = enqueueApprovalRequest({
           flow,
           nonce,
-          tool: payload.tool ?? null,
+          tool: toolName,
+          riskLevel: classifyToolRisk(toolName),
         });
         // Surface the target app when this request becomes the active one
         if (getConfig().popUpApp && currentApproval()?.id === queued.id) {
