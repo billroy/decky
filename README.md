@@ -13,13 +13,31 @@ Decky has two components that run locally on your machine:
 
 You drag **Decky Slot** actions onto your Stream Deck keys. Each slot dynamically changes its appearance and behavior based on the current state of your AI session — showing approval buttons when permission is needed, command buttons when idle, and status indicators while tools execute.
 
-## Requirements
+## Prerequisites
 
-| Requirement              | Version        |
-|:-------------------------|:---------------|
-| Node.js                  | 20+            |
-| Elgato Stream Deck app   | 6.6+           |
-| Claude Code              | Latest         |
+Install these before running the Decky installer:
+
+| Prerequisite                | How to install                                        |
+|:----------------------------|:------------------------------------------------------|
+| **Elgato Stream Deck**      | Hardware — any model supported by the Stream Deck app |
+| **Stream Deck app** 6.6+    | [Download from Elgato](https://www.elgato.com/downloads) |
+| **Node.js** 20+             | [nodejs.org](https://nodejs.org/) or your package manager |
+| **Git**                     | [git-scm.com](https://git-scm.com/) or your package manager |
+| **Stream Deck CLI**         | `npm install -g @elgato/cli` (used to link the plugin) |
+| **Claude Code**             | [claude.ai/download](https://claude.ai/download) — latest version |
+
+**Linux only:** also install `xdotool` and `xclip` for text injection and window management:
+
+```bash
+# Debian/Ubuntu
+sudo apt install xdotool xclip
+
+# Fedora
+sudo dnf install xdotool xclip
+
+# Arch
+sudo pacman -S xdotool xclip
+```
 
 ### Supported Platforms
 
@@ -27,7 +45,7 @@ You drag **Decky Slot** actions onto your Stream Deck keys. Each slot dynamicall
 |:-----------------|:-----------------|:--------------------------------------------|
 | **macOS 13+**    | Tested           | Full feature support                        |
 | **Windows 10+**  | Experimental     | Pending user testing                        |
-| **Linux (X11)**  | Experimental     | Requires `xdotool` and `xclip` packages     |
+| **Linux (X11)**  | Experimental     | Requires `xdotool` and `xclip` (see above)  |
 | **Linux (Wayland)** | Not supported | Wayland security model blocks window automation |
 
 ## Installation
@@ -40,7 +58,7 @@ cd decky
 ./install.sh
 ```
 
-The install script handles everything: installs dependencies, builds the plugin, copies hook scripts to `~/.decky/hooks/`, registers hooks in `~/.claude/settings.json`, and links the plugin into the Stream Deck app (requires the `streamdeck` CLI — install with `npm install -g @elgato/cli`).
+The install script installs npm dependencies, builds the plugin, copies hook scripts to `~/.decky/hooks/`, registers hooks in `~/.claude/settings.json`, and links the plugin into the Stream Deck app.
 
 ### 2. Start the bridge
 
@@ -52,22 +70,7 @@ The bridge listens on `http://localhost:9130`.
 
 ### 3. Add slots to your Stream Deck
 
-In the Stream Deck app, find **Decky Slot** under Custom actions and drag it onto every key you want Decky to control. Click each key to configure it in the Property Inspector.
-
-### Linux prerequisites
-
-Install `xdotool` and `xclip` for text injection and window management:
-
-```bash
-# Debian/Ubuntu
-sudo apt install xdotool xclip
-
-# Fedora
-sudo dnf install xdotool xclip
-
-# Arch
-sudo pacman -S xdotool xclip
-```
+Open the Stream Deck app, find **Decky Slot** under Custom actions, and drag it onto every key you want Decky to control. Click each key to configure it in the Property Inspector.
 
 ## Uninstallation
 
