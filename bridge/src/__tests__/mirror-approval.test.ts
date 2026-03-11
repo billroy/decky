@@ -1,3 +1,6 @@
+// Enable debug endpoint so approval-trace tests work (safe: vitest forks give separate processes)
+process.env.DECKY_DEBUG = "1";
+
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { io as ioClient, type Socket as ClientSocket } from "socket.io-client";
 import { getBridgeToken } from "../security.js";

@@ -293,6 +293,13 @@ function runAppleScript(script: string): Promise<string> {
   });
 }
 
+/**
+ * Escape a string for AppleScript double-quoted context.
+ *
+ * SECURITY: Only escapes \ and ". Safe ONLY for non-user-input values.
+ * Currently called with hardcoded app names and OS-provided process/window names.
+ * If user input ever reaches this function, harden the escaping or use stdin.
+ */
 function appleScriptString(value: string): string {
   return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }

@@ -44,9 +44,42 @@ export function getBridgeToken(): string {
   return token;
 }
 
+/**
+ * Generate a fresh bridge token, write it to disk, and update the cache.
+ * Called on each bridge start so that tokens from previous sessions are invalidated.
+ * Hook scripts re-read the file on every invocation; the plugin re-reads on reconnect.
+ */
+export function rotateBridgeToken(): string {
+  // If DECKY_AUTH_TOKEN env var is set, rotation is a no-op — the env token is static.
+  const env = process.env.DECKY_AUTH_TOKEN;
+  if (typeof env === "string" && env.trim().length >= 16) {
+    cachedToken = normalizeToken(env);
+    return cachedToken;
+  }
+
+  ensureDeckyDir();
+  const token = createToken();
+  writeFileSync(TOKEN_PATH, `${token}\n`, { encoding: "utf-8", mode: 0o600 });
+  cachedToken = token;
+  return token;
+}
+
 export function readRequestToken(req: Request): string {
   const h = req.header("x-decky-token");
   return typeof h === "string" ? h.trim() : "";
+}
+
+/**
+ * Check whether a host string refers to a loopback address.
+ * Used to validate DECKY_HOST before binding the server.
+ */
+export function isLoopbackAddress(host: string): boolean {
+  if (!host) return false;
+  const lower = host.toLowerCase();
+  if (lower === "localhost") return true;
+  if (lower === "::1") return true;
+  if (lower.startsWith("127.")) return true;
+  return false;
 }
 
 export function redactActionForLog(data: Record<string, unknown>): Record<string, unknown> {

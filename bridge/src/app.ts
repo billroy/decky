@@ -9,6 +9,7 @@
 import express from "express";
 import { createServer, type Server as HttpServer } from "node:http";
 import { Server as SocketIOServer } from "socket.io";
+import rateLimit from "express-rate-limit";
 import { StateMachine, type HookPayload, type HookEvent } from "./state-machine.js";
 import { writeGateFile, clearGateFile, type ApprovalResult } from "./approval-gate.js";
 import {
@@ -139,6 +140,7 @@ export function createApp(): DeckyApp {
   let pendingApprovalFlow: ApprovalFlow = "gate";
 
   const io = new SocketIOServer(httpServer, {
+    maxHttpBufferSize: 100_000,
     cors: {
       origin: (origin, cb) => {
         if (!origin) return cb(null, true);
@@ -315,7 +317,7 @@ export function createApp(): DeckyApp {
 
   // --- Middleware ---
 
-  app.use(express.json());
+  app.use(express.json({ limit: "100kb" }));
   app.use((req, res, next) => {
     if (readRequestToken(req) !== bridgeToken) {
       res.status(401).json({ error: "Unauthorized" });
@@ -323,6 +325,27 @@ export function createApp(): DeckyApp {
     }
     next();
   });
+
+  // --- Rate limiting ---
+
+  const hookLimiter = rateLimit({
+    windowMs: 60_000,
+    max: 200,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many requests" },
+  });
+
+  const configLimiter = rateLimit({
+    windowMs: 60_000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: "Too many requests" },
+  });
+
+  app.use("/hook", hookLimiter);
+  app.use("/config", configLimiter);
 
   // --- Routes ---
 
@@ -368,21 +391,23 @@ export function createApp(): DeckyApp {
     res.json(statePayload());
   });
 
-  app.get("/debug/approval-trace", (req, res) => {
-    const raw = typeof req.query.limit === "string" ? Number(req.query.limit) : 25;
-    const limit = Number.isFinite(raw) ? Math.max(1, Math.min(100, Math.floor(raw))) : 25;
-    res.json({
-      traces: approvalTrace.list(limit),
-      approvalQueue: approvalQueue.map((entry, idx) => ({
-        id: entry.id,
-        index: idx + 1,
-        flow: entry.flow,
-        tool: entry.tool,
-        createdAt: entry.createdAt,
-      })),
-      now: Date.now(),
+  if (process.env.DECKY_DEBUG === "1" || process.env.DECKY_DEBUG === "true") {
+    app.get("/debug/approval-trace", (req, res) => {
+      const raw = typeof req.query.limit === "string" ? Number(req.query.limit) : 25;
+      const limit = Number.isFinite(raw) ? Math.max(1, Math.min(100, Math.floor(raw))) : 25;
+      res.json({
+        traces: approvalTrace.list(limit),
+        approvalQueue: approvalQueue.map((entry, idx) => ({
+          id: entry.id,
+          index: idx + 1,
+          flow: entry.flow,
+          tool: entry.tool,
+          createdAt: entry.createdAt,
+        })),
+        now: Date.now(),
+      });
     });
-  });
+  }
 
   app.get("/config", (_req, res) => {
     res.json(getConfig());
@@ -448,7 +473,20 @@ export function createApp(): DeckyApp {
     socket.emit("stateChange", statePayload());
     socket.emit("configUpdate", getConfig());
 
+    const ACTION_THROTTLE_MS = 200;
+    const THROTTLE_EXEMPT = new Set(["approve", "deny", "cancel", "restart", "approveOnceInClaude"]);
+    let lastThrottledActionTime = 0;
+
     socket.on("action", (data: { action: string; [key: string]: unknown }) => {
+      if (!THROTTLE_EXEMPT.has(data.action)) {
+        const now = Date.now();
+        if (now - lastThrottledActionTime < ACTION_THROTTLE_MS) {
+          socket.emit("error", { error: "Action throttled" });
+          return;
+        }
+        lastThrottledActionTime = now;
+      }
+
       const actionId = normalizeActionId(data.actionId) ?? createActionId("sd");
       console.log(`[io] action received: ${JSON.stringify(redactActionForLog(data as Record<string, unknown>))}`);
 

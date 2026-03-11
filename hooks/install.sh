@@ -8,10 +8,11 @@ SETTINGS="$HOME/.claude/settings.json"
 
 echo "Installing Decky hooks to $DEST ..."
 mkdir -p "$DEST"
+chmod 0700 "$DEST"
 
 for hook in permission-request.sh post-tool-use.sh stop.sh notification.sh; do
   cp "$SCRIPT_DIR/$hook" "$DEST/$hook"
-  chmod +x "$DEST/$hook"
+  chmod 0700 "$DEST/$hook"
   echo "  installed $hook"
 done
 
@@ -62,4 +63,9 @@ else
   echo "Created $SETTINGS with Decky hooks."
 fi
 
+echo ""
+echo "NOTE: Hooks are registered in ~/.claude/settings.json (global scope)."
+echo "They will intercept tool-use events in ALL Claude Code sessions."
+echo "This is required for PermissionRequest hooks to fire correctly."
+echo ""
 echo "Done."
