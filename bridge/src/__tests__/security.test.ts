@@ -148,9 +148,9 @@ function waitForSocketEvent(
 // --- Tranche 4: Body size limits ---
 
 describe("body size limits", () => {
-  it("rejects payloads exceeding 100kb with 413", async () => {
-    // 150KB payload — well over the 100kb limit
-    const oversized = "x".repeat(150_000);
+  it("rejects payloads exceeding 5mb with 413", async () => {
+    // 6MB payload — well over the 5mb limit
+    const oversized = "x".repeat(6_000_000);
     const res = await fetch(`${baseUrl}/hook`, {
       method: "POST",
       headers: {

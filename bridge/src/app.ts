@@ -333,7 +333,7 @@ export function createApp(): DeckyApp {
 
   // --- Middleware ---
 
-  app.use(express.json({ limit: "100kb" }));
+  app.use(express.json({ limit: "5mb" }));
   app.use((req, res, next) => {
     if (readRequestToken(req) !== bridgeToken) {
       res.status(401).json({ error: "Unauthorized" });
