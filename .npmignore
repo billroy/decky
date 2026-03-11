@@ -1,0 +1,24 @@
+# Source and build artifacts for bridge and plugin — not included in npm package.
+# The npm package only ships the hook scripts and setup.js installer.
+
+bridge/
+plugin/
+docs/
+screenshots/
+scripts/
+*.sh
+install.sh
+start.sh
+.github/
+.gitignore
+*.md
+!README.md
+node_modules/
+
+# Test files
+**/__tests__/
+**/*.test.ts
+**/*.spec.ts
+vitest.config.*
+tsconfig.*
+rollup.config.*

@@ -1,0 +1,28 @@
+{
+  "name": "@decky/setup",
+  "version": "0.1.0",
+  "description": "Installer for Decky — StreamDeck controller for Claude Code",
+  "type": "commonjs",
+  "bin": {
+    "decky-setup": "./setup.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "files": [
+    "setup.js",
+    "hooks/"
+  ],
+  "keywords": [
+    "claude",
+    "claude-code",
+    "streamdeck",
+    "decky"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/billroy/decky.git"
+  },
+  "homepage": "https://github.com/billroy/decky",
+  "license": "MIT"
+}

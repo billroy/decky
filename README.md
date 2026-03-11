@@ -50,15 +50,32 @@ sudo pacman -S xdotool xclip
 
 ## Installation
 
-### 1. Clone and install
+### Option A — npx (recommended)
 
 ```bash
 git clone https://github.com/billroy/decky.git
 cd decky
-./install.sh
+npx @decky/setup
 ```
 
-The install script installs npm dependencies, builds the plugin, copies hook scripts to `~/.decky/hooks/`, registers hooks in `~/.claude/settings.json`, and links the plugin into the Stream Deck app.
+`npx @decky/setup` installs npm dependencies, builds the plugin, copies hook scripts to `~/.decky/hooks/`, registers hooks in `~/.claude/settings.json`, and links the plugin into the Stream Deck app.
+
+### Option B — manual
+
+```bash
+git clone https://github.com/billroy/decky.git
+cd decky
+node setup.js
+```
+
+Or run the steps individually:
+
+```bash
+cd bridge && npm install
+cd ../plugin && npm install && npm run build
+node hooks/install.js
+cd plugin && streamdeck link com.decky.controller.sdPlugin
+```
 
 ### 2. Start the bridge
 
