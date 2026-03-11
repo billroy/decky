@@ -86,6 +86,8 @@ interface ApprovalQueueItem {
   id: string;
   flow: ApprovalFlow;
   nonce: string | null;
+  sessionId: string | null;
+  cwd: string | null;
   tool: string | null;
   riskLevel: RiskLevel | null;
   createdAt: number;
@@ -117,6 +119,8 @@ interface StatePayload {
     position: number;
     flow: ApprovalFlow;
     riskLevel: RiskLevel | null;
+    sessionId: string | null;
+    cwd: string | null;
   } | null;
 }
 
@@ -241,6 +245,8 @@ export function createApp(): DeckyApp {
           position: 1, // active is always approvalQueue[0]
           flow: active.flow,
           riskLevel: active.riskLevel,
+          sessionId: active.sessionId,
+          cwd: active.cwd,
         }
         : null,
     };
@@ -250,9 +256,15 @@ export function createApp(): DeckyApp {
     io.emit("stateChange", statePayload(snapshot));
   }
 
-  // Broadcast state changes to all connected Socket.io clients
+  // Broadcast state changes to all connected Socket.io clients.
+  // For PostToolUse, queue advancement (shift) is handled by applyHookPayload below.
+  // For all other terminal-state transitions, clear the whole queue.
   sm.onStateChange((snapshot) => {
-    if ((snapshot.state === "idle" || snapshot.state === "stopped" || snapshot.state === "done") && approvalQueue.length > 0) {
+    const isTerminal =
+      snapshot.state === "idle" ||
+      snapshot.state === "stopped" ||
+      snapshot.state === "done";
+    if (isTerminal && snapshot.lastEvent !== "PostToolUse" && approvalQueue.length > 0) {
       approvalQueue.splice(0, approvalQueue.length);
       applyPendingFromQueue();
     }
@@ -264,6 +276,8 @@ export function createApp(): DeckyApp {
     options?: {
       approvalFlow?: ApprovalFlow;
       nonce?: string | null;
+      sessionId?: string | null;
+      cwd?: string | null;
     },
   ) {
     const flow = options?.approvalFlow ?? "mirror";
@@ -285,13 +299,20 @@ export function createApp(): DeckyApp {
         clearGateFile();
       }
       const nonce = options?.nonce ?? null;
-      const current = sm.getSnapshot();
-      const duplicatePre = current.state === "awaiting-approval";
-      if (!duplicatePre) {
+      const sessionId = options?.sessionId ?? null;
+      const cwd = options?.cwd ?? null;
+      // Dedup: with a nonce, dedup by exact nonce (concurrent sessions use different nonces).
+      // Without a nonce (legacy/simple hooks), fall back to single-queue mode (cap at 1).
+      const alreadyQueued = nonce != null
+        ? approvalQueue.some((item) => item.nonce === nonce)
+        : approvalQueue.length > 0;
+      if (!alreadyQueued) {
         const toolName = payload.tool ?? null;
         const queued = enqueueApprovalRequest({
           flow,
           nonce,
+          sessionId,
+          cwd,
           tool: toolName,
           riskLevel: classifyToolRisk(toolName),
         });
@@ -305,9 +326,9 @@ export function createApp(): DeckyApp {
     }
     let snapshot = sm.processEvent(payload);
 
-    if (
-      payload.event === "PostToolUse" || payload.event === "Stop" || payload.event === "SubagentStop"
-    ) {
+    if (payload.event === "PostToolUse") {
+      // Advance the queue by one: the completed tool's approval slot is freed.
+      // (Stop/SubagentStop queue clearing is handled by the sm.onStateChange listener.)
       const shifted = shiftApprovalRequest();
       if (shifted) {
         const next = currentApproval();
@@ -402,7 +423,9 @@ export function createApp(): DeckyApp {
       typeof nonceHeader === "string" && nonceHeader.trim().length > 0
         ? nonceHeader.trim()
         : null;
-    const snapshot = applyHookPayload(payload, { approvalFlow, nonce });
+    const sessionId = typeof body.session_id === "string" ? body.session_id : null;
+    const cwd = typeof body.cwd === "string" ? body.cwd : null;
+    const snapshot = applyHookPayload(payload, { approvalFlow, nonce, sessionId, cwd });
     res.json({ ok: true, state: statePayload(snapshot) });
   });
 

@@ -107,16 +107,41 @@ describe("approval queue — app surfacing on arrival", () => {
     expect(macroMocks.surface).toHaveBeenCalledWith("claude");
   });
 
-  it("does NOT surface again for duplicate hook request while awaiting", async () => {
-    // First request: Claude (becomes active, surfaces)
-    await postHook({ event: "PermissionRequest", tool: "Bash" });
+  it("does NOT surface again for request with same nonce (exact duplicate)", async () => {
+    // First request with nonce — becomes active, surfaces
+    await postHook(
+      { event: "PermissionRequest", tool: "Bash" },
+      { "x-decky-nonce": "nonce-abc" },
+    );
     expect(macroMocks.surface).toHaveBeenCalledOnce();
-    expect(macroMocks.surface).toHaveBeenCalledWith("claude");
 
     macroMocks.surface.mockClear();
 
-    // Second hook-source request while awaiting is a duplicate (duplicatePre guard)
-    await postHook({ event: "PermissionRequest", tool: "Write" });
+    // Same nonce fired again — deduped, not enqueued, no surfacing
+    await postHook(
+      { event: "PermissionRequest", tool: "Bash" },
+      { "x-decky-nonce": "nonce-abc" },
+    );
+    expect(macroMocks.surface).not.toHaveBeenCalled();
+  });
+
+  it("DOES surface for a concurrent session with a different nonce", async () => {
+    // First session — becomes active
+    const { data: s1 } = await postHook(
+      { event: "PermissionRequest", tool: "Bash", session_id: "sess-1", cwd: "/repos/alpha" },
+      { "x-decky-nonce": "nonce-1" },
+    );
+    expect(s1.state.approval.pending).toBe(1);
+    expect(macroMocks.surface).toHaveBeenCalledOnce();
+
+    macroMocks.surface.mockClear();
+
+    // Second session — different nonce, enqueued (pending=2), NOT surfaced (not at head)
+    const { data: s2 } = await postHook(
+      { event: "PermissionRequest", tool: "Write", session_id: "sess-2", cwd: "/repos/beta" },
+      { "x-decky-nonce": "nonce-2" },
+    );
+    expect(s2.state.approval.pending).toBe(2);
     expect(macroMocks.surface).not.toHaveBeenCalled();
   });
 });
@@ -186,5 +211,88 @@ describe("approval queue — metadata propagation", () => {
     const status = await res.json();
     expect(status.approval.pending).toBe(1);
     expect(status.approval.flow).toBe("mirror");
+  });
+
+  it("sessionId and cwd are propagated from hook body to approval metadata", async () => {
+    const { data } = await postHook({
+      event: "PermissionRequest",
+      tool: "Bash",
+      session_id: "sess-abc",
+      cwd: "/home/bill/myrepo",
+    });
+    expect(data.state.approval.sessionId).toBe("sess-abc");
+    expect(data.state.approval.cwd).toBe("/home/bill/myrepo");
+  });
+
+  it("sessionId and cwd are null when absent from hook body", async () => {
+    const { data } = await postHook({ event: "PermissionRequest", tool: "Read" });
+    expect(data.state.approval.sessionId).toBeNull();
+    expect(data.state.approval.cwd).toBeNull();
+  });
+});
+
+describe("concurrent sessions — multi-session queue", () => {
+  async function approve(): Promise<void> {
+    const sock = await connectClient();
+    const statePromise = waitForState(sock, "idle");
+    // For mirror flow, approval cycles through PostToolUse which returns to idle
+    sock.emit("action", { action: "approve" });
+    await statePromise;
+    sock.disconnect();
+  }
+
+  it("queues two concurrent sessions (pending=2), both states visible", async () => {
+    const { data: s1 } = await postHook(
+      { event: "PermissionRequest", tool: "Bash", session_id: "s1", cwd: "/repos/alpha" },
+      { "x-decky-nonce": "n1" },
+    );
+    expect(s1.state.state).toBe("awaiting-approval");
+    expect(s1.state.approval.pending).toBe(1);
+    expect(s1.state.approval.sessionId).toBe("s1");
+
+    const { data: s2 } = await postHook(
+      { event: "PermissionRequest", tool: "Write", session_id: "s2", cwd: "/repos/beta" },
+      { "x-decky-nonce": "n2" },
+    );
+    expect(s2.state.state).toBe("awaiting-approval");
+    expect(s2.state.approval.pending).toBe(2);
+    // Active item is still s1 (head of queue)
+    expect(s2.state.approval.sessionId).toBe("s1");
+    expect(s2.state.approval.cwd).toBe("/repos/alpha");
+  });
+
+  it("advancing queue (PostToolUse) reveals s2 as new head with cwd=/repos/beta", async () => {
+    await postHook(
+      { event: "PermissionRequest", tool: "Bash", session_id: "s1", cwd: "/repos/alpha" },
+      { "x-decky-nonce": "n1" },
+    );
+    await postHook(
+      { event: "PermissionRequest", tool: "Write", session_id: "s2", cwd: "/repos/beta" },
+      { "x-decky-nonce": "n2" },
+    );
+
+    // Advance queue — PostToolUse for s1
+    const { data: after } = await postHook({ event: "PostToolUse", tool: "Bash" });
+    expect(after.state.approval.pending).toBe(1);
+    expect(after.state.approval.sessionId).toBe("s2");
+    expect(after.state.approval.cwd).toBe("/repos/beta");
+  });
+
+  it("state returns to idle when both sessions complete", async () => {
+    await postHook(
+      { event: "PermissionRequest", tool: "Bash", session_id: "s1", cwd: "/repos/alpha" },
+      { "x-decky-nonce": "n1" },
+    );
+    await postHook(
+      { event: "PermissionRequest", tool: "Write", session_id: "s2", cwd: "/repos/beta" },
+      { "x-decky-nonce": "n2" },
+    );
+
+    // Resolve s1
+    await postHook({ event: "PostToolUse", tool: "Bash" });
+    // Resolve s2
+    const { data: final } = await postHook({ event: "PostToolUse", tool: "Write" });
+    expect(final.state.state).toBe("idle");
+    expect(final.state.approval).toBeNull();
   });
 });
