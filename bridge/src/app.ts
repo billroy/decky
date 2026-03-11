@@ -40,6 +40,7 @@ import {
 } from "./macro-exec.js";
 import { getBridgeToken, readRequestToken, redactActionForLog } from "./security.js";
 import { ApprovalTraceStore } from "./approval-trace.js";
+import { RateLimitStore, type RateLimitSummary } from "./rate-limit.js";
 
 const MAX_MACRO_ACTION_TEXT = 2000;
 
@@ -134,6 +135,7 @@ interface StatePayload {
     text: string | null;
     options: QuestionOption[];
   } | null;
+  rateLimit: RateLimitSummary | null;
 }
 
 /** Classify a tool name against configured risk rules (first match wins). */
@@ -169,6 +171,7 @@ export function createApp(): DeckyApp {
   const bridgeToken = getBridgeToken();
   const approvalTrace = new ApprovalTraceStore();
   const approvalQueue: ApprovalQueueItem[] = [];
+  const rateLimitStore = new RateLimitStore();
   let pendingGateNonce: string | null = null;
   let pendingQuestion: { text: string | null; options: QuestionOption[] } | null = null;
 
@@ -263,6 +266,7 @@ export function createApp(): DeckyApp {
         }
         : null,
       question: pendingQuestion,
+      rateLimit: rateLimitStore.getSummary(),
     };
   }
 
@@ -351,6 +355,19 @@ export function createApp(): DeckyApp {
     ) {
       pendingQuestion = null;
       clearQuestionResponse();
+    }
+
+    // Extract token usage from Stop/SubagentStop payloads if present.
+    if (payload.event === "Stop" || payload.event === "SubagentStop") {
+      const usageRaw = (payload as Record<string, unknown>).usage;
+      if (usageRaw && typeof usageRaw === "object") {
+        const usage = usageRaw as Record<string, unknown>;
+        const inputTokens = typeof usage.input_tokens === "number" ? usage.input_tokens : 0;
+        const outputTokens = typeof usage.output_tokens === "number" ? usage.output_tokens : 0;
+        if (inputTokens > 0 || outputTokens > 0) {
+          rateLimitStore.addUsage(inputTokens, outputTokens);
+        }
+      }
     }
 
     let snapshot = sm.processEvent(payload);
@@ -451,6 +468,8 @@ export function createApp(): DeckyApp {
       tool: extractToolName(body),
       input: body.input,
       ...(event === "AskUserQuestion" ? { question: questionText ?? undefined, options: normalizedOptions } : {}),
+      // Pass usage through for Stop/SubagentStop so rate limit tracking can read it.
+      ...(body.usage && typeof body.usage === "object" ? { usage: body.usage } : {}),
     };
 
     console.log(
@@ -539,6 +558,25 @@ export function createApp(): DeckyApp {
       }
       res.status(500).json({ error: "Failed to restore config backup" });
     }
+  });
+
+  app.get("/rate-limit", (_req, res) => {
+    res.json(rateLimitStore.getSummary());
+  });
+
+  app.post("/rate-limit", (req, res) => {
+    const body = req.body as Record<string, unknown>;
+    const inputTokens = typeof body.inputTokens === "number" ? body.inputTokens : 0;
+    const outputTokens = typeof body.outputTokens === "number" ? body.outputTokens : 0;
+    if (inputTokens <= 0 && outputTokens <= 0) {
+      res.status(400).json({ error: "inputTokens or outputTokens must be > 0" });
+      return;
+    }
+    if (typeof body.limitTokens5h === "number" && body.limitTokens5h > 0) {
+      rateLimitStore.setLimit(body.limitTokens5h);
+    }
+    rateLimitStore.addUsage(inputTokens, outputTokens);
+    res.json({ ok: true, ...rateLimitStore.getSummary() });
   });
 
   // --- Socket.io connections ---
