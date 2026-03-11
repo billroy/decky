@@ -10,8 +10,14 @@ import express from "express";
 import { createServer, type Server as HttpServer } from "node:http";
 import { Server as SocketIOServer } from "socket.io";
 import rateLimit from "express-rate-limit";
-import { StateMachine, type HookPayload, type HookEvent } from "./state-machine.js";
-import { writeGateFile, clearGateFile, type ApprovalResult } from "./approval-gate.js";
+import { StateMachine, type HookPayload, type HookEvent, type QuestionOption } from "./state-machine.js";
+import {
+  writeGateFile,
+  clearGateFile,
+  writeQuestionResponse,
+  clearQuestionResponse,
+  type ApprovalResult,
+} from "./approval-gate.js";
 import {
   loadConfig,
   getConfig,
@@ -44,6 +50,7 @@ const VALID_EVENTS: Set<string> = new Set([
   "Notification",
   "Stop",
   "SubagentStop",
+  "AskUserQuestion",
 ]);
 
 function normalizeHookEvent(value: unknown): HookEvent | undefined {
@@ -58,6 +65,7 @@ function normalizeHookEvent(value: unknown): HookEvent | undefined {
   if (key === "stop") return "Stop";
   if (key === "subagentstop" || key === "subagent_stop" || key === "subagent-stop") return "SubagentStop";
   if (key === "permissionrequest" || key === "permission_request" || key === "permission-request") return "PermissionRequest";
+  if (key === "askuserquestion" || key === "ask_user_question" || key === "ask-user-question") return "AskUserQuestion";
   return undefined;
 }
 
@@ -122,6 +130,10 @@ interface StatePayload {
     sessionId: string | null;
     cwd: string | null;
   } | null;
+  question: {
+    text: string | null;
+    options: QuestionOption[];
+  } | null;
 }
 
 /** Classify a tool name against configured risk rules (first match wins). */
@@ -158,6 +170,7 @@ export function createApp(): DeckyApp {
   const approvalTrace = new ApprovalTraceStore();
   const approvalQueue: ApprovalQueueItem[] = [];
   let pendingGateNonce: string | null = null;
+  let pendingQuestion: { text: string | null; options: QuestionOption[] } | null = null;
 
   const io = new SocketIOServer(httpServer, {
     maxHttpBufferSize: 100_000,
@@ -249,6 +262,7 @@ export function createApp(): DeckyApp {
           cwd: active.cwd,
         }
         : null,
+      question: pendingQuestion,
     };
   }
 
@@ -324,6 +338,21 @@ export function createApp(): DeckyApp {
         }
       }
     }
+    // AskUserQuestion: store question/options for statePayload, clear on terminal events
+    if (payload.event === "AskUserQuestion") {
+      pendingQuestion = {
+        text: payload.question ?? null,
+        options: payload.options ?? [],
+      };
+    } else if (
+      payload.event === "Stop" ||
+      payload.event === "SubagentStop" ||
+      payload.event === "PostToolUse"
+    ) {
+      pendingQuestion = null;
+      clearQuestionResponse();
+    }
+
     let snapshot = sm.processEvent(payload);
 
     if (payload.event === "PostToolUse") {
@@ -403,10 +432,25 @@ export function createApp(): DeckyApp {
       return;
     }
 
+    // Normalize options array for AskUserQuestion events (max 8, label ≤ 80 chars).
+    const rawOptions = Array.isArray(body.options) ? body.options : [];
+    const normalizedOptions: QuestionOption[] = rawOptions
+      .slice(0, 8)
+      .map((o: unknown) => {
+        if (!o || typeof o !== "object") return null;
+        const opt = o as Record<string, unknown>;
+        const label = typeof opt.label === "string" ? opt.label.trim().slice(0, 80) : "";
+        if (!label) return null;
+        return { label, ...(typeof opt.value === "string" ? { value: opt.value } : {}) };
+      })
+      .filter((o): o is QuestionOption => o !== null);
+    const questionText = typeof body.question === "string" ? body.question : null;
+
     const payload: HookPayload = {
       event,
       tool: extractToolName(body),
       input: body.input,
+      ...(event === "AskUserQuestion" ? { question: questionText ?? undefined, options: normalizedOptions } : {}),
     };
 
     console.log(
@@ -516,7 +560,7 @@ export function createApp(): DeckyApp {
     socket.emit("configUpdate", getConfig());
 
     const ACTION_THROTTLE_MS = 200;
-    const THROTTLE_EXEMPT = new Set(["approve", "deny", "cancel", "restart", "approveOnceInClaude"]);
+    const THROTTLE_EXEMPT = new Set(["approve", "deny", "cancel", "restart", "approveOnceInClaude", "selectOption"]);
     let lastThrottledActionTime = 0;
 
     socket.on("action", (data: { action: string; [key: string]: unknown }) => {
@@ -709,6 +753,27 @@ export function createApp(): DeckyApp {
             socket.emit("error", { error: "Failed to activate Claude for approve once" });
           });
         }
+      } else if (data.action === "selectOption") {
+        // User selected an option from an AskUserQuestion prompt.
+        // Write the index to the response file so the polling hook can read it.
+        const currentState = sm.getSnapshot().state;
+        if (currentState !== "asking") {
+          socket.emit("error", { error: "selectOption ignored: not in asking state" });
+          return;
+        }
+        const rawIndex = data.index;
+        if (typeof rawIndex !== "number" || !Number.isInteger(rawIndex) || rawIndex < 0) {
+          socket.emit("error", { error: "selectOption requires a non-negative integer index" });
+          return;
+        }
+        const optionCount = pendingQuestion?.options.length ?? 0;
+        if (rawIndex >= optionCount) {
+          socket.emit("error", { error: `selectOption index ${rawIndex} out of range (${optionCount} options)` });
+          return;
+        }
+        writeQuestionResponse(rawIndex);
+        pendingQuestion = null;
+        sm.forceState("idle", "option selected via StreamDeck");
       } else if (data.action === "startDictationForClaude") {
         startDictationForClaude().catch((err) => {
           console.error("[io] startDictationForClaude failed:", err);

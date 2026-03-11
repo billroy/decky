@@ -7,7 +7,7 @@
  *   3. Hook script reads the result, deletes the file, and exits with the appropriate code.
  */
 
-import { mkdirSync, writeFileSync, unlinkSync, existsSync } from "node:fs";
+import { mkdirSync, writeFileSync, unlinkSync, existsSync, readFileSync } from "node:fs";
 import { portableRenameSync } from "./fs-compat.js";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -54,3 +54,39 @@ export function gateFileExists(): boolean {
 /** Exposed for testing / configuration. */
 export const GATE_FILE_PATH = GATE_FILE;
 export const DECKY_DIR_PATH = DECKY_DIR;
+
+// --- AskUserQuestion response file ---
+
+const QUESTION_FILE = join(DECKY_DIR, "question-response");
+
+/**
+ * Write the selected option index so the polling AskUserQuestion hook can read it.
+ * The hook reads the integer, deletes the file, and returns the option value.
+ */
+export function writeQuestionResponse(index: number): void {
+  ensureDir();
+  const tmp = `${QUESTION_FILE}.${process.pid}.${Date.now()}.tmp`;
+  writeFileSync(tmp, String(index), { encoding: "utf-8", mode: 0o600 });
+  portableRenameSync(tmp, QUESTION_FILE);
+}
+
+/** Remove the question response file (idempotent). */
+export function clearQuestionResponse(): void {
+  try {
+    unlinkSync(QUESTION_FILE);
+  } catch {
+    // File already gone — that's fine.
+  }
+}
+
+/** Read the question response file (for tests / hook polling). */
+export function readQuestionResponse(): string | null {
+  try {
+    return readFileSync(QUESTION_FILE, "utf-8").trim();
+  } catch {
+    return null;
+  }
+}
+
+/** Exposed for testing. */
+export const QUESTION_FILE_PATH = QUESTION_FILE;

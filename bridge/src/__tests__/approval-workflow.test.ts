@@ -14,6 +14,8 @@ import {
   clearGateFile,
   gateFileExists,
   GATE_FILE_PATH,
+  clearQuestionResponse,
+  readQuestionResponse,
 } from "../approval-gate.js";
 import { saveConfig } from "../config.js";
 import { readFileSync } from "node:fs";
@@ -58,6 +60,7 @@ afterAll(async () => {
 
 afterEach(() => {
   clearGateFile();
+  clearQuestionResponse();
   decky.sm.forceState("idle", "test cleanup");
   saveConfig({ enableApproveOnce: true, enableDictation: true });
 });
@@ -367,5 +370,107 @@ describe("approval workflow — mirror full cycle (PermissionRequest)", () => {
       const { data } = await postHook({ event: "PermissionRequest", tool: "Bash" });
       expect(data.state.approval!.riskLevel).toBe("safe");
     });
+  });
+});
+
+describe("AskUserQuestion — asking state + selectOption action", () => {
+  function connectClient(): Promise<ClientSocket> {
+    return new Promise((resolve) => {
+      const sock = ioClient(baseUrl, { auth: { token } });
+      sock.once("connect", () => resolve(sock));
+    });
+  }
+
+  function waitForState(sock: ClientSocket, targetState: string): Promise<unknown> {
+    return new Promise((resolve) => {
+      sock.on("stateChange", (snap: { state: string }) => {
+        if (snap.state === targetState) resolve(snap);
+      });
+    });
+  }
+
+  beforeEach(() => {
+    decky.sm.forceState("idle", "test reset");
+  });
+
+  it("AskUserQuestion transitions to asking state", async () => {
+    const { data } = await postHook({
+      event: "AskUserQuestion",
+      question: "Which approach?",
+      options: [{ label: "Option A" }, { label: "Option B" }],
+    });
+    expect(data.state.state).toBe("asking");
+    expect(data.state.question).not.toBeNull();
+    expect(data.state.question.text).toBe("Which approach?");
+    expect(data.state.question.options).toHaveLength(2);
+    expect(data.state.question.options[0].label).toBe("Option A");
+    expect(data.state.question.options[1].label).toBe("Option B");
+  });
+
+  it("AskUserQuestion options are capped at 8", async () => {
+    const options = Array.from({ length: 12 }, (_, i) => ({ label: `Option ${i + 1}` }));
+    const { data } = await postHook({ event: "AskUserQuestion", question: "Pick one", options });
+    expect(data.state.question.options).toHaveLength(8);
+  });
+
+  it("selectOption writes response file and transitions to idle", async () => {
+    await postHook({
+      event: "AskUserQuestion",
+      question: "Choose",
+      options: [{ label: "A" }, { label: "B" }, { label: "C" }],
+    });
+    expect(decky.sm.getSnapshot().state).toBe("asking");
+
+    const sock = await connectClient();
+    const idlePromise = waitForState(sock, "idle");
+    sock.emit("action", { action: "selectOption", index: 1 });
+    await idlePromise;
+
+    expect(readQuestionResponse()).toBe("1");
+    expect(decky.sm.getSnapshot().state).toBe("idle");
+    sock.disconnect();
+  });
+
+  it("selectOption in wrong state emits error", async () => {
+    decky.sm.forceState("idle", "test reset");  // not asking
+
+    const sock = await connectClient();
+    const errorPromise = new Promise<{ error: string }>((resolve) => {
+      sock.once("error", resolve);
+    });
+    sock.emit("action", { action: "selectOption", index: 0 });
+    const err = await errorPromise;
+    expect(err.error).toContain("not in asking state");
+    sock.disconnect();
+  });
+
+  it("selectOption with out-of-range index emits error", async () => {
+    await postHook({
+      event: "AskUserQuestion",
+      question: "Pick",
+      options: [{ label: "A" }, { label: "B" }],
+    });
+
+    const sock = await connectClient();
+    const errorPromise = new Promise<{ error: string }>((resolve) => {
+      sock.once("error", resolve);
+    });
+    sock.emit("action", { action: "selectOption", index: 5 });
+    const err = await errorPromise;
+    expect(err.error).toContain("out of range");
+    sock.disconnect();
+  });
+
+  it("Stop while asking clears question and transitions to idle", async () => {
+    await postHook({
+      event: "AskUserQuestion",
+      question: "Choose",
+      options: [{ label: "A" }],
+    });
+    expect(decky.sm.getSnapshot().state).toBe("asking");
+
+    const { data } = await postHook({ event: "Stop" });
+    expect(data.state.state).toBe("idle");
+    expect(data.state.question).toBeNull();
   });
 });

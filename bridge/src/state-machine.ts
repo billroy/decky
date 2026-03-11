@@ -1,13 +1,16 @@
 /**
  * Decky state machine — tracks Claude Code session state.
  *
- * States: idle, thinking, awaiting-approval, tool-executing, stopped, done
+ * States: idle, thinking, awaiting-approval, tool-executing, stopped, done, asking
  * Transitions are driven by Claude Code lifecycle hook events.
  *
  * The `done` state is reached when Claude finishes a turn (Stop event from
  * thinking or tool-executing). It holds until the user explicitly acknowledges
  * (presses the Done key, which fires forceState("idle")) or a new prompt
  * arrives (PreToolUse/PermissionRequest transitions back to awaiting-approval).
+ *
+ * The `asking` state is reached when Claude sends an AskUserQuestion hook event.
+ * It holds until the user selects an option (forceState("idle")) or Stop arrives.
  */
 
 type State =
@@ -16,7 +19,8 @@ type State =
   | "awaiting-approval"
   | "tool-executing"
   | "stopped"
-  | "done";
+  | "done"
+  | "asking";
 
 export type HookEvent =
   | "PreToolUse"
@@ -24,12 +28,20 @@ export type HookEvent =
   | "PostToolUse"
   | "Notification"
   | "Stop"
-  | "SubagentStop";
+  | "SubagentStop"
+  | "AskUserQuestion";
+
+export interface QuestionOption {
+  label: string;
+  value?: string;
+}
 
 export interface HookPayload {
   event: HookEvent;
   tool?: string;
   input?: unknown;
+  question?: string;
+  options?: QuestionOption[];
   [key: string]: unknown;
 }
 
@@ -101,6 +113,15 @@ export class StateMachine {
     "done:PreToolUse": "awaiting-approval",
     "done:PermissionRequest": "awaiting-approval",
     "done:PostToolUse": "idle",   // defensive — shouldn't normally occur
+
+    // AskUserQuestion → asking (Claude is waiting for user to select an option)
+    "idle:AskUserQuestion": "asking",
+    "thinking:AskUserQuestion": "asking",
+    "tool-executing:AskUserQuestion": "asking",
+    "done:AskUserQuestion": "asking",
+    // asking:Stop/PostToolUse → idle (question was dismissed or session ended)
+    "asking:Stop": "idle",
+    "asking:PostToolUse": "idle",
 
     // Notification → no state change (handled specially below)
   };
