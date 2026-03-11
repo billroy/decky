@@ -23,13 +23,14 @@ describe("layouts", () => {
     setTargetBadgeOptions({ showTargetBadge: false, defaultTargetApp: "claude" });
   });
   describe("getLayoutStates", () => {
-    it("returns all five states", () => {
+    it("returns all six states including done", () => {
       const states = getLayoutStates();
       expect(states).toContain("idle");
       expect(states).toContain("thinking");
       expect(states).toContain("awaiting-approval");
       expect(states).toContain("tool-executing");
       expect(states).toContain("stopped");
+      expect(states).toContain("done");
     });
   });
 
@@ -329,6 +330,20 @@ describe("layouts", () => {
 
     it("other slots are empty", () => {
       const config = getSlotConfig("stopped", 1);
+      expect(config.title).toBe("");
+    });
+  });
+
+  describe("done layout", () => {
+    it("slot 0 is Done acknowledge button (teal, restart action)", () => {
+      const config = getSlotConfig("done", 0);
+      expect(config.title).toBe("Done");
+      expect(config.action).toBe("restart");
+      expect(config.svg).toContain("#0d9488");
+    });
+
+    it("other slots are empty", () => {
+      const config = getSlotConfig("done", 1);
       expect(config.title).toBe("");
     });
   });

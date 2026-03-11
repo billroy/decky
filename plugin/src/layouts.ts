@@ -757,6 +757,14 @@ const RESTART: SlotConfig = {
   action: "restart",
 };
 
+// Teal "Done ✓" button — shown when a Claude turn completes and awaits acknowledgment.
+// Pressing it fires the existing `restart` action which force-sets state to idle.
+const DONE: SlotConfig = {
+  svg: approvalButtonSVG("#0d9488", "check", "Done \u2713"),
+  title: "Done",
+  action: "restart",
+};
+
 const THINKING: SlotConfig = {
   svg: thinkingSVG(),
   title: "Thinking\u2026",
@@ -961,6 +969,12 @@ const LAYOUTS: Record<string, LayoutDef> = {
 
   stopped: {
     0: RESTART,
+  },
+
+  // done: Claude's turn ended successfully. Slot 0 is a teal "Done ✓" button;
+  // pressing it fires the `restart` action which force-sets state back to idle.
+  done: {
+    0: DONE,
   },
 };
 
