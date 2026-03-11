@@ -968,6 +968,97 @@ describe("SlotAction drag-swap", () => {
     expect(swappedMacros[2].label).toBe("Gamma");
   });
 
+  it("onKeyDown in asking state dispatches selectOption with correct index", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge(baseConfig());
+    bridge.snapshot = {
+      state: "asking",
+      previousState: "thinking",
+      tool: null,
+      lastEvent: "AskUserQuestion",
+      timestamp: Date.now(),
+      question: {
+        text: "Which approach?",
+        options: [{ label: "Option A" }, { label: "Option B" }, { label: "Option C" }],
+      },
+    } as any;
+    setSlotClient(bridge as any);
+
+    const action0 = makeKeyAction("action-0");
+    const action1 = makeKeyAction("action-1");
+    const action2 = makeKeyAction("action-2");
+    const slot = new SlotAction();
+    (slot as any).actions = [action0, action1, action2];
+
+    await slot.onWillAppear({
+      action: action0,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+    await slot.onWillAppear({
+      action: action1,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 1 } },
+    } as any);
+    await slot.onWillAppear({
+      action: action2,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 2 } },
+    } as any);
+
+    bridge.sendAction.mockClear();
+
+    // Press slot 1 (Option B = index 1)
+    await slot.onKeyDown({ action: action1 } as any);
+
+    const calls = bridge.sendAction.mock.calls;
+    expect(calls.length).toBe(1);
+    expect(calls[0][0]).toBe("selectOption");
+    expect(calls[0][1]).toEqual({ index: 1 });
+  });
+
+  it("asking state renders option buttons with letter labels", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge(baseConfig());
+    bridge.snapshot = {
+      state: "asking",
+      previousState: null,
+      tool: null,
+      lastEvent: "AskUserQuestion",
+      timestamp: Date.now(),
+      question: {
+        text: "Pick one",
+        options: [{ label: "Yes" }, { label: "No" }],
+      },
+    } as any;
+    setSlotClient(bridge as any);
+
+    const action0 = makeKeyAction("action-0");
+    const action1 = makeKeyAction("action-1");
+    const slot = new SlotAction();
+    (slot as any).actions = [action0, action1];
+
+    await slot.onWillAppear({
+      action: action0,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+    await slot.onWillAppear({
+      action: action1,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 1 } },
+    } as any);
+
+    const svg0 = latestSvg(action0);
+    const svg1 = latestSvg(action1);
+
+    expect(svg0).toContain("Yes");
+    expect(svg0).toContain(">A<");
+    expect(svg1).toContain("No");
+    expect(svg1).toContain(">B<");
+    // Indigo background
+    expect(svg0).toContain("#6366f1");
+  });
+
   it("does not swap when settings match physical position", async () => {
     const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
     resetSlots();
