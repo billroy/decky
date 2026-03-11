@@ -46,11 +46,53 @@ describe("StateMachine", () => {
       expect(snap.state).toBe("idle");
     });
 
-    it("awaiting-approval → idle on Stop (interrupt)", () => {
+    it("thinking → done on Stop (task complete, awaiting acknowledgment)", () => {
+      sm.forceState("thinking", "test setup");
+      const snap = sm.processEvent({ event: "Stop" });
+      expect(snap.state).toBe("done");
+      expect(snap.previousState).toBe("thinking");
+    });
+
+    it("tool-executing → done on Stop", () => {
+      sm.forceState("tool-executing", "test setup");
+      const snap = sm.processEvent({ event: "Stop" });
+      expect(snap.state).toBe("done");
+      expect(snap.previousState).toBe("tool-executing");
+    });
+
+    it("awaiting-approval → idle on Stop (interrupt, no acknowledgment needed)", () => {
       sm.processEvent({ event: "PreToolUse", tool: "Bash" });
       const snap = sm.processEvent({ event: "Stop" });
       expect(snap.state).toBe("idle");
       expect(snap.previousState).toBe("awaiting-approval");
+    });
+
+    it("done → done on duplicate Stop (no-op)", () => {
+      sm.forceState("thinking", "test setup");
+      sm.processEvent({ event: "Stop" });
+      const snap = sm.processEvent({ event: "Stop" });
+      expect(snap.state).toBe("done");
+    });
+
+    it("done → awaiting-approval on PreToolUse (new session starts)", () => {
+      sm.forceState("done", "test setup");
+      const snap = sm.processEvent({ event: "PreToolUse", tool: "Bash" });
+      expect(snap.state).toBe("awaiting-approval");
+      expect(snap.previousState).toBe("done");
+    });
+
+    it("done → awaiting-approval on PermissionRequest (new approval arrives)", () => {
+      sm.forceState("done", "test setup");
+      const snap = sm.processEvent({ event: "PermissionRequest", tool: "Write" });
+      expect(snap.state).toBe("awaiting-approval");
+      expect(snap.previousState).toBe("done");
+    });
+
+    it("done → idle via forceState (user acknowledges)", () => {
+      sm.forceState("done", "test setup");
+      const snap = sm.forceState("idle", "acknowledged");
+      expect(snap.state).toBe("idle");
+      expect(snap.previousState).toBe("done");
     });
 
     it("idle → idle on SubagentStop", () => {
@@ -58,10 +100,10 @@ describe("StateMachine", () => {
       expect(snap.state).toBe("idle");
     });
 
-    it("thinking → idle on SubagentStop", () => {
+    it("thinking → done on SubagentStop", () => {
       sm.forceState("thinking", "test setup");
       const snap = sm.processEvent({ event: "SubagentStop" });
-      expect(snap.state).toBe("idle");
+      expect(snap.state).toBe("done");
       expect(snap.previousState).toBe("thinking");
     });
   });

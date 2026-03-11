@@ -233,7 +233,7 @@ export function createApp(): DeckyApp {
 
   // Broadcast state changes to all connected Socket.io clients
   sm.onStateChange((snapshot) => {
-    if ((snapshot.state === "idle" || snapshot.state === "stopped") && approvalQueue.length > 0) {
+    if ((snapshot.state === "idle" || snapshot.state === "stopped" || snapshot.state === "done") && approvalQueue.length > 0) {
       approvalQueue.splice(0, approvalQueue.length);
       applyPendingFromQueue();
     }

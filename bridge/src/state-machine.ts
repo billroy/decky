@@ -1,8 +1,13 @@
 /**
  * Decky state machine — tracks Claude Code session state.
  *
- * States: idle, thinking, awaiting-approval, tool-executing, stopped
+ * States: idle, thinking, awaiting-approval, tool-executing, stopped, done
  * Transitions are driven by Claude Code lifecycle hook events.
+ *
+ * The `done` state is reached when Claude finishes a turn (Stop event from
+ * thinking or tool-executing). It holds until the user explicitly acknowledges
+ * (presses the Done key, which fires forceState("idle")) or a new prompt
+ * arrives (PreToolUse/PermissionRequest transitions back to awaiting-approval).
  */
 
 type State =
@@ -10,7 +15,8 @@ type State =
   | "thinking"
   | "awaiting-approval"
   | "tool-executing"
-  | "stopped";
+  | "stopped"
+  | "done";
 
 export type HookEvent =
   | "PreToolUse"
@@ -73,16 +79,25 @@ export class StateMachine {
     "idle:PostToolUse": "idle",
     "thinking:PostToolUse": "idle",
 
-    // Stop → idle (Claude finished responding)
-    "thinking:Stop": "idle",
-    "tool-executing:Stop": "idle",
+    // Stop — successful turn completion → done (requires user acknowledgment)
+    // Exception: awaiting-approval:Stop goes to idle (interrupted session,
+    // nothing was accomplished that needs acknowledgment).
+    "thinking:Stop": "done",
+    "tool-executing:Stop": "done",
     "awaiting-approval:Stop": "idle",
     "idle:Stop": "idle",
+    "done:Stop": "done",          // duplicate stop is a no-op
 
-    // SubagentStop → idle
-    "thinking:SubagentStop": "idle",
-    "tool-executing:SubagentStop": "idle",
+    // SubagentStop → done (same acknowledgment flow as Stop)
+    "thinking:SubagentStop": "done",
+    "tool-executing:SubagentStop": "done",
     "idle:SubagentStop": "idle",
+    "done:SubagentStop": "done",  // duplicate is a no-op
+
+    // done → re-engage when a new tool/approval arrives
+    "done:PreToolUse": "awaiting-approval",
+    "done:PermissionRequest": "awaiting-approval",
+    "done:PostToolUse": "idle",   // defensive — shouldn't normally occur
 
     // Notification → no state change (handled specially below)
   };
