@@ -67,6 +67,14 @@ describe("StateMachine", () => {
       expect(snap.previousState).toBe("awaiting-approval");
     });
 
+    it("awaiting-approval stays awaiting-approval on concurrent PermissionRequest", () => {
+      sm.processEvent({ event: "PreToolUse", tool: "Bash" });
+      expect(sm.getSnapshot().state).toBe("awaiting-approval");
+      // Second session's PermissionRequest arrives — state doesn't change
+      const snap = sm.processEvent({ event: "PermissionRequest", tool: "Write" });
+      expect(snap.state).toBe("awaiting-approval");
+    });
+
     it("done → done on duplicate Stop (no-op)", () => {
       sm.forceState("thinking", "test setup");
       sm.processEvent({ event: "Stop" });

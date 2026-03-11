@@ -67,6 +67,9 @@ export class StateMachine {
     "thinking:PermissionRequest": "awaiting-approval",
     "tool-executing:PermissionRequest": "awaiting-approval",
     "stopped:PermissionRequest": "awaiting-approval",
+    // Concurrent sessions: 2nd+ PermissionRequest arrives while already awaiting.
+    // Stay in awaiting-approval (queue is managed separately in app.ts).
+    "awaiting-approval:PermissionRequest": "awaiting-approval",
 
     // PostToolUse → idle (tool finished; thinking state is disabled for now
     // because it interferes with deck usability — revisit when UI is reworked)
