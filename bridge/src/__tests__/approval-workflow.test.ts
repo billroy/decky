@@ -476,6 +476,63 @@ describe("AskUserQuestion — asking state + selectOption action", () => {
   });
 });
 
+describe("alwaysAllow socket action", () => {
+  beforeEach(() => {
+    decky.sm.forceState("idle", "test reset");
+    vi.mocked(mockApproveOnce).mockClear();
+  });
+
+  it("gate flow: alwaysAllow adds rule and writes approve to gate file", async () => {
+    await postHookGate({ event: "PreToolUse", tool: "Bash" });
+
+    const sock = await connectClient();
+    const statePromise = waitForState(sock, "tool-executing");
+
+    sock.emit("action", { action: "alwaysAllow", tool: "Bash" });
+    await statePromise;
+
+    expect(gateFileExists()).toBe(true);
+    expect(readFileSync(GATE_FILE_PATH, "utf-8")).toBe("approve");
+
+    // Rule should now be saved
+    const { getAlwaysAllowRules } = await import("../config.js");
+    const rules = getAlwaysAllowRules();
+    expect(rules.some((r) => r.pattern === "Bash")).toBe(true);
+
+    sock.disconnect();
+    saveConfig({ alwaysAllowRules: [] });
+  });
+
+  it("mirror flow: alwaysAllow adds rule and calls approveOnceInClaude", async () => {
+    await postHook({ event: "PermissionRequest", tool: "Read" });
+
+    const sock = await connectClient();
+    sock.emit("action", { action: "alwaysAllow", tool: "Read" });
+
+    await vi.waitFor(() => expect(vi.mocked(mockApproveOnce)).toHaveBeenCalledTimes(1));
+
+    const { getAlwaysAllowRules } = await import("../config.js");
+    const rules = getAlwaysAllowRules();
+    expect(rules.some((r) => r.pattern === "Read")).toBe(true);
+
+    sock.disconnect();
+    saveConfig({ alwaysAllowRules: [] });
+  });
+
+  it("alwaysAllow with no active approval is a no-op (no crash)", async () => {
+    const sock = await connectClient();
+    // State is idle, no pending approval
+    sock.emit("action", { action: "alwaysAllow", tool: "Bash" });
+
+    // Should not crash — just wait briefly
+    await new Promise((r) => setTimeout(r, 100));
+    expect(decky.sm.getSnapshot().state).toBe("idle");
+
+    sock.disconnect();
+    saveConfig({ alwaysAllowRules: [] });
+  });
+});
+
 describe("alwaysAllow auto-approve", () => {
   beforeEach(() => {
     decky.sm.forceState("idle", "test reset");

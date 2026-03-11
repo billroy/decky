@@ -496,6 +496,7 @@ const LUCIDE_ICONS: Record<string, string> = {
   "thumbs-up": '<path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2a3.13 3.13 0 0 1 3 3.88Z" /><path d="M7 10v12" />',
   "thumbs-down": '<path d="M9 18.12 10 14H4.17a2 2 0 0 1-1.92-2.56l2.33-8A2 2 0 0 1 6.5 2H20a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2h-2.76a2 2 0 0 0-1.79 1.11L12 22a3.13 3.13 0 0 1-3-3.88Z" /><path d="M17 14V2" />',
   "circle-help": '<circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><path d="M12 17h.01" />',
+  "infinity": '<path d="M12 12c-2-2.5-4-4-6-4a4 4 0 0 0 0 8c2 0 4-1.5 6-4z" /><path d="M12 12c2 2.5 4 4 6 4a4 4 0 0 0 0-8c-2 0-4 1.5-6 4z" />',
 };
 
 /** Export icon names for use by PI. */
@@ -764,6 +765,23 @@ function stopSlot(approval?: ApprovalUiMeta | null): SlotConfig {
     title: "Stop",
     action: "cancel",
     data: { targetApp },
+  };
+}
+
+function alwaysAllowSlot(tool: string | null | undefined): SlotConfig {
+  const label = "Always";
+  const iconPath = LUCIDE_ICONS["infinity"] ?? "";
+  const bg = "#7c3aed"; // purple
+  const svg = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+    <rect width="144" height="144" rx="16" fill="${bg}" />
+    <g transform="translate(30, 16) scale(3.5)" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconPath}</g>
+    <text x="72" y="122" font-size="20" font-family="sans-serif" text-anchor="middle" fill="#ffffff">${label}</text>
+  </svg>`;
+  return {
+    svg,
+    title: "Always Allow",
+    action: "alwaysAllow",
+    data: { tool: tool ?? "" },
   };
 }
 
@@ -1126,10 +1144,7 @@ export function getSlotConfig(
     if (slotIndex === 0) return approveSlot(approval);
     if (slotIndex === 1) return denySlot(approval);
     if (slotIndex === 2) return stopSlot(approval);
-    if (slotIndex === 3) {
-      const title = toolName && toolName.trim().length > 0 ? toolName : "Tool Approval";
-      return { svg: approvalInfoSVG(toolName, approval), title };
-    }
+    if (slotIndex === 3) return alwaysAllowSlot(toolName);
     // Slots beyond the approval buttons preserve their idle/macro content
     const macroList = macros ?? DEFAULT_MACROS;
     const idleLayout = buildIdleLayout(macroList);
@@ -1149,7 +1164,7 @@ export function getLayout(state: string, macros?: MacroInput[], question?: Quest
   if (state === "awaiting-approval") {
     const idle = buildIdleLayout(macros ?? DEFAULT_MACROS);
     // Approval buttons override slots 0-3; slots 4+ keep macro content
-    return { ...idle, 0: approveSlot(), 1: denySlot(), 2: stopSlot() };
+    return { ...idle, 0: approveSlot(), 1: denySlot(), 2: stopSlot(), 3: alwaysAllowSlot(null) };
   }
   if (state === "asking") {
     const options = question?.options ?? [];

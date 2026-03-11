@@ -665,7 +665,7 @@ export function createApp(): DeckyApp {
     socket.emit("configUpdate", getConfig());
 
     const ACTION_THROTTLE_MS = 200;
-    const THROTTLE_EXEMPT = new Set(["approve", "deny", "cancel", "restart", "approveOnceInClaude", "selectOption"]);
+    const THROTTLE_EXEMPT = new Set(["approve", "deny", "cancel", "restart", "approveOnceInClaude", "selectOption", "alwaysAllow"]);
     let lastThrottledActionTime = 0;
 
     socket.on("action", (data: { action: string; [key: string]: unknown }) => {
@@ -879,6 +879,32 @@ export function createApp(): DeckyApp {
         writeQuestionResponse(rawIndex);
         pendingQuestion = null;
         sm.forceState("idle", "option selected via StreamDeck");
+      } else if (data.action === "alwaysAllow") {
+        const tool = typeof data.tool === "string" && data.tool.trim() ? data.tool.trim() : null;
+        if (tool) {
+          try { addAlwaysAllowRule(tool); } catch { /* ignore validation errors */ }
+        }
+        // Approve the current queued request (same logic as the "approve" action)
+        const active = currentApproval();
+        if (active) {
+          if (active.flow === "mirror") {
+            withApprovalAttemptContext(actionId, () => approveOnceInClaude()).catch((err) => {
+              console.error("[io] alwaysAllow approve failed in mirror flow:", err);
+              socket.emit("error", { error: "Failed to approve in Claude" });
+            });
+          } else {
+            writeGateFile("approve", pendingGateNonce ?? undefined);
+            pendingGateNonce = null;
+            shiftApprovalRequest();
+            const next = currentApproval();
+            if (next) {
+              sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+              surfaceActiveApproval();
+            } else {
+              sm.forceState("tool-executing", "approved via alwaysAllow");
+            }
+          }
+        }
       } else if (data.action === "startDictationForClaude") {
         startDictationForClaude().catch((err) => {
           console.error("[io] startDictationForClaude failed:", err);

@@ -236,7 +236,7 @@ describe("layouts", () => {
       expect(stop.data?.targetApp).toBe("claude");
     });
 
-    it("slot 3 shows tool name when available", () => {
+    it("slot 3 is the Always Allow button with tool name in data", () => {
       const config = getSlotConfig("awaiting-approval", 3, "Bash", undefined, {
         pending: 2,
         position: 1,
@@ -244,42 +244,21 @@ describe("layouts", () => {
         flow: "mirror",
         requestId: "req-1",
       });
-      expect(config.title).toBe("Bash");
-      expect(config.svg).toContain("Bash");
-      expect(config.svg).toContain("1/2");
+      expect(config.action).toBe("alwaysAllow");
+      expect(config.title).toBe("Always Allow");
+      expect(config.data?.tool).toBe("Bash");
+      expect(config.svg).toContain("#7c3aed"); // purple background
     });
 
-    it("slot 3 shows approval info when no tool name", () => {
+    it("slot 3 Always Allow has empty string tool when no tool name", () => {
       const config = getSlotConfig("awaiting-approval", 3);
-      expect(config.title).toBe("Tool Approval");
-      expect(config.svg).toContain("Info");
+      expect(config.action).toBe("alwaysAllow");
+      expect(config.data?.tool).toBe("");
     });
 
-    describe("approvalInfoSVG project name from cwd", () => {
-      it("shows 'Info' when pending=1 regardless of cwd", () => {
-        const config = getSlotConfig("awaiting-approval", 3, "Bash", undefined, {
-          pending: 1, position: 1, targetApp: "claude", flow: "mirror", requestId: "r1",
-          cwd: "/repos/myproject",
-        });
-        expect(config.svg).toContain(">Info<");
-      });
-
-      it("shows cwd basename when pending>1 and cwd is provided", () => {
-        const config = getSlotConfig("awaiting-approval", 3, "Bash", undefined, {
-          pending: 2, position: 1, targetApp: "claude", flow: "mirror", requestId: "r1",
-          cwd: "/repos/my-project",
-        });
-        expect(config.svg).toContain(">my-project<");
-        expect(config.svg).not.toContain(">Info<");
-      });
-
-      it("shows 'Info' when pending>1 but cwd is null", () => {
-        const config = getSlotConfig("awaiting-approval", 3, "Bash", undefined, {
-          pending: 2, position: 1, targetApp: "claude", flow: "mirror", requestId: "r1",
-          cwd: null,
-        });
-        expect(config.svg).toContain(">Info<");
-      });
+    it("slot 3 Always Allow shows 'Always' label", () => {
+      const config = getSlotConfig("awaiting-approval", 3, "Read");
+      expect(config.svg).toContain("Always");
     });
 
     it("slots beyond approval buttons (4+) show macro content instead of empty", () => {
