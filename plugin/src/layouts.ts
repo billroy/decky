@@ -589,6 +589,34 @@ function toolInfoSVG(toolName: string): string {
   </svg>`;
 }
 
+interface QuestionOption {
+  label: string;
+  value?: string;
+}
+
+export interface QuestionUiMeta {
+  text: string | null;
+  options: QuestionOption[];
+}
+
+/** Max option buttons shown on the StreamDeck (slots 0–3). */
+const MAX_DECK_OPTIONS = 4;
+
+/** Letter labels for option slots: A, B, C, D */
+const OPTION_LABELS = ["A", "B", "C", "D"];
+
+/** Background color for option buttons (indigo). */
+const OPTION_BG = "#6366f1";
+
+function optionButtonSVG(optionLabel: string, slotLetter: string): string {
+  const display = optionLabel.length > 9 ? `${optionLabel.slice(0, 8)}\u2026` : optionLabel;
+  return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+    <rect width="144" height="144" rx="16" fill="${OPTION_BG}" />
+    <text x="72" y="38" font-size="18" font-family="sans-serif" text-anchor="middle" fill="#ffffff" opacity="0.85">${slotLetter}</text>
+    <text x="72" y="82" font-size="22" font-family="sans-serif" text-anchor="middle" fill="#ffffff">${display}</text>
+  </svg>`;
+}
+
 interface ApprovalUiMeta {
   pending: number;
   position: number;
@@ -1006,12 +1034,29 @@ export function getSlotConfig(
   toolName?: string | null,
   macros?: MacroInput[],
   approval?: ApprovalUiMeta | null,
+  question?: QuestionUiMeta | null,
 ): SlotConfig {
   // Idle state: render from macros (config-driven or defaults)
   if (state === "idle") {
     const macroList = macros ?? DEFAULT_MACROS;
     const idleLayout = buildIdleLayout(macroList);
     return idleLayout[slotIndex] ?? emptySlot(slotIndex);
+  }
+
+  // Asking state: slots 0–(N-1) show option buttons; remaining slots are empty
+  if (state === "asking") {
+    const options = question?.options ?? [];
+    const count = Math.min(options.length, MAX_DECK_OPTIONS);
+    if (slotIndex < count) {
+      const opt = options[slotIndex];
+      return {
+        svg: optionButtonSVG(opt.label, OPTION_LABELS[slotIndex]),
+        title: opt.label,
+        action: "selectOption",
+        data: { index: slotIndex },
+      };
+    }
+    return emptySlot(slotIndex);
   }
 
   // Special case: tool-executing slot 1 shows tool name
@@ -1040,7 +1085,7 @@ export function getSlotConfig(
 }
 
 /** Get the full layout definition for a state. */
-export function getLayout(state: string, macros?: MacroInput[]): LayoutDef {
+export function getLayout(state: string, macros?: MacroInput[], question?: QuestionUiMeta | null): LayoutDef {
   if (state === "idle") {
     return buildIdleLayout(macros ?? DEFAULT_MACROS);
   }
@@ -1049,10 +1094,25 @@ export function getLayout(state: string, macros?: MacroInput[]): LayoutDef {
     // Approval buttons override slots 0-3; slots 4+ keep macro content
     return { ...idle, 0: approveSlot(), 1: denySlot(), 2: stopSlot() };
   }
+  if (state === "asking") {
+    const options = question?.options ?? [];
+    const count = Math.min(options.length, MAX_DECK_OPTIONS);
+    const layout: LayoutDef = {};
+    for (let i = 0; i < count; i++) {
+      const opt = options[i];
+      layout[i] = {
+        svg: optionButtonSVG(opt.label, OPTION_LABELS[i]),
+        title: opt.label,
+        action: "selectOption",
+        data: { index: i },
+      };
+    }
+    return layout;
+  }
   return LAYOUTS[state] ?? {};
 }
 
 /** List all known states that have layout definitions. */
 export function getLayoutStates(): string[] {
-  return ["idle", "awaiting-approval", ...Object.keys(LAYOUTS)];
+  return ["idle", "awaiting-approval", "asking", ...Object.keys(LAYOUTS)];
 }

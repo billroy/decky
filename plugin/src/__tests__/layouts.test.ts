@@ -13,6 +13,7 @@ import {
   setTargetBadgeOptions,
   setWidgetRenderContext,
   type MacroInput,
+  type QuestionUiMeta,
 } from "../layouts.js";
 
 describe("layouts", () => {
@@ -23,7 +24,7 @@ describe("layouts", () => {
     setTargetBadgeOptions({ showTargetBadge: false, defaultTargetApp: "claude" });
   });
   describe("getLayoutStates", () => {
-    it("returns all six states including done", () => {
+    it("returns all states including done and asking", () => {
       const states = getLayoutStates();
       expect(states).toContain("idle");
       expect(states).toContain("thinking");
@@ -31,6 +32,7 @@ describe("layouts", () => {
       expect(states).toContain("tool-executing");
       expect(states).toContain("stopped");
       expect(states).toContain("done");
+      expect(states).toContain("asking");
     });
   });
 
@@ -767,6 +769,71 @@ describe("layouts", () => {
       const svg = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg"><rect/></svg>`;
       const frame = slideOutFrame(svg, -144);
       expect(frame).toContain("translate(0, -144)");
+    });
+  });
+
+  describe("asking state layout", () => {
+    const twoOptions: QuestionUiMeta = {
+      text: "Which approach?",
+      options: [{ label: "Option A" }, { label: "Option B" }],
+    };
+
+    const fourOptions: QuestionUiMeta = {
+      text: "Pick one",
+      options: [
+        { label: "Alpha" }, { label: "Beta" }, { label: "Gamma" }, { label: "Delta" },
+      ],
+    };
+
+    it("slot 0 returns option button with letter A and option label", () => {
+      const slot = getSlotConfig("asking", 0, null, undefined, undefined, twoOptions);
+      expect(slot.action).toBe("selectOption");
+      expect(slot.data).toEqual({ index: 0 });
+      expect(slot.title).toBe("Option A");
+      expect(slot.svg).toContain(">A<");
+      expect(slot.svg).toContain("Option A");
+    });
+
+    it("slot 1 returns option button with letter B and option label", () => {
+      const slot = getSlotConfig("asking", 1, null, undefined, undefined, twoOptions);
+      expect(slot.action).toBe("selectOption");
+      expect(slot.data).toEqual({ index: 1 });
+      expect(slot.title).toBe("Option B");
+      expect(slot.svg).toContain(">B<");
+    });
+
+    it("slot beyond option count returns empty slot", () => {
+      const slot = getSlotConfig("asking", 2, null, undefined, undefined, twoOptions);
+      expect(slot.action).toBeUndefined();
+      expect(slot.title).toBe("");
+    });
+
+    it("max 4 options shown (slot 4 is empty even with more options)", () => {
+      const manyOptions: QuestionUiMeta = {
+        text: "x",
+        options: Array.from({ length: 8 }, (_, i) => ({ label: `Opt${i}` })),
+      };
+      const slot4 = getSlotConfig("asking", 4, null, undefined, undefined, manyOptions);
+      expect(slot4.action).toBeUndefined();
+    });
+
+    it("getLayout for asking returns slots for each option", () => {
+      const layout = getLayout("asking", undefined, fourOptions);
+      expect(Object.keys(layout)).toHaveLength(4);
+      expect(layout[0].action).toBe("selectOption");
+      expect(layout[0].data?.index).toBe(0);
+      expect(layout[3].action).toBe("selectOption");
+      expect(layout[3].data?.index).toBe(3);
+    });
+
+    it("getLayout for asking with no question returns empty layout", () => {
+      const layout = getLayout("asking");
+      expect(Object.keys(layout)).toHaveLength(0);
+    });
+
+    it("option SVG uses indigo background", () => {
+      const slot = getSlotConfig("asking", 0, null, undefined, undefined, twoOptions);
+      expect(slot.svg).toContain("#6366f1");
     });
   });
 });

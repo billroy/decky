@@ -17,6 +17,11 @@ export interface PlatformCapabilities {
   platform: string;
 }
 
+export interface QuestionOption {
+  label: string;
+  value?: string;
+}
+
 export interface StateSnapshot {
   state: string;
   previousState: string | null;
@@ -33,6 +38,10 @@ export interface StateSnapshot {
     riskLevel?: "safe" | "warning" | "critical" | null;
     sessionId?: string | null;
     cwd?: string | null;
+  } | null;
+  question?: {
+    text: string | null;
+    options: QuestionOption[];
   } | null;
 }
 
