@@ -69,6 +69,13 @@ interface MacroDef {
   widget?: WidgetDef;
 }
 
+export type RiskLevel = "safe" | "warning" | "critical";
+
+export interface ToolRiskRule {
+  pattern: string;
+  risk: RiskLevel;
+}
+
 interface DeckyConfig {
   macros: MacroDef[];
   approvalTimeout: number;
@@ -80,6 +87,7 @@ interface DeckyConfig {
   popUpApp: boolean;
   enableApproveOnce: boolean;
   enableDictation: boolean;
+  toolRiskRules: ToolRiskRule[];
 }
 
 export class ConfigValidationError extends Error {
@@ -124,12 +132,15 @@ const DEFAULT_CONFIG: DeckyConfig = {
   popUpApp: false,
   enableApproveOnce: true,
   enableDictation: false,
+  toolRiskRules: [],
 };
 
 const MAX_MACROS = 36;
 const MAX_LABEL_LENGTH = 20;
 const MAX_TEXT_LENGTH = 2000;
 const MAX_ICON_LENGTH = 64;
+const MAX_TOOL_RISK_RULES = 100;
+const MAX_RISK_PATTERN_LENGTH = 64;
 const MIN_FONT_SIZE = 16;
 const MAX_FONT_SIZE = 42;
 const MIN_WIDGET_INTERVAL_MINUTES = 1;
@@ -185,6 +196,20 @@ function normalizeIcon(value: unknown): string | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
   return ICON_ALIASES[trimmed] ?? trimmed;
+}
+
+function normalizeToolRiskRules(value: unknown): ToolRiskRule[] {
+  if (!Array.isArray(value)) return DEFAULT_CONFIG.toolRiskRules;
+  const rules: ToolRiskRule[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const { pattern, risk } = item as Record<string, unknown>;
+    if (typeof pattern !== "string" || !pattern.trim()) continue;
+    if (risk !== "safe" && risk !== "warning" && risk !== "critical") continue;
+    rules.push({ pattern: pattern.trim().slice(0, MAX_RISK_PATTERN_LENGTH), risk });
+    if (rules.length >= MAX_TOOL_RISK_RULES) break;
+  }
+  return rules;
 }
 
 function normalizeFontSize(value: unknown): number | undefined {
@@ -486,6 +511,7 @@ export function loadConfig(): DeckyConfig {
         typeof raw_obj.enableDictation === "boolean"
           ? raw_obj.enableDictation
           : DEFAULT_CONFIG.enableDictation,
+      toolRiskRules: normalizeToolRiskRules(raw_obj.toolRiskRules),
       ...(colors ? { colors } : {}),
     };
 
@@ -501,6 +527,11 @@ export function loadConfig(): DeckyConfig {
 /** Get the current in-memory config. */
 export function getConfig(): DeckyConfig {
   return currentConfig;
+}
+
+/** Get the current tool risk rules (convenience accessor). */
+export function getToolRiskRules(): ToolRiskRule[] {
+  return currentConfig.toolRiskRules;
 }
 
 
@@ -544,6 +575,27 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
   }
   if (update_obj.enableDictation !== undefined && typeof update_obj.enableDictation !== "boolean") {
     throw new ConfigValidationError("enableDictation must be a boolean");
+  }
+  if (update_obj.toolRiskRules !== undefined) {
+    if (!Array.isArray(update_obj.toolRiskRules)) {
+      throw new ConfigValidationError("toolRiskRules must be an array");
+    }
+    if (update_obj.toolRiskRules.length > MAX_TOOL_RISK_RULES) {
+      throw new ConfigValidationError(`toolRiskRules must not exceed ${MAX_TOOL_RISK_RULES} entries`);
+    }
+    for (const rule of update_obj.toolRiskRules as unknown[]) {
+      if (!rule || typeof rule !== "object") throw new ConfigValidationError("each toolRiskRule must be an object");
+      const r = rule as Record<string, unknown>;
+      if (typeof r.pattern !== "string" || !r.pattern.trim()) {
+        throw new ConfigValidationError("toolRiskRule.pattern must be a non-empty string");
+      }
+      if (r.pattern.length > MAX_RISK_PATTERN_LENGTH) {
+        throw new ConfigValidationError(`toolRiskRule.pattern must not exceed ${MAX_RISK_PATTERN_LENGTH} characters`);
+      }
+      if (r.risk !== "safe" && r.risk !== "warning" && r.risk !== "critical") {
+        throw new ConfigValidationError("toolRiskRule.risk must be 'safe', 'warning', or 'critical'");
+      }
+    }
   }
   if (update_obj.defaultTargetApp !== undefined) {
     const v = update_obj.defaultTargetApp;
@@ -600,6 +652,9 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
       typeof update_obj.enableDictation === "boolean"
         ? update_obj.enableDictation
         : currentConfig.enableDictation,
+    toolRiskRules: Array.isArray(update_obj.toolRiskRules)
+      ? normalizeToolRiskRules(update_obj.toolRiskRules)
+      : currentConfig.toolRiskRules,
     ...(hasColorsField
       ? (normalizedUpdateColors ? { colors: normalizedUpdateColors } : {})
       : (currentConfig.colors ? { colors: currentConfig.colors } : {})),

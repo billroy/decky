@@ -427,4 +427,79 @@ describe("config endpoints", () => {
     expect(res.status).toBe(400);
   });
 
+  describe("toolRiskRules", () => {
+    it("saves valid toolRiskRules", async () => {
+      const rules = [
+        { pattern: "Bash", risk: "warning" },
+        { pattern: "WriteFile", risk: "critical" },
+        { pattern: "Read", risk: "safe" },
+      ];
+      const res = await fetch(`${baseUrl}/config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-decky-token": token },
+        body: JSON.stringify({ toolRiskRules: rules }),
+      });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.config.toolRiskRules).toHaveLength(3);
+      expect(data.config.toolRiskRules[0]).toEqual({ pattern: "Bash", risk: "warning" });
+      expect(data.config.toolRiskRules[1]).toEqual({ pattern: "WriteFile", risk: "critical" });
+      expect(data.config.toolRiskRules[2]).toEqual({ pattern: "Read", risk: "safe" });
+    });
+
+    it("rejects toolRiskRules that is not an array", async () => {
+      const res = await fetch(`${baseUrl}/config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-decky-token": token },
+        body: JSON.stringify({ toolRiskRules: "Bash:warning" }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects oversized toolRiskRules array (>100)", async () => {
+      const rules = Array.from({ length: 101 }, (_, i) => ({ pattern: `Tool${i}`, risk: "safe" }));
+      const res = await fetch(`${baseUrl}/config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-decky-token": token },
+        body: JSON.stringify({ toolRiskRules: rules }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects rule with empty pattern", async () => {
+      const res = await fetch(`${baseUrl}/config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-decky-token": token },
+        body: JSON.stringify({ toolRiskRules: [{ pattern: "   ", risk: "safe" }] }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects rule with pattern exceeding 64 chars", async () => {
+      const res = await fetch(`${baseUrl}/config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-decky-token": token },
+        body: JSON.stringify({ toolRiskRules: [{ pattern: "x".repeat(65), risk: "safe" }] }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it("rejects rule with invalid risk level", async () => {
+      const res = await fetch(`${baseUrl}/config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-decky-token": token },
+        body: JSON.stringify({ toolRiskRules: [{ pattern: "Bash", risk: "dangerous" }] }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it("defaults to empty toolRiskRules array in GET /config", async () => {
+      const res = await fetch(`${baseUrl}/config`, {
+        headers: { "x-decky-token": token },
+      });
+      const data = await res.json();
+      expect(Array.isArray(data.toolRiskRules)).toBe(true);
+    });
+  });
+
 });
