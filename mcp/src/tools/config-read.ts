@@ -72,11 +72,22 @@ export function registerConfigReadTools(server: McpServer): void {
         "You can also use any emoji or Unicode character directly as an icon value.",
       inputSchema: z.object({}),
     },
-    async () =>
-      ok({
-        icons: Object.entries(NAMED_ICONS).map(([name, symbol]) => ({ name, symbol })),
-        note: "You can also use any emoji or text directly (e.g. '🚀', '★', 'GO').",
-      }),
+    async () => {
+      const canonical: string[] = [];
+      const aliases: Record<string, string> = {};
+      for (const [name, target] of Object.entries(NAMED_ICONS)) {
+        if (name === target) {
+          canonical.push(name);
+        } else {
+          aliases[name] = target;
+        }
+      }
+      return ok({
+        icons: canonical,
+        aliases,
+        note: "Use any canonical icon name or alias. Aliases resolve to the canonical name shown.",
+      });
+    },
   );
 
   server.registerTool(
