@@ -354,6 +354,22 @@ async function clickApprovalButtonInTargetApp(
   const roleScript =
     roleHint === "default"
       ? `
+          -- Multi-session: search all windows for one with an AXDefaultButton,
+          -- AXRaise it (bring it to front), then click. Falls back to front window.
+          try
+            set targetWindow to missing value
+            repeat with w in windows
+              if exists (first button of w whose subrole is "AXDefaultButton") then
+                set targetWindow to w
+                exit repeat
+              end if
+            end repeat
+            if targetWindow is not missing value then
+              perform action "AXRaise" of targetWindow
+              click (first button of targetWindow whose subrole is "AXDefaultButton")
+              return "clicked"
+            end if
+          end try
           try
             click (first button of front window whose subrole is "AXDefaultButton")
             return "clicked"
