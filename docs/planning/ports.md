@@ -1,6 +1,7 @@
 # Porting Decky to Windows and Linux
 
 Fresh analysis based on the codebase as of 2026-03-10.
+Updated 2026-03-11 to reflect security hardening (commit `b527bec`, tag `v0.2`).
 
 ## How Decky Works (Portability Context)
 
@@ -39,17 +40,6 @@ different portability profile:
 | `plugin/scripts/generate-icons.mjs` | Node.js Canvas-free SVG→PNG. Uses `sharp` which has prebuilt binaries for all three platforms. |
 
 ### Minor Fixes Required
-
-#### `bridge/src/config.ts` — editor allowlist is macOS-biased
-
-The `ALLOWED_EDITORS` list is `["bbedit", "code", "cursor", "windsurf", "textedit"]`.
-BBEdit and TextEdit are macOS-only. The `DEFAULT_EDITOR` is `bbedit`.
-
-**Fix:** Add platform-appropriate editors (e.g. `notepad` on Windows, `gedit`/
-`xdg-open` on Linux). Change the default editor per-platform, or fall back to
-a universal choice like `code` (VS Code).
-
-**Effort:** Trivial — a few lines of platform detection.
 
 #### `bridge/src/approval-gate.ts` — Unix file permissions, atomic rename
 
@@ -205,82 +195,188 @@ and the logic is straightforward HTTP+file I/O.
 | Talk to Claude (dictation) | ✅ | ❌ no equivalent | ❌ no equivalent | ❌ no equivalent |
 | Focus capture + restore | ✅ | ❌ needs Win32 API | ❌ needs xdotool | ❌ very hard |
 
-## Recommended Phased Approach
+## Recommended Staged Approach
 
-### Phase 1: Ship Core Approval Workflow Cross-Platform
+Work is organized by platform rather than by feature. Each stage must reach a
+stable, user-tested state before the next stage begins. macOS is never left
+broken — all portability prep work happens on macOS first, and we verify
+feature parity before moving on.
 
-**Goal:** Approve/deny/cancel buttons, state display, config editing, and
-widgets work on all platforms. Command buttons appear but show a "not supported
-on this platform" error when pressed.
+---
 
-**Tasks:**
-1. Add Windows + Linux to `manifest.json` OS array.
-2. Rewrite hook scripts in Node.js (4 scripts, ~150 lines each).
-3. Update `install.sh` → cross-platform Node installer.
-4. Fix `renameSync` EPERM on Windows in `approval-gate.ts` and `config.ts`.
-5. Make `DEFAULT_EDITOR` platform-aware in `config.ts`.
-6. Add `process.platform` guard in `app.ts` around `macro-exec.ts` imports so
-   unsupported actions return a structured error instead of crashing.
-7. Add CI matrix (macOS + Windows + Ubuntu) for bridge tests.
+### Stage 1: macOS — Portability Foundation
 
-**Outcome:** Decky's primary purpose (approval workflow) works on all platforms.
-Users can configure command buttons but get a clear error if they try to use
-text injection on a non-macOS platform.
+**Goal:** Rewrite all macOS-specific non-automation code into cross-platform
+form, running and testing everything on macOS. At the end of this stage, Decky
+on macOS works exactly as it does today — no regressions — but the codebase is
+ready for other platforms.
 
-**Effort estimate:** 3-5 days.
+#### 1a. Rewrite hook scripts in Node.js
 
-### Phase 2: Windows Text Injection Backend
+Replace the five Bash hook scripts with equivalent Node.js scripts. This is the
+highest-risk portability change because it touches the security-critical
+approval path. Must preserve nonce validation, timeout, and fail-closed
+semantics. Hook scripts must continue to re-read `~/.decky/bridge-token` on
+each invocation (not cache it) since the token now rotates on every bridge
+start (v0.2 security hardening).
 
-**Goal:** Command buttons and Approve Once work on Windows.
+- `hooks/pre-tool-use.sh` → `hooks/pre-tool-use.js` (gate flow — legacy, opt-in)
+- `hooks/permission-request.sh` → `hooks/permission-request.js` (mirror flow — default)
+- `hooks/post-tool-use.sh` → `hooks/post-tool-use.js`
+- `hooks/stop.sh` → `hooks/stop.js`
+- `hooks/notification.sh` → `hooks/notification.js`
+- Update `hooks/install.sh` and `hooks/uninstall.sh` to handle `.js` hooks.
+  The install script must preserve 0700 permissions on the hooks directory and
+  scripts (v0.2 security hardening).
 
-**Tasks:**
-1. Create `bridge/src/macro-exec-win32.ts` implementing clipboard + activate +
-   paste + keystroke via PowerShell or `@nut-tree/nut-js`.
-2. Build Windows app-identification mapping (window titles for Claude, Codex,
-   ChatGPT, Cursor, Windsurf).
-3. Implement `approveInTargetApp` and `dismissApprovalInTargetApp` using
-   Windows UI Automation.
-4. Wire platform selection in a new `bridge/src/macro-exec-router.ts` that
-   delegates to the correct backend based on `process.platform`.
-5. Add integration tests (can be manual or use a Windows CI runner).
+**Test on macOS:** Run through the full approval workflow (approve, deny,
+cancel), command buttons, and Approve Once. Verify identical behavior to the
+Bash hooks. The 39 security tests in `security.test.ts` (v0.2) serve as a
+regression safety net — run `npm test` after each change.
 
-**Outcome:** Full command-button parity on Windows.
+#### 1b. Fix filesystem portability in bridge
 
-**Effort estimate:** 5-8 days. UI Automation for button clicking is the hardest
-part — consider shipping Approve Once as macOS-only initially and adding it to
-Windows later.
+These changes prepare the bridge for Windows but are safe no-ops on macOS:
 
-### Phase 3: Linux Text Injection Backend (X11)
+- `bridge/src/approval-gate.ts` — wrap `renameSync` in unlink-then-rename
+  helper that only triggers on EPERM (Windows). No behavior change on macOS.
+- `bridge/src/config.ts` — same `renameSync` fix in `writeConfigAtomically()`.
+- `bridge/src/security.ts` — accept that `mode: 0o600` bits (used by both
+  `getBridgeToken()` and `rotateBridgeToken()`) are no-ops on Windows. No
+  code change needed; just document the decision. On Windows, the user's home
+  directory ACLs provide equivalent protection.
 
-**Goal:** Command buttons work on Linux under X11.
+#### 1c. Add platform capability guards
 
-**Tasks:**
-1. Create `bridge/src/macro-exec-linux.ts` using `xclip` + `xdotool`.
-2. Build `WM_CLASS` mapping for the five target apps.
-3. Focus capture/restore via `xdotool getactivewindow` / `windowactivate`.
+- `bridge/src/app.ts` — add a `process.platform` check around macro-exec
+  calls so that unsupported actions on non-macOS platforms return a structured
+  error to the plugin instead of crashing. On macOS this guard is a no-op.
+- `bridge/src/macro-exec.ts` — rename to `macro-exec-darwin.ts` and create
+  `macro-exec-router.ts` that delegates to the correct backend by platform.
+  Initially only the darwin backend exists; other platforms get the
+  "not supported" error path.
 
-**Wayland caveat:** Wayland's security model deliberately prevents applications
-from activating other windows or injecting keystrokes. `xdotool` does not work
-under Wayland. `ydotool` requires elevated privileges. This is a fundamental
-platform limitation, not a Decky limitation. Recommend documenting Wayland as
-unsupported for text injection and detecting it at runtime
-(`$XDG_SESSION_TYPE === "wayland"`).
+#### 1d. Manifest and CI
 
-**Effort estimate:** 3-5 days for X11. Wayland support is an open research
-problem.
+- `plugin/com.decky.controller.sdPlugin/manifest.json` — add Windows and Linux
+  to the OS array.
+- `.github/workflows/plugin-pi-tests.yml` — add macOS and Windows runners for
+  bridge tests (matrix strategy).
 
-### Phase 4: Dictation and Polish
+#### 1e. Polish and documentation
 
-**Goal:** Address remaining macOS-only features and harden cross-platform support.
+- Add capability flags to bridge config snapshots so the PI can hide/disable
+  action types not supported on the current platform.
+- Update PI to show disabled states for unsupported actions.
+- Decide on Talk to Claude: keep as macOS-only and document, or investigate
+  platform alternatives.
 
-**Tasks:**
-1. Decide on Talk to Claude: macOS-only, or implement platform alternatives.
-2. Document platform limitations prominently in README and PI.
-3. Add capability flags to bridge config snapshots so PI can hide/disable
-   unsupported action types per-platform.
-4. End-to-end testing across all platforms.
+### 🚦 Testing Gate: macOS Feature Parity
 
-**Effort estimate:** 2-3 days.
+**Before proceeding to Stage 2, the user tests on macOS and confirms:**
+
+- [ ] Approval workflow (approve/deny/cancel) works identically to pre-port
+- [ ] Command buttons (text injection) work
+- [ ] Approve Once works
+- [ ] Hook scripts (now Node.js) handle edge cases: timeout, bridge down, nonce mismatch
+- [ ] Hook scripts correctly re-read rotating token on each invocation
+- [ ] PI shows/hides action types appropriately
+- [ ] CI passes on all matrix runners
+- [ ] All 151+ bridge tests pass (including 39 security tests from v0.2)
+
+---
+
+### Stage 2: Windows Port
+
+**Goal:** Decky runs on Windows with at minimum the core approval workflow.
+Text injection is a stretch goal for this stage. Testing is done by friends
+with Windows machines.
+
+#### 2a. Core approval workflow on Windows
+
+At this point the hook scripts (Node.js), filesystem fixes (renameSync), and
+manifest changes are already in place from Stage 1. The core approval workflow
+(approve/deny/cancel buttons, state display, widgets, config editing) should
+work on Windows out of the box.
+
+- Verify bridge starts and serves on Windows.
+- Verify plugin loads in StreamDeck on Windows.
+- Verify hook scripts work with Claude Code on Windows.
+- Fix any Windows-specific issues discovered during testing.
+
+#### 2b. Windows text injection backend
+
+- Create `bridge/src/macro-exec-win32.ts` implementing clipboard + activate +
+  paste + keystroke via PowerShell or `@nut-tree/nut-js`.
+- Build Windows app-identification mapping (window titles for Claude, Codex,
+  ChatGPT, Cursor, Windsurf).
+- Wire into `macro-exec-router.ts`.
+
+#### 2c. Windows approval automation (stretch)
+
+- Implement `approveInTargetApp` and `dismissApprovalInTargetApp` using
+  Windows UI Automation API.
+- This is the hardest part — button labels and window structures can change
+  between app versions. May ship as macOS-only initially if too fragile.
+
+### 🚦 Testing Gate: Windows Approval Workflow
+
+**Before proceeding to Stage 3, friends test on Windows and confirm:**
+
+- [ ] Bridge + plugin start and connect
+- [ ] Approve/deny/cancel work via StreamDeck
+- [ ] Command buttons work (if 2b is complete), or show clear "not supported" error
+- [ ] Hook scripts work correctly with Claude Code on Windows
+- [ ] No regressions on macOS (user re-tests)
+
+---
+
+### Stage 3: Linux Port
+
+**Goal:** Decky runs on Linux under X11 with the core approval workflow and
+text injection. Wayland limitations are documented.
+
+#### 3a. Core approval workflow on Linux
+
+Same as Windows — the cross-platform foundation from Stage 1 should make this
+work with minimal effort. Verify bridge, plugin (community StreamDeck host),
+and hooks on Linux.
+
+**Note:** No official Elgato StreamDeck host exists for Linux. Community tools
+(streamdeck-ui, etc.) may not fully implement SDK v2. This is a known
+limitation outside Decky's control.
+
+#### 3b. Linux text injection backend (X11)
+
+- Create `bridge/src/macro-exec-linux.ts` using `xclip` + `xdotool`.
+- Build `WM_CLASS` mapping for the five target apps.
+- Focus capture/restore via `xdotool getactivewindow` / `windowactivate`.
+- Wire into `macro-exec-router.ts`.
+
+#### 3c. Wayland detection and documentation
+
+Wayland's security model deliberately prevents applications from activating
+other windows or injecting keystrokes. `xdotool` does not work under Wayland.
+`ydotool` requires elevated privileges. This is a fundamental platform
+limitation, not a Decky limitation.
+
+- Detect Wayland at runtime (`$XDG_SESSION_TYPE === "wayland"` or
+  `process.env.XDG_SESSION_TYPE`).
+- Show a clear message in the PI and on button press: text injection requires
+  X11.
+- Document in README.
+
+### 🚦 Testing Gate: Linux
+
+**Confirm on Linux (X11):**
+
+- [ ] Bridge + plugin start and connect (with community StreamDeck host)
+- [ ] Approve/deny/cancel work
+- [ ] Command buttons work under X11
+- [ ] Wayland detected and clearly reported as unsupported for text injection
+- [ ] No regressions on macOS or Windows
+
+---
 
 ## Risk Summary
 
@@ -289,47 +385,55 @@ problem.
 | `macro-exec.ts` rewrite scope | High | 691 lines of deeply macOS-specific automation. Each platform needs different app identification, different automation APIs, different timing. |
 | Wayland text injection | High | Fundamental platform limitation. No reliable solution exists. Must be documented as unsupported. |
 | Linux Stream Deck host | Medium | No official Elgato host for Linux. Community tools (streamdeck-ui, etc.) may not fully implement SDK v2. |
+| Hook script rewrite | Medium | Straightforward but touches the security-critical approval path. Must preserve nonce validation, timeout, fail-closed semantics, and fresh token reads (for rotation). Mitigated by doing this first on macOS, the v0.2 security test suite (39 tests covering auth, CORS, config validation), and user-testing before moving on. |
 | Windows `renameSync` EPERM | Low | Well-understood fix: unlink + rename. Affects approval-gate and config writes. |
-| Hook script rewrite | Medium | Straightforward but touches the security-critical approval path. Must preserve nonce validation, timeout, fail-closed semantics. |
 | Windows UI Automation fragility | Medium | Button labels and window structures can change between app versions. Approve Once on Windows may be brittle. |
-| Editor allowlist | Low | Easy to extend per-platform. |
+
+## Effort Estimates
+
+| Stage | Estimate | Notes |
+|-------|----------|-------|
+| Stage 1 (macOS foundation) | 4-6 days | Hook rewrite (5 hooks + install/uninstall) is the largest substage. Filesystem fixes and manifest are quick. Security test suite provides regression safety. |
+| Stage 2 (Windows) | 5-8 days | Core workflow may "just work". Text injection backend is the bulk. UI Automation is a stretch. |
+| Stage 3 (Linux) | 3-5 days | X11 backend is simpler than Windows. Wayland is documented as unsupported. |
+| **Total** | **12-19 days** | Sequenced with testing gates; actual calendar time will be longer. |
 
 ## Summary
 
-Decky's approval workflow — its primary purpose — is close to cross-platform.
-The plugin and PI are already fully portable. The bridge core is portable with
-minor filesystem fixes. Hook scripts need a Node.js rewrite. These changes
-(Phase 1) deliver working approve/deny/cancel on all three platforms.
+Work is sequenced to protect macOS stability. Stage 1 does all the risky
+cross-platform prep on macOS — rewriting hooks in Node.js, fixing filesystem
+calls, adding platform routing — and pauses for user testing to confirm
+feature parity. Only after macOS is verified stable does Stage 2 bring up
+Windows, tested by friends. Stage 3 adds Linux/X11 support last.
 
-Text injection into other apps (command buttons, Approve Once, dictation) is
-deeply macOS-specific and requires per-platform backends. This is the bulk of
-the porting effort and can be delivered incrementally (Phases 2-4) after the
-core workflow ships.
+The core approval workflow — Decky's primary purpose — becomes cross-platform
+in Stage 1 and should work on Windows and Linux with minimal additional effort
+in Stages 2a/3a. The per-platform text injection backends (Stages 2b/3b) are
+the bulk of the porting effort and can be delivered incrementally.
 
-## Files Requiring Changes (by phase)
+## Files Requiring Changes (by stage)
 
-### Phase 1
-- `plugin/com.decky.controller.sdPlugin/manifest.json` — add Windows + Linux
-- `hooks/pre-tool-use.sh` → `hooks/pre-tool-use.js` (Node.js rewrite)
+### Stage 1 (macOS foundation)
+- `hooks/pre-tool-use.sh` → `hooks/pre-tool-use.js` (Node.js rewrite — gate flow, legacy)
+- `hooks/permission-request.sh` → `hooks/permission-request.js` (Node.js rewrite — mirror flow, default)
 - `hooks/post-tool-use.sh` → `hooks/post-tool-use.js`
 - `hooks/stop.sh` → `hooks/stop.js`
 - `hooks/notification.sh` → `hooks/notification.js`
-- `hooks/install.sh` → Node.js installer
-- `bridge/src/approval-gate.ts` — Windows renameSync fix
-- `bridge/src/config.ts` — Windows renameSync fix + platform-aware editor defaults
-- `bridge/src/security.ts` — Windows permission handling
-- `bridge/src/app.ts` — guard macro-exec calls with platform capability check
+- `hooks/install.sh` → cross-platform Node.js installer (preserve 0700 permissions)
+- `hooks/uninstall.sh` → cross-platform Node.js uninstaller
+- `bridge/src/approval-gate.ts` — Windows renameSync fix (no-op on macOS)
+- `bridge/src/config.ts` — Windows renameSync fix
+- `bridge/src/macro-exec.ts` — rename to `macro-exec-darwin.ts`
+- `bridge/src/macro-exec-router.ts` (new) — platform dispatcher
+- `bridge/src/app.ts` — platform capability guards, expose capabilities in config
+- `plugin/com.decky.controller.sdPlugin/manifest.json` — add Windows + Linux
+- `plugin/com.decky.controller.sdPlugin/ui/property-inspector-v2.html` — capability gating UI
 - `.github/workflows/plugin-pi-tests.yml` — add platform matrix
 
-### Phase 2
+### Stage 2 (Windows)
 - `bridge/src/macro-exec-win32.ts` (new) — Windows text injection backend
-- `bridge/src/macro-exec-router.ts` (new) — platform dispatcher
-- `bridge/src/macro-exec.ts` — rename to `macro-exec-darwin.ts`, export same interface
+- `bridge/src/macro-exec-router.ts` — add Windows backend
 
-### Phase 3
+### Stage 3 (Linux)
 - `bridge/src/macro-exec-linux.ts` (new) — Linux/X11 text injection backend
 - `bridge/src/macro-exec-router.ts` — add Linux backend
-
-### Phase 4
-- `plugin/com.decky.controller.sdPlugin/ui/property-inspector-v2.html` — capability gating UI
-- `bridge/src/app.ts` — expose platform capabilities in config snapshots
