@@ -502,4 +502,75 @@ describe("config endpoints", () => {
     });
   });
 
+  describe("maxTokens5h config field", () => {
+    it("GET /config does not include maxTokens5h in default config", async () => {
+      const res = await fetch(`${baseUrl}/config`, {
+        headers: { "x-decky-token": token },
+      });
+      const data = await res.json();
+      // maxTokens5h is optional — not present in default config
+      expect(data.maxTokens5h).toBeUndefined();
+    });
+
+    it("PUT /config accepts maxTokens5h and returns it in config", async () => {
+      const res = await fetch(`${baseUrl}/config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-decky-token": token },
+        body: JSON.stringify({ maxTokens5h: 100000 }),
+      });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.config.maxTokens5h).toBe(100000);
+    });
+
+    it("PUT /config rejects non-positive maxTokens5h", async () => {
+      const res = await fetch(`${baseUrl}/config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-decky-token": token },
+        body: JSON.stringify({ maxTokens5h: 0 }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it("PUT /config rejects negative maxTokens5h", async () => {
+      const res = await fetch(`${baseUrl}/config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-decky-token": token },
+        body: JSON.stringify({ maxTokens5h: -1000 }),
+      });
+      expect(res.status).toBe(400);
+    });
+
+    it("PUT /config rejects non-numeric maxTokens5h", async () => {
+      const res = await fetch(`${baseUrl}/config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-decky-token": token },
+        body: JSON.stringify({ maxTokens5h: "100000" }),
+      });
+      expect(res.status).toBe(400);
+    });
+  });
+
+  describe("rate-limit widget kind", () => {
+    it("PUT /config accepts rate-limit widget kind", async () => {
+      const res = await fetch(`${baseUrl}/config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-decky-token": token },
+        body: JSON.stringify({
+          macros: [
+            {
+              label: "Tokens",
+              text: "",
+              type: "widget",
+              widget: { kind: "rate-limit", refreshMode: "onClick" },
+            },
+          ],
+        }),
+      });
+      expect(res.status).toBe(200);
+      const data = await res.json();
+      expect(data.config.macros[0].widget.kind).toBe("rate-limit");
+    });
+  });
+
 });

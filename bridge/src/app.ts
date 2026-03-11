@@ -207,6 +207,7 @@ export function createApp(): DeckyApp {
 
   // Load config from ~/.decky/config.json
   loadConfig();
+  if (getConfig().maxTokens5h) rateLimitStore.setLimit(getConfig().maxTokens5h!);
 
   function currentApproval(): ApprovalQueueItem | null {
     return approvalQueue.length > 0 ? approvalQueue[0] : null;
@@ -522,6 +523,7 @@ export function createApp(): DeckyApp {
     const body = req.body as Record<string, unknown>;
     try {
       const config = saveConfig(body);
+      if (config.maxTokens5h) rateLimitStore.setLimit(config.maxTokens5h);
       io.emit("configUpdate", config);
       res.json({ ok: true, config });
     } catch (err) {
@@ -535,6 +537,7 @@ export function createApp(): DeckyApp {
 
   app.post("/config/reload", (_req, res) => {
     const config = loadConfig();
+    if (config.maxTokens5h) rateLimitStore.setLimit(config.maxTokens5h);
     io.emit("configUpdate", config);
     res.json({ ok: true, config });
   });
@@ -549,6 +552,7 @@ export function createApp(): DeckyApp {
     const index = typeof idxRaw === "number" ? Math.floor(idxRaw) : Number.NaN;
     try {
       const config = restoreConfigBackup(index);
+      if (config.maxTokens5h) rateLimitStore.setLimit(config.maxTokens5h);
       io.emit("configUpdate", config);
       res.json({ ok: true, config, restoredIndex: index, backups: listConfigBackups() });
     } catch (err) {
@@ -890,6 +894,7 @@ export function createApp(): DeckyApp {
         if (Object.keys(update).length > 0) {
           try {
             const config = saveConfig(update);
+            if (config.maxTokens5h) rateLimitStore.setLimit(config.maxTokens5h);
             io.emit("configUpdate", config);
             socket.emit("updateConfigAck", {
               requestId: requestId ?? null,

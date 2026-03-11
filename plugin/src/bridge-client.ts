@@ -112,6 +112,7 @@ export interface DeckyConfig {
   popUpApp?: boolean;
   enableApproveOnce?: boolean;
   enableDictation?: boolean;
+  maxTokens5h?: number;
 }
 
 export type ConnectionStatus = "connected" | "disconnected" | "connecting";

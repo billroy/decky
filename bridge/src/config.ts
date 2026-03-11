@@ -24,7 +24,7 @@ interface ColorOverrides {
   icon?: string;
 }
 
-type WidgetKind = "bridge-status";
+type WidgetKind = "bridge-status" | "rate-limit";
 type WidgetRefreshMode = "onClick" | "interval";
 
 interface WidgetDef {
@@ -88,6 +88,7 @@ interface DeckyConfig {
   enableApproveOnce: boolean;
   enableDictation: boolean;
   toolRiskRules: ToolRiskRule[];
+  maxTokens5h?: number;
 }
 
 export class ConfigValidationError extends Error {
@@ -258,7 +259,10 @@ function normalizeMacro(value: unknown, fallbackTarget: TargetApp): MacroDef | n
 function normalizeWidget(value: unknown): WidgetDef | undefined {
   if (!value || typeof value !== "object") return undefined;
   const obj = value as Record<string, unknown>;
-  const kind = obj.kind === "bridge-status" ? "bridge-status" : undefined;
+  const kind: WidgetKind | undefined =
+    obj.kind === "bridge-status" ? "bridge-status" :
+    obj.kind === "rate-limit" ? "rate-limit" :
+    undefined;
   if (!kind) return undefined;
   const out: WidgetDef = { kind };
   if (obj.refreshMode === "onClick" || obj.refreshMode === "interval") {
@@ -513,6 +517,9 @@ export function loadConfig(): DeckyConfig {
           : DEFAULT_CONFIG.enableDictation,
       toolRiskRules: normalizeToolRiskRules(raw_obj.toolRiskRules),
       ...(colors ? { colors } : {}),
+      ...(typeof raw_obj.maxTokens5h === "number" && Number.isFinite(raw_obj.maxTokens5h) && raw_obj.maxTokens5h > 0
+        ? { maxTokens5h: raw_obj.maxTokens5h }
+        : {}),
     };
 
     console.log(`[config] loaded ${currentConfig.macros.length} macros from ${CONFIG_PATH}`);
@@ -597,6 +604,11 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
       }
     }
   }
+  if (update_obj.maxTokens5h !== undefined) {
+    if (typeof update_obj.maxTokens5h !== "number" || !Number.isFinite(update_obj.maxTokens5h) || update_obj.maxTokens5h <= 0) {
+      throw new ConfigValidationError("maxTokens5h must be a positive number");
+    }
+  }
   if (update_obj.defaultTargetApp !== undefined) {
     const v = update_obj.defaultTargetApp;
     if (v !== "claude" && v !== "codex" && v !== "chatgpt" && v !== "cursor" && v !== "windsurf") {
@@ -655,6 +667,11 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
     toolRiskRules: Array.isArray(update_obj.toolRiskRules)
       ? normalizeToolRiskRules(update_obj.toolRiskRules)
       : currentConfig.toolRiskRules,
+    ...(typeof update_obj.maxTokens5h === "number" && Number.isFinite(update_obj.maxTokens5h) && update_obj.maxTokens5h > 0
+      ? { maxTokens5h: update_obj.maxTokens5h }
+      : currentConfig.maxTokens5h !== undefined
+        ? { maxTokens5h: currentConfig.maxTokens5h }
+        : {}),
     ...(hasColorsField
       ? (normalizedUpdateColors ? { colors: normalizedUpdateColors } : {})
       : (currentConfig.colors ? { colors: currentConfig.colors } : {})),
