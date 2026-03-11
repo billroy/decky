@@ -104,12 +104,27 @@ interface ApprovalQueueItem {
   createdAt: number;
 }
 
+interface PlatformCapabilities {
+  textInjection: boolean;
+  approveInApp: boolean;
+  dictation: boolean;
+  platform: string;
+}
+
+const platformCapabilities: PlatformCapabilities = {
+  textInjection: process.platform === "darwin",
+  approveInApp: process.platform === "darwin",
+  dictation: process.platform === "darwin",
+  platform: process.platform,
+};
+
 interface StatePayload {
   state: string;
   previousState: string | null;
   tool: string | null;
   lastEvent: string | null;
   timestamp: number;
+  capabilities: PlatformCapabilities;
   approval: {
     pending: number;
     position: number;
@@ -219,6 +234,7 @@ export function createApp(): DeckyApp {
     const active = currentApproval();
     return {
       ...snapshot,
+      capabilities: platformCapabilities,
       approval: active
         ? {
           pending: approvalQueue.length,

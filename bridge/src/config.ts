@@ -10,11 +10,11 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
-  renameSync,
   statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { portableRenameSync } from "./fs-compat.js";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
@@ -359,7 +359,7 @@ function rotateBackups(): void {
       if (i === CONFIG_BACKUP_COUNT - 1) {
         unlinkSync(src);
       } else {
-        renameSync(src, backupPath(i + 1));
+        portableRenameSync(src, backupPath(i + 1));
       }
     } catch (err: unknown) {
       if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
@@ -375,7 +375,7 @@ function writeConfigAtomically(raw: string): void {
   const tmpPath = join(DECKY_DIR, `${CONFIG_TMP_PREFIX}-${process.pid}-${Date.now()}`);
   try {
     writeFileSync(tmpPath, raw, "utf-8");
-    renameSync(tmpPath, CONFIG_PATH);
+    portableRenameSync(tmpPath, CONFIG_PATH);
   } finally {
     if (existsSync(tmpPath)) {
       try {

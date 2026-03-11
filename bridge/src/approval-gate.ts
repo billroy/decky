@@ -7,7 +7,8 @@
  *   3. Hook script reads the result, deletes the file, and exits with the appropriate code.
  */
 
-import { mkdirSync, writeFileSync, unlinkSync, existsSync, renameSync } from "node:fs";
+import { mkdirSync, writeFileSync, unlinkSync, existsSync } from "node:fs";
+import { portableRenameSync } from "./fs-compat.js";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
@@ -30,7 +31,7 @@ export function writeGateFile(result: ApprovalResult, nonce?: string): void {
   const payload = nonce ? `${nonce}:${result}` : result;
   const tmp = `${GATE_FILE}.${process.pid}.${Date.now()}.tmp`;
   writeFileSync(tmp, payload, { encoding: "utf-8", mode: 0o600 });
-  renameSync(tmp, GATE_FILE);
+  portableRenameSync(tmp, GATE_FILE);
 }
 
 /**

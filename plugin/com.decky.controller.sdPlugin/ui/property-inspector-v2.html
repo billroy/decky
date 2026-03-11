@@ -794,6 +794,7 @@
       popUpApp: false
     };
     let defaultColors = { bg: "", text: "", icon: "" };
+    let bridgeCapabilities = null; // { textInjection, approveInApp, dictation, platform }
     let configLoaded = false;
     let baselinePayload = "";
     let selectedMacroIndex = -1;
@@ -1121,6 +1122,9 @@
         savedShowTargetBadge = settings.showTargetBadge;
         if (msg.popUpApp !== undefined) settings.popUpApp = !!msg.popUpApp;
         savedPopUpApp = settings.popUpApp;
+        if (msg.capabilities && typeof msg.capabilities === "object") {
+          bridgeCapabilities = msg.capabilities;
+        }
         if (msg.colors) {
           defaultColors.bg = msg.colors.bg || "";
           defaultColors.text = msg.colors.text || "";
@@ -1313,7 +1317,14 @@
         item.draggable = showAllMacros;
         item.dataset.index = i;
 
-        const macroTypeOptions = MACRO_TYPES.map(
+        const availableTypes = MACRO_TYPES.filter(function (opt) {
+          if (!bridgeCapabilities) return true;
+          if (opt.value === "macro" && !bridgeCapabilities.textInjection) return false;
+          if (opt.value === "approveOnceInClaude" && !bridgeCapabilities.approveInApp) return false;
+          if (opt.value === "startDictationForClaude" && !bridgeCapabilities.dictation) return false;
+          return true;
+        });
+        const macroTypeOptions = availableTypes.map(
           (opt) => '<option value="' + esc(opt.value) + '"' + (macroType === opt.value ? " selected" : "") + ">" + esc(opt.label) + "</option>"
         ).join("");
         const iconPickerHtml = buildIconPicker(i, macro.icon || "");

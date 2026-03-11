@@ -400,6 +400,7 @@ export class SlotAction extends SingletonAction {
       popUpApp: cfg?.popUpApp ?? false,
       enableApproveOnce: cfg?.enableApproveOnce ?? true,
       enableDictation: cfg?.enableDictation ?? true,
+      capabilities: bridgeRef?.getLastSnapshot()?.capabilities ?? null,
     };
     if (typeof selectedMacroIndex === "number" && selectedMacroIndex >= 0) {
       snapshot.selectedMacroIndex = selectedMacroIndex;

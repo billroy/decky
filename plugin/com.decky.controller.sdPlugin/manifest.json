@@ -9,7 +9,9 @@
   "Version": "0.1.0.0",
   "SDKVersion": 2,
   "OS": [
-    { "Platform": "mac", "MinimumVersion": "13" }
+    { "Platform": "mac", "MinimumVersion": "13" },
+    { "Platform": "windows", "MinimumVersion": "10" },
+    { "Platform": "linux" }
   ],
   "Software": { "MinimumVersion": "6.6" },
   "Nodejs": { "Version": "20" },

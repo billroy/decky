@@ -10,12 +10,20 @@ import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
+export interface PlatformCapabilities {
+  textInjection: boolean;
+  approveInApp: boolean;
+  dictation: boolean;
+  platform: string;
+}
+
 export interface StateSnapshot {
   state: string;
   previousState: string | null;
   tool: string | null;
   lastEvent: string | null;
   timestamp: number;
+  capabilities?: PlatformCapabilities;
   approval?: {
     pending: number;
     position: number;

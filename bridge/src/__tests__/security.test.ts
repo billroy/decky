@@ -501,3 +501,43 @@ describe("Socket.io macro validation", () => {
     }
   });
 });
+
+// --- Tranche 1c: Platform capabilities in /status ---
+
+describe("platform capabilities", () => {
+  it("GET /status includes capabilities object", async () => {
+    const res = await fetch(`${baseUrl}/status`, {
+      headers: { "x-decky-token": token },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      capabilities: {
+        textInjection: boolean;
+        approveInApp: boolean;
+        dictation: boolean;
+        platform: string;
+      };
+    };
+    expect(body.capabilities).toBeDefined();
+    expect(body.capabilities.platform).toBe(process.platform);
+    expect(typeof body.capabilities.textInjection).toBe("boolean");
+    expect(typeof body.capabilities.approveInApp).toBe("boolean");
+    expect(typeof body.capabilities.dictation).toBe("boolean");
+  });
+
+  it("capabilities are included in Socket.io state events", async () => {
+    const client = await connectClient();
+    try {
+      const statePromise = waitForSocketEvent(client, "stateChange");
+      // Trigger a state change so the event fires
+      decky.sm.forceState("thinking", "test capabilities");
+      const stateData = (await statePromise) as {
+        capabilities: { platform: string };
+      };
+      expect(stateData.capabilities).toBeDefined();
+      expect(stateData.capabilities.platform).toBe(process.platform);
+    } finally {
+      client.disconnect();
+    }
+  });
+});
