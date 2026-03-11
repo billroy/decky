@@ -884,10 +884,22 @@ export function createApp(): DeckyApp {
         if (tool) {
           try { addAlwaysAllowRule(tool); } catch { /* ignore validation errors */ }
         }
-        // Approve the current queued request (same logic as the "approve" action)
-        const active = currentApproval();
-        if (active) {
-          if (active.flow === "mirror") {
+        // Approve the current queued request. Both flows shift the queue and
+        // force state immediately (matching the approveOnceInClaude pattern),
+        // then click the Claude dialog.
+        if (currentApproval()) {
+          const activeFlow = currentApproval()!.flow;
+          if (activeFlow !== "gate") {
+            // mirror flow: shift queue + force state first for immediate visual feedback
+            pendingGateNonce = null;
+            shiftApprovalRequest();
+            const next = currentApproval();
+            if (next) {
+              sm.forceState("awaiting-approval", "queued approval pending", next.tool);
+              surfaceActiveApproval();
+            } else {
+              sm.forceState("tool-executing", "approved via alwaysAllow");
+            }
             withApprovalAttemptContext(actionId, () => approveOnceInClaude()).catch((err) => {
               console.error("[io] alwaysAllow approve failed in mirror flow:", err);
               socket.emit("error", { error: "Failed to approve in Claude" });

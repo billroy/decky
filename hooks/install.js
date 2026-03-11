@@ -68,11 +68,20 @@ if (fs.existsSync(SETTINGS)) {
   }
 }
 
-// Deep-merge: replace Decky hook entries, preserve other hook entries
+// Merge Decky hook entries into existing hooks, preserving non-Decky entries.
+// For each event key, append Decky's matchers to any pre-existing array so
+// other tools' hooks under the same event type are not overwritten.
 if (!settings.hooks || typeof settings.hooks !== "object") {
   settings.hooks = {};
 }
-Object.assign(settings.hooks, DECKY_HOOKS);
+for (const [event, deckyMatchers] of Object.entries(DECKY_HOOKS)) {
+  const existing = Array.isArray(settings.hooks[event]) ? settings.hooks[event] : [];
+  // Remove any previously-installed Decky entries (identified by command containing ".decky/hooks/")
+  const nonDecky = existing.filter(
+    (entry) => !(entry.hooks && entry.hooks.some((h) => h.command && h.command.includes(".decky/hooks/")))
+  );
+  settings.hooks[event] = [...nonDecky, ...deckyMatchers];
+}
 
 fs.writeFileSync(SETTINGS, JSON.stringify(settings, null, 2) + "\n", "utf-8");
 

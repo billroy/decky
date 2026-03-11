@@ -737,6 +737,7 @@
     ];
     const WIDGET_KINDS = [
       { value: "bridge-status", label: "Bridge status" },
+      { value: "rate-limit", label: "Rate limit" },
     ];
     const WIDGET_REFRESH_MODES = [
       { value: "onClick", label: "On click" },
@@ -1307,7 +1308,7 @@
       visibleIndexes.forEach((i) => {
         const macro = macros[i];
         const macroType = macro.type === "widget" || SLOT_ACTION_TYPES[macro.type] ? macro.type : "macro";
-        const widgetKind = "bridge-status";
+        const widgetKind = (macro.widget && macro.widget.kind) ? macro.widget.kind : "bridge-status";
         const widgetRefreshMode = macro.widget && macro.widget.refreshMode === "interval" ? "interval" : "onClick";
         const widgetInterval = macro.widget && Number.isFinite(macro.widget.intervalMinutes)
           ? Math.min(60, Math.max(1, Math.floor(Number(macro.widget.intervalMinutes))))
@@ -1506,7 +1507,7 @@
           var idx = parseInt(e.target.dataset.widgetKind, 10);
           if (!Number.isFinite(idx) || !macros[idx]) return;
           if (!macros[idx].widget) macros[idx].widget = {};
-          macros[idx].widget.kind = "bridge-status";
+          macros[idx].widget.kind = e.target.value || "bridge-status";
           markDirty();
         });
       });

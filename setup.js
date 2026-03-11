@@ -25,6 +25,10 @@ const inRepo = fs.existsSync(path.join(SCRIPT_DIR, "bridge")) &&
 function run(cmd, cwd) {
   console.log(`  $ ${cmd}`);
   const result = spawnSync(cmd, { shell: true, stdio: "inherit", cwd: cwd ?? SCRIPT_DIR });
+  if (result.error) {
+    console.error(`ERROR: could not spawn command: ${result.error.message}`);
+    process.exit(1);
+  }
   if (result.status !== 0) {
     console.error(`ERROR: command failed with exit code ${result.status}`);
     process.exit(result.status ?? 1);

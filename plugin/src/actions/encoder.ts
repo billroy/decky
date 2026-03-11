@@ -20,8 +20,6 @@ import type { DialAction, FeedbackPayload } from "@elgato/streamdeck";
 import type { JsonObject } from "@elgato/utils";
 import type { BridgeClient, StateSnapshot } from "../bridge-client.js";
 
-/** Approximate approval timeout in seconds (matches bridge default: 120). */
-const APPROVAL_TIMEOUT_S = 120;
 
 let bridgeRef: BridgeClient | null = null;
 let lastSnapshot: StateSnapshot | null = null;
@@ -125,7 +123,10 @@ export class EncoderAction extends SingletonAction {
   override onDialRotate(ev: DialRotateEvent): void {
     const pending = lastSnapshot?.approval?.pending ?? 0;
     if (pending > 1) {
-      previewOffset = Math.max(0, previewOffset + ev.payload.ticks);
+      previewOffset = Math.min(
+        Math.max(0, previewOffset + ev.payload.ticks),
+        pending - 1,
+      );
       if (lastSnapshot) {
         void refreshAllDials(lastSnapshot);
       }
@@ -144,4 +145,4 @@ export function initEncoderStateListener(client: BridgeClient): void {
 }
 
 // Re-export for testing
-export { buildFeedback, stateLabel, rateLimitColor, APPROVAL_TIMEOUT_S };
+export { buildFeedback, stateLabel, rateLimitColor };

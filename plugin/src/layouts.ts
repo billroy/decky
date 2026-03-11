@@ -1157,14 +1157,14 @@ export function getSlotConfig(
 }
 
 /** Get the full layout definition for a state. */
-export function getLayout(state: string, macros?: MacroInput[], question?: QuestionUiMeta | null): LayoutDef {
+export function getLayout(state: string, macros?: MacroInput[], question?: QuestionUiMeta | null, approval?: ApprovalUiMeta | null): LayoutDef {
   if (state === "idle") {
     return buildIdleLayout(macros ?? DEFAULT_MACROS);
   }
   if (state === "awaiting-approval") {
     const idle = buildIdleLayout(macros ?? DEFAULT_MACROS);
     // Approval buttons override slots 0-3; slots 4+ keep macro content
-    return { ...idle, 0: approveSlot(), 1: denySlot(), 2: stopSlot(), 3: alwaysAllowSlot(null) };
+    return { ...idle, 0: approveSlot(approval), 1: denySlot(approval), 2: stopSlot(approval), 3: alwaysAllowSlot(null) };
   }
   if (state === "asking") {
     const options = question?.options ?? [];
