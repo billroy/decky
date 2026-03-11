@@ -113,6 +113,7 @@ export interface DeckyConfig {
   enableApproveOnce?: boolean;
   enableDictation?: boolean;
   maxTokens5h?: number;
+  alwaysAllowRules?: Array<{ id: string; pattern: string; createdAt: number }>;
 }
 
 export type ConnectionStatus = "connected" | "disconnected" | "connecting";

@@ -76,6 +76,12 @@ export interface ToolRiskRule {
   risk: RiskLevel;
 }
 
+export interface AlwaysAllowRule {
+  id: string;
+  pattern: string;
+  createdAt: number;
+}
+
 interface DeckyConfig {
   macros: MacroDef[];
   approvalTimeout: number;
@@ -89,6 +95,7 @@ interface DeckyConfig {
   enableDictation: boolean;
   toolRiskRules: ToolRiskRule[];
   maxTokens5h?: number;
+  alwaysAllowRules: AlwaysAllowRule[];
 }
 
 export class ConfigValidationError extends Error {
@@ -134,6 +141,7 @@ const DEFAULT_CONFIG: DeckyConfig = {
   enableApproveOnce: true,
   enableDictation: false,
   toolRiskRules: [],
+  alwaysAllowRules: [],
 };
 
 const MAX_MACROS = 36;
@@ -142,6 +150,8 @@ const MAX_TEXT_LENGTH = 2000;
 const MAX_ICON_LENGTH = 64;
 const MAX_TOOL_RISK_RULES = 100;
 const MAX_RISK_PATTERN_LENGTH = 64;
+const MAX_ALWAYS_ALLOW_RULES = 200;
+const MAX_ALWAYS_ALLOW_PATTERN_LENGTH = 64;
 const MIN_FONT_SIZE = 16;
 const MAX_FONT_SIZE = 42;
 const MIN_WIDGET_INTERVAL_MINUTES = 1;
@@ -209,6 +219,21 @@ function normalizeToolRiskRules(value: unknown): ToolRiskRule[] {
     if (risk !== "safe" && risk !== "warning" && risk !== "critical") continue;
     rules.push({ pattern: pattern.trim().slice(0, MAX_RISK_PATTERN_LENGTH), risk });
     if (rules.length >= MAX_TOOL_RISK_RULES) break;
+  }
+  return rules;
+}
+
+function normalizeAlwaysAllowRules(value: unknown): AlwaysAllowRule[] {
+  if (!Array.isArray(value)) return [];
+  const rules: AlwaysAllowRule[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object") continue;
+    const { id, pattern, createdAt } = item as Record<string, unknown>;
+    if (typeof id !== "string" || !id.trim()) continue;
+    if (typeof pattern !== "string" || !pattern.trim()) continue;
+    const ts = typeof createdAt === "number" && Number.isFinite(createdAt) ? createdAt : Date.now();
+    rules.push({ id: id.trim(), pattern: pattern.trim().slice(0, MAX_ALWAYS_ALLOW_PATTERN_LENGTH), createdAt: ts });
+    if (rules.length >= MAX_ALWAYS_ALLOW_RULES) break;
   }
   return rules;
 }
@@ -516,6 +541,7 @@ export function loadConfig(): DeckyConfig {
           ? raw_obj.enableDictation
           : DEFAULT_CONFIG.enableDictation,
       toolRiskRules: normalizeToolRiskRules(raw_obj.toolRiskRules),
+      alwaysAllowRules: normalizeAlwaysAllowRules(raw_obj.alwaysAllowRules),
       ...(colors ? { colors } : {}),
       ...(typeof raw_obj.maxTokens5h === "number" && Number.isFinite(raw_obj.maxTokens5h) && raw_obj.maxTokens5h > 0
         ? { maxTokens5h: raw_obj.maxTokens5h }
@@ -541,6 +567,38 @@ export function getToolRiskRules(): ToolRiskRule[] {
   return currentConfig.toolRiskRules;
 }
 
+/** Get the current always-allow rules (convenience accessor). */
+export function getAlwaysAllowRules(): AlwaysAllowRule[] {
+  return currentConfig.alwaysAllowRules;
+}
+
+/**
+ * Append a new always-allow rule (by pattern) and persist.
+ * Generates a unique id and createdAt timestamp.
+ * Returns the updated rules list.
+ */
+export function addAlwaysAllowRule(pattern: string): AlwaysAllowRule[] {
+  const trimmed = pattern.trim().slice(0, MAX_ALWAYS_ALLOW_PATTERN_LENGTH);
+  if (!trimmed) throw new ConfigValidationError("alwaysAllowRule.pattern must be a non-empty string");
+  if (currentConfig.alwaysAllowRules.length >= MAX_ALWAYS_ALLOW_RULES) {
+    throw new ConfigValidationError(`alwaysAllowRules must not exceed ${MAX_ALWAYS_ALLOW_RULES} entries`);
+  }
+  const id = `aal-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const rule: AlwaysAllowRule = { id, pattern: trimmed, createdAt: Date.now() };
+  const newRules = [...currentConfig.alwaysAllowRules, rule];
+  saveConfig({ alwaysAllowRules: newRules });
+  return currentConfig.alwaysAllowRules;
+}
+
+/**
+ * Remove an always-allow rule by id and persist.
+ * Returns the updated rules list. No error if id not found.
+ */
+export function removeAlwaysAllowRule(id: string): AlwaysAllowRule[] {
+  const newRules = currentConfig.alwaysAllowRules.filter((r) => r.id !== id);
+  saveConfig({ alwaysAllowRules: newRules });
+  return currentConfig.alwaysAllowRules;
+}
 
 /** Save config to disk and update in-memory copy. Returns the saved config. */
 export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
@@ -609,6 +667,27 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
       throw new ConfigValidationError("maxTokens5h must be a positive number");
     }
   }
+  if (update_obj.alwaysAllowRules !== undefined) {
+    if (!Array.isArray(update_obj.alwaysAllowRules)) {
+      throw new ConfigValidationError("alwaysAllowRules must be an array");
+    }
+    if (update_obj.alwaysAllowRules.length > MAX_ALWAYS_ALLOW_RULES) {
+      throw new ConfigValidationError(`alwaysAllowRules must not exceed ${MAX_ALWAYS_ALLOW_RULES} entries`);
+    }
+    for (const rule of update_obj.alwaysAllowRules as unknown[]) {
+      if (!rule || typeof rule !== "object") throw new ConfigValidationError("each alwaysAllowRule must be an object");
+      const r = rule as Record<string, unknown>;
+      if (typeof r.id !== "string" || !r.id.trim()) {
+        throw new ConfigValidationError("alwaysAllowRule.id must be a non-empty string");
+      }
+      if (typeof r.pattern !== "string" || !r.pattern.trim()) {
+        throw new ConfigValidationError("alwaysAllowRule.pattern must be a non-empty string");
+      }
+      if (r.pattern.length > MAX_ALWAYS_ALLOW_PATTERN_LENGTH) {
+        throw new ConfigValidationError(`alwaysAllowRule.pattern must not exceed ${MAX_ALWAYS_ALLOW_PATTERN_LENGTH} characters`);
+      }
+    }
+  }
   if (update_obj.defaultTargetApp !== undefined) {
     const v = update_obj.defaultTargetApp;
     if (v !== "claude" && v !== "codex" && v !== "chatgpt" && v !== "cursor" && v !== "windsurf") {
@@ -667,6 +746,9 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
     toolRiskRules: Array.isArray(update_obj.toolRiskRules)
       ? normalizeToolRiskRules(update_obj.toolRiskRules)
       : currentConfig.toolRiskRules,
+    alwaysAllowRules: Array.isArray(update_obj.alwaysAllowRules)
+      ? normalizeAlwaysAllowRules(update_obj.alwaysAllowRules)
+      : currentConfig.alwaysAllowRules,
     ...(typeof update_obj.maxTokens5h === "number" && Number.isFinite(update_obj.maxTokens5h) && update_obj.maxTokens5h > 0
       ? { maxTokens5h: update_obj.maxTokens5h }
       : currentConfig.maxTokens5h !== undefined

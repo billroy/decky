@@ -22,6 +22,9 @@ import {
   loadConfig,
   getConfig,
   getToolRiskRules,
+  getAlwaysAllowRules,
+  addAlwaysAllowRule,
+  removeAlwaysAllowRule,
   listConfigBackups,
   normalizeTheme,
   restoreConfigBackup,
@@ -581,6 +584,39 @@ export function createApp(): DeckyApp {
     }
     rateLimitStore.addUsage(inputTokens, outputTokens);
     res.json({ ok: true, ...rateLimitStore.getSummary() });
+  });
+
+  app.get("/rules", (_req, res) => {
+    res.json({ rules: getAlwaysAllowRules() });
+  });
+
+  app.post("/rules", (req, res) => {
+    const body = req.body as Record<string, unknown>;
+    const pattern = typeof body.pattern === "string" ? body.pattern.trim() : "";
+    if (!pattern) {
+      res.status(400).json({ error: "pattern must be a non-empty string" });
+      return;
+    }
+    try {
+      const rules = addAlwaysAllowRule(pattern);
+      res.json({ ok: true, rules });
+    } catch (err) {
+      if (err instanceof ConfigValidationError) {
+        res.status(400).json({ error: err.message });
+        return;
+      }
+      res.status(500).json({ error: "Failed to add rule" });
+    }
+  });
+
+  app.delete("/rules/:id", (req, res) => {
+    const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: "id is required" });
+      return;
+    }
+    const rules = removeAlwaysAllowRule(id);
+    res.json({ ok: true, rules });
   });
 
   // --- Socket.io connections ---
