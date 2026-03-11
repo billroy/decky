@@ -1383,6 +1383,9 @@
               '<input type="checkbox" data-field="submit" data-index="' + i + '"' + (macro.submit === false ? "" : " checked") + " />" +
             "</div>" : "") +
           "</div>" +
+          (bridgeCapabilities && bridgeCapabilities.platform === "linux" && macroType !== "widget"
+            ? '<div class="field-row"><div class="field-group"><div class="helper" style="color:#e0a020;">Requires X11 session. Not supported under Wayland.</div></div></div>'
+            : "") +
           (macroType === "widget"
             ? '<div class="field-row">' +
                 '<div class="field-group">' +

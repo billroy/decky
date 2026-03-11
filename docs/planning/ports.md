@@ -195,6 +195,15 @@ and the logic is straightforward HTTP+file I/O.
 | Talk to Claude (dictation) | ✅ | ❌ no equivalent | ❌ no equivalent | ❌ no equivalent |
 | Focus capture + restore | ✅ | ❌ needs Win32 API | ❌ needs xdotool | ❌ very hard |
 
+## Implementation Status
+
+All three stages are implemented and tested. Pending user testing on Windows
+and Linux machines.
+
+- **Stage 1 (macOS foundation):** Complete — commit `8077b84`
+- **Stage 2 (Windows):** Complete — commit `1c84aed`
+- **Stage 3 (Linux):** Complete — see latest commit
+
 ## Recommended Staged Approach
 
 Work is organized by platform rather than by feature. Each stage must reach a
@@ -204,7 +213,7 @@ feature parity before moving on.
 
 ---
 
-### Stage 1: macOS — Portability Foundation
+### Stage 1: macOS — Portability Foundation ✅
 
 **Goal:** Rewrite all macOS-specific non-automation code into cross-platform
 form, running and testing everything on macOS. At the end of this stage, Decky
@@ -286,7 +295,7 @@ These changes prepare the bridge for Windows but are safe no-ops on macOS:
 
 ---
 
-### Stage 2: Windows Port
+### Stage 2: Windows Port ✅
 
 **Goal:** Decky runs on Windows with at minimum the core approval workflow.
 Text injection is a stretch goal for this stage. Testing is done by friends
@@ -331,7 +340,7 @@ work on Windows out of the box.
 
 ---
 
-### Stage 3: Linux Port
+### Stage 3: Linux Port ✅
 
 **Goal:** Decky runs on Linux under X11 with the core approval workflow and
 text injection. Wayland limitations are documented.
@@ -411,29 +420,32 @@ in Stage 1 and should work on Windows and Linux with minimal additional effort
 in Stages 2a/3a. The per-platform text injection backends (Stages 2b/3b) are
 the bulk of the porting effort and can be delivered incrementally.
 
-## Files Requiring Changes (by stage)
+## Files Changed (actual implementation)
 
-### Stage 1 (macOS foundation)
-- `hooks/pre-tool-use.sh` → `hooks/pre-tool-use.js` (Node.js rewrite — gate flow, legacy)
-- `hooks/permission-request.sh` → `hooks/permission-request.js` (Node.js rewrite — mirror flow, default)
-- `hooks/post-tool-use.sh` → `hooks/post-tool-use.js`
-- `hooks/stop.sh` → `hooks/stop.js`
-- `hooks/notification.sh` → `hooks/notification.js`
-- `hooks/install.sh` → cross-platform Node.js installer (preserve 0700 permissions)
-- `hooks/uninstall.sh` → cross-platform Node.js uninstaller
-- `bridge/src/approval-gate.ts` — Windows renameSync fix (no-op on macOS)
-- `bridge/src/config.ts` — Windows renameSync fix
-- `bridge/src/macro-exec.ts` — rename to `macro-exec-darwin.ts`
-- `bridge/src/macro-exec-router.ts` (new) — platform dispatcher
-- `bridge/src/app.ts` — platform capability guards, expose capabilities in config
+### Stage 1 (macOS foundation) — commit `8077b84`
+- `hooks/*.js` — Node.js rewrites of all hook scripts (install, uninstall, pre-tool-use, post-tool-use, permission-request, stop, notification)
+- `bridge/src/fs-compat.ts` — `portableRenameSync` helper
+- `bridge/src/approval-gate.ts`, `bridge/src/config.ts` — use portableRenameSync
+- `bridge/src/macro-exec-darwin.ts` — renamed from macro-exec.ts
+- `bridge/src/macro-exec.ts` — platform router (lazy-loads darwin/win32/linux)
+- `bridge/src/app.ts` — platform capabilities in state payload
+- `plugin/src/bridge-client.ts` — PlatformCapabilities interface
+- `plugin/src/actions/slot.ts` — forward capabilities in configSnapshot
+- `plugin/com.decky.controller.sdPlugin/ui/property-inspector-v2.html` — capability gating
 - `plugin/com.decky.controller.sdPlugin/manifest.json` — add Windows + Linux
-- `plugin/com.decky.controller.sdPlugin/ui/property-inspector-v2.html` — capability gating UI
-- `.github/workflows/plugin-pi-tests.yml` — add platform matrix
+- `.github/workflows/plugin-pi-tests.yml` — 3-OS CI matrix
 
-### Stage 2 (Windows)
-- `bridge/src/macro-exec-win32.ts` (new) — Windows text injection backend
-- `bridge/src/macro-exec-router.ts` — add Windows backend
+### Stage 2 (Windows) — commit `1c84aed`
+- `bridge/src/macro-exec-win32.ts` — PowerShell + clip.exe + UI Automation
+- `bridge/src/macro-exec.ts` — add win32 lazy-load
+- `bridge/src/app.ts` — textInjection/approveInApp for win32
+- `bridge/package.json` — remove Unix-only env var from test script
+- `bridge/src/__tests__/macro-exec.test.ts` — import darwin directly, skipIf
+- `bridge/src/__tests__/macro-exec-win32.test.ts` — 15 tests
 
 ### Stage 3 (Linux)
-- `bridge/src/macro-exec-linux.ts` (new) — Linux/X11 text injection backend
-- `bridge/src/macro-exec-router.ts` — add Linux backend
+- `bridge/src/macro-exec-linux.ts` — xdotool + xclip, Wayland detection
+- `bridge/src/macro-exec.ts` — add linux lazy-load
+- `bridge/src/app.ts` — textInjection/approveInApp for linux
+- `bridge/src/__tests__/macro-exec-linux.test.ts` — 14 tests
+- `plugin/com.decky.controller.sdPlugin/ui/property-inspector-v2.html` — Wayland hint
