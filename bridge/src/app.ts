@@ -90,6 +90,8 @@ export interface DeckyApp {
   httpServer: HttpServer;
   io: SocketIOServer;
   sm: StateMachine;
+  /** Restore console.log/warn/error to the originals captured at createApp() time. Call in test teardown. */
+  restoreConsole: () => void;
 }
 
 type ApprovalFlow = "gate" | "mirror";
@@ -1097,8 +1099,30 @@ export function createApp(): DeckyApp {
     socket.on("slotHeartbeat", (payload: unknown) => {
       if (!payload || typeof payload !== "object") return;
       const p = payload as Record<string, unknown>;
-      const deviceId = typeof p.deviceId === "string" ? p.deviceId : "unknown";
-      deckState.set(deviceId, p as unknown as SlotHeartbeatPayload);
+
+      // Validate and sanitize before storing — this data is forwarded to GET /status.
+      const rawDeviceId = typeof p.deviceId === "string" ? p.deviceId.trim() : "unknown";
+      const deviceId = rawDeviceId.slice(0, 128) || "unknown";
+      const rows = typeof p.rows === "number" && Number.isFinite(p.rows) ? Math.max(0, Math.floor(p.rows)) : 0;
+      const cols = typeof p.cols === "number" && Number.isFinite(p.cols) ? Math.max(0, Math.floor(p.cols)) : 0;
+      const buttonCount = rows * cols;
+      const model = typeof p.model === "string" ? p.model.slice(0, 64) : "unknown";
+
+      const rawSlots = Array.isArray(p.activeSlots) ? p.activeSlots : [];
+      const activeSlots = rawSlots.slice(0, 256).flatMap((s) => {
+        if (!s || typeof s !== "object") return [];
+        const slot = s as Record<string, unknown>;
+        const row = typeof slot.row === "number" ? Math.floor(slot.row) : -1;
+        const col = typeof slot.col === "number" ? Math.floor(slot.col) : -1;
+        const index = typeof slot.index === "number" ? Math.floor(slot.index) : -1;
+        if (row < 0 || col < 0 || index < 0) return [];
+        const entry: SlotHeartbeatPayload["activeSlots"][number] = { row, col, index };
+        if (typeof slot.label === "string") entry.label = slot.label.slice(0, 64);
+        return [entry];
+      });
+
+      const sanitized: SlotHeartbeatPayload = { deviceId, model, rows, cols, buttonCount, activeSlots };
+      deckState.set(deviceId, sanitized);
     });
 
     socket.on("disconnect", () => {
@@ -1106,5 +1130,11 @@ export function createApp(): DeckyApp {
     });
   });
 
-  return { app, httpServer, io, sm };
+  function restoreConsole(): void {
+    console.log = _origLog;
+    console.warn = _origWarn;
+    console.error = _origError;
+  }
+
+  return { app, httpServer, io, sm, restoreConsole };
 }

@@ -7,14 +7,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { bridge, BridgeUnreachableError, formatBridgeError } from "../bridge-client.js";
-
-function ok(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
-}
-
-function fail(msg: string) {
-  return { content: [{ type: "text" as const, text: `Error: ${msg}` }], isError: true as const };
-}
+import { ok, fail } from "./helpers.js";
 
 export function registerDebugTools(server: McpServer): void {
   // --- decky_get_debug_trace ---

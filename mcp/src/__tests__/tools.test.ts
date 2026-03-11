@@ -19,6 +19,7 @@ vi.mock("../bridge-client.js", () => ({
   bridge: mockBridge,
   BridgeUnreachableError: class BridgeUnreachableError extends Error {},
   formatBridgeError: (e: unknown) => String(e),
+  DEFAULT_BASE_URL: "http://localhost:9130",
 }));
 
 // ---- Tool registration helpers ----

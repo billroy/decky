@@ -5,17 +5,8 @@
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { bridge, BridgeUnreachableError, formatBridgeError } from "../bridge-client.js";
-
-const DEFAULT_BASE_URL = process.env.DECKY_BRIDGE_URL ?? "http://127.0.0.1:9130";
-
-function ok(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
-}
-
-function fail(msg: string) {
-  return { content: [{ type: "text" as const, text: `Error: ${msg}` }], isError: true as const };
-}
+import { bridge, BridgeUnreachableError, formatBridgeError, DEFAULT_BASE_URL } from "../bridge-client.js";
+import { ok, fail } from "./helpers.js";
 
 export function registerStatusTools(server: McpServer): void {
   server.registerTool(

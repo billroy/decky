@@ -16,14 +16,7 @@ import {
   validateTargetApp,
   slotSupportsIcon,
 } from "../vocabularies.js";
-
-function ok(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
-}
-
-function fail(msg: string) {
-  return { content: [{ type: "text" as const, text: `Error: ${msg}` }], isError: true as const };
-}
+import { ok, fail, resolveSlotIndex } from "./helpers.js";
 
 type MacroDef = Record<string, unknown>;
 type DeckyConfig = {
@@ -50,39 +43,6 @@ function resolveColors(
     ...(colors.text !== undefined ? { text: resolveColor(colors.text) } : {}),
     ...(colors.icon !== undefined ? { icon: resolveColor(colors.icon) } : {}),
   };
-}
-
-/**
- * Resolve slot index from {index} or {row, col} using deck info in status.
- * Returns null if resolution fails.
- */
-async function resolveSlotIndex(
-  input: { index?: number; row?: number; col?: number },
-): Promise<{ index: number } | { error: string }> {
-  if (typeof input.index === "number") {
-    return { index: input.index };
-  }
-  if (typeof input.row === "number" && typeof input.col === "number") {
-    try {
-      const status = await bridge.get<Record<string, unknown>>("/status");
-      const deck = status.deck as
-        | { cols: number; activeSlots: Array<{ row: number; col: number; index: number }> }
-        | null;
-      if (!deck) {
-        return {
-          error:
-            "No deck heartbeat data available. The Stream Deck plugin must be running and connected " +
-            "before row/col addressing can be used. Alternatively, provide an index.",
-        };
-      }
-      const cols = deck.cols;
-      const computed = input.row * cols + input.col;
-      return { index: computed };
-    } catch (e) {
-      return { error: formatBridgeError(e) };
-    }
-  }
-  return { error: "Must provide either 'index' or both 'row' and 'col'." };
 }
 
 const ColorSchema = z

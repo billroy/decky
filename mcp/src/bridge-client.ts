@@ -11,7 +11,7 @@ import { homedir } from "node:os";
 
 const DECKY_DIR = process.env.DECKY_HOME ?? join(homedir(), ".decky");
 const TOKEN_PATH = join(DECKY_DIR, "bridge-token");
-const DEFAULT_BASE_URL = process.env.DECKY_BRIDGE_URL ?? "http://127.0.0.1:9130";
+export const DEFAULT_BASE_URL = process.env.DECKY_BRIDGE_URL ?? "http://127.0.0.1:9130";
 
 export class BridgeError extends Error {
   constructor(

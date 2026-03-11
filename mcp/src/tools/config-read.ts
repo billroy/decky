@@ -16,14 +16,7 @@ import {
   TARGET_APPS,
   WIDGET_KINDS,
 } from "../vocabularies.js";
-
-function ok(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
-}
-
-function fail(msg: string) {
-  return { content: [{ type: "text" as const, text: `Error: ${msg}` }], isError: true as const };
-}
+import { ok, fail } from "./helpers.js";
 
 export function registerConfigReadTools(server: McpServer): void {
   server.registerTool(

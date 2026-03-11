@@ -6,14 +6,7 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import { bridge, formatBridgeError } from "../bridge-client.js";
-
-function ok(data: unknown) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
-}
-
-function fail(msg: string) {
-  return { content: [{ type: "text" as const, text: `Error: ${msg}` }], isError: true as const };
-}
+import { ok, fail } from "./helpers.js";
 
 type AlwaysAllowRule = { id: string; pattern: string; createdAt?: number };
 

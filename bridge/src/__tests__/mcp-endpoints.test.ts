@@ -55,6 +55,7 @@ afterAll(async () => {
   client?.disconnect();
   decky.io.close();
   await new Promise<void>((resolve) => decky.httpServer.close(() => resolve()));
+  decky.restoreConsole();
 });
 
 describe("GET /status", () => {
