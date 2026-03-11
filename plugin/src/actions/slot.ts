@@ -501,10 +501,12 @@ export class SlotAction extends SingletonAction {
     if (cfg?.theme) setTheme(cfg.theme);
     setThemeSeed(cfg?.themeSeed ?? 0);
     setDefaultColors(cfg?.colors ?? {});
+    const snap = bridgeRef?.getLastSnapshot();
     setWidgetRenderContext({
       connectionStatus: bridgeRef?.getConnectionStatus() ?? "disconnected",
-      state: bridgeRef?.getLastSnapshot()?.state,
-      timestamp: bridgeRef?.getLastSnapshot()?.timestamp,
+      state: snap?.state,
+      timestamp: snap?.timestamp,
+      rateLimit: snap?.rateLimit ?? null,
     });
     setTargetBadgeOptions({
       showTargetBadge: cfg?.showTargetBadge ?? false,
