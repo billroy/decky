@@ -182,7 +182,6 @@ export class SlotAction extends SingletonAction {
   private unsubConfig?: () => void;
   private unsubBridgeEvent?: () => void;
   private activePiActionId?: string;
-  private widgetInterval?: ReturnType<typeof setInterval>;
   private animationAbort: AbortController | null = null;
   private lastRenderedState: string = "";
   private lastApprovalSnapshot: StateSnapshot | null = null;
@@ -313,10 +312,6 @@ export class SlotAction extends SingletonAction {
       this.unsubState = undefined;
       this.unsubConfig = undefined;
       this.unsubBridgeEvent = undefined;
-      if (this.widgetInterval) {
-        clearInterval(this.widgetInterval);
-        this.widgetInterval = undefined;
-      }
     }
   }
 
@@ -334,7 +329,7 @@ export class SlotAction extends SingletonAction {
     const config = getSlotConfig(state, layoutSlotIndex, snapshot?.tool, macros, snapshot?.approval ?? null, snapshot?.question ?? null);
 
     if (config.action === "widget-refresh") {
-      await this.renderAll(bridgeRef.getConnectionStatus(), snapshot);
+      bridgeRef.sendAction("requestState");
       return;
     }
 
@@ -553,13 +548,11 @@ export class SlotAction extends SingletonAction {
       connectionStatus: bridgeRef?.getConnectionStatus() ?? "disconnected",
       state: snap?.state,
       timestamp: snap?.timestamp,
-      rateLimit: snap?.rateLimit ?? null,
     });
     setTargetBadgeOptions({
       showTargetBadge: cfg?.showTargetBadge ?? false,
       defaultTargetApp: cfg?.defaultTargetApp ?? "claude",
     });
-    this.syncWidgetInterval(cfg?.macros ?? []);
     if (!cfg?.macros?.length) return undefined;
     return cfg.macros.map((m) => ({
       label: m.label,
@@ -572,25 +565,6 @@ export class SlotAction extends SingletonAction {
       type: m.type,
       widget: m.widget,
     }));
-  }
-
-  private syncWidgetInterval(macros: Array<{ type?: string; widget?: { refreshMode?: string; intervalMinutes?: number } }>): void {
-    const minutes = macros
-      .filter((m) => m.type === "widget" && m.widget?.refreshMode === "interval")
-      .map((m) => {
-        const n = Number(m.widget?.intervalMinutes ?? 1);
-        return Number.isFinite(n) && n >= 1 && n <= 60 ? Math.floor(n) : 1;
-      });
-    const minMinutes = minutes.length ? Math.min(...minutes) : 0;
-    if (this.widgetInterval) {
-      clearInterval(this.widgetInterval);
-      this.widgetInterval = undefined;
-    }
-    if (minMinutes > 0) {
-      this.widgetInterval = setInterval(() => {
-        this.renderAll(bridgeRef?.getConnectionStatus() ?? "disconnected", bridgeRef?.getLastSnapshot() ?? null).catch(() => {});
-      }, minMinutes * 60_000);
-    }
   }
 
   private async renderAll(connStatus: ConnectionStatus, snapshot: StateSnapshot | null): Promise<void> {

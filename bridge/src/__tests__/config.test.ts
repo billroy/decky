@@ -164,7 +164,7 @@ describe("config endpoints", () => {
             label: "Bridge",
             text: "",
             type: "widget",
-            widget: { kind: "bridge-status", refreshMode: "interval", intervalMinutes: 5 },
+            widget: { kind: "bridge-status" },
           },
         ],
       }),
@@ -173,7 +173,6 @@ describe("config endpoints", () => {
     const data = await res.json();
     expect(data.config.macros[0].type).toBe("widget");
     expect(data.config.macros[0].widget.kind).toBe("bridge-status");
-    expect(data.config.macros[0].widget.intervalMinutes).toBe(5);
   });
 
   it("PUT /config persists slot utility macro types", async () => {
@@ -502,54 +501,6 @@ describe("config endpoints", () => {
     });
   });
 
-  describe("maxTokens5h config field", () => {
-    it("GET /config does not include maxTokens5h in default config", async () => {
-      const res = await fetch(`${baseUrl}/config`, {
-        headers: { "x-decky-token": token },
-      });
-      const data = await res.json();
-      // maxTokens5h is optional — not present in default config
-      expect(data.maxTokens5h).toBeUndefined();
-    });
-
-    it("PUT /config accepts maxTokens5h and returns it in config", async () => {
-      const res = await fetch(`${baseUrl}/config`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", "x-decky-token": token },
-        body: JSON.stringify({ maxTokens5h: 100000 }),
-      });
-      expect(res.status).toBe(200);
-      const data = await res.json();
-      expect(data.config.maxTokens5h).toBe(100000);
-    });
-
-    it("PUT /config rejects non-positive maxTokens5h", async () => {
-      const res = await fetch(`${baseUrl}/config`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", "x-decky-token": token },
-        body: JSON.stringify({ maxTokens5h: 0 }),
-      });
-      expect(res.status).toBe(400);
-    });
-
-    it("PUT /config rejects negative maxTokens5h", async () => {
-      const res = await fetch(`${baseUrl}/config`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", "x-decky-token": token },
-        body: JSON.stringify({ maxTokens5h: -1000 }),
-      });
-      expect(res.status).toBe(400);
-    });
-
-    it("PUT /config rejects non-numeric maxTokens5h", async () => {
-      const res = await fetch(`${baseUrl}/config`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", "x-decky-token": token },
-        body: JSON.stringify({ maxTokens5h: "100000" }),
-      });
-      expect(res.status).toBe(400);
-    });
-  });
 
   describe("/rules endpoints (alwaysAllowRules)", () => {
     async function getRules() {
@@ -622,28 +573,6 @@ describe("config endpoints", () => {
       await postRule("Write");
       const { data } = await getRules();
       expect(data.rules.some((r: { pattern: string }) => r.pattern === "Write")).toBe(true);
-    });
-  });
-
-  describe("rate-limit widget kind", () => {
-    it("PUT /config accepts rate-limit widget kind", async () => {
-      const res = await fetch(`${baseUrl}/config`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json", "x-decky-token": token },
-        body: JSON.stringify({
-          macros: [
-            {
-              label: "Tokens",
-              text: "",
-              type: "widget",
-              widget: { kind: "rate-limit", refreshMode: "onClick" },
-            },
-          ],
-        }),
-      });
-      expect(res.status).toBe(200);
-      const data = await res.json();
-      expect(data.config.macros[0].widget.kind).toBe("rate-limit");
     });
   });
 

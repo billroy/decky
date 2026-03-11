@@ -29,7 +29,6 @@ type DeckyConfig = {
   popUpApp?: boolean;
   enableApproveOnce?: boolean;
   enableDictation?: boolean;
-  maxTokens5h?: number;
   [key: string]: unknown;
 };
 
@@ -135,16 +134,6 @@ export function registerConfigWriteTools(server: McpServer): void {
           .enum(["bridge-status", "rate-limit"])
           .optional()
           .describe("Widget kind (widget type only)"),
-        widgetRefreshMode: z
-          .enum(["onClick", "interval"])
-          .optional()
-          .describe("Widget refresh mode"),
-        widgetIntervalMinutes: z
-          .number()
-          .int()
-          .min(1)
-          .optional()
-          .describe("Widget refresh interval in minutes"),
       }),
     },
     async (args) => {
@@ -187,11 +176,9 @@ export function registerConfigWriteTools(server: McpServer): void {
         if (args.submit !== undefined) slot.submit = args.submit;
         if (args.colors !== undefined) slot.colors = resolveColors(args.colors);
 
-        if (args.widgetKind !== undefined || args.widgetRefreshMode !== undefined || args.widgetIntervalMinutes !== undefined) {
+        if (args.widgetKind !== undefined) {
           const widget = (slot.widget as Record<string, unknown> | undefined) ?? {};
-          if (args.widgetKind !== undefined) widget.kind = args.widgetKind;
-          if (args.widgetRefreshMode !== undefined) widget.refreshMode = args.widgetRefreshMode;
-          if (args.widgetIntervalMinutes !== undefined) widget.intervalMinutes = args.widgetIntervalMinutes;
+          widget.kind = args.widgetKind;
           slot.widget = widget;
         }
 
@@ -225,9 +212,7 @@ export function registerConfigWriteTools(server: McpServer): void {
         targetApp: z.string().optional(),
         submit: z.boolean().optional(),
         colors: ColorSchema,
-        widgetKind: z.enum(["bridge-status", "rate-limit"]).optional(),
-        widgetRefreshMode: z.enum(["onClick", "interval"]).optional(),
-        widgetIntervalMinutes: z.number().int().min(1).optional(),
+        widgetKind: z.enum(["bridge-status"]).optional(),
       }),
     },
     async (args) => {
@@ -252,13 +237,7 @@ export function registerConfigWriteTools(server: McpServer): void {
           ...(args.submit !== undefined ? { submit: args.submit } : {}),
           ...(args.colors ? { colors: resolveColors(args.colors) } : {}),
           ...(args.widgetKind !== undefined
-            ? {
-                widget: {
-                  kind: args.widgetKind,
-                  ...(args.widgetRefreshMode ? { refreshMode: args.widgetRefreshMode } : {}),
-                  ...(args.widgetIntervalMinutes ? { intervalMinutes: args.widgetIntervalMinutes } : {}),
-                },
-              }
+            ? { widget: { kind: args.widgetKind } }
             : {}),
         };
 
@@ -410,12 +389,6 @@ export function registerConfigWriteTools(server: McpServer): void {
         popUpApp: z.boolean().optional().describe("Auto-surface Claude.app on approval"),
         enableApproveOnce: z.boolean().optional().describe("Enable approve-and-activate feature"),
         enableDictation: z.boolean().optional().describe("Enable voice input (macOS only)"),
-        maxTokens5h: z
-          .number()
-          .int()
-          .min(1000)
-          .optional()
-          .describe("5-hour token limit for rate-limit widget"),
       }),
     },
     async (args) => {
@@ -433,7 +406,6 @@ export function registerConfigWriteTools(server: McpServer): void {
           "popUpApp",
           "enableApproveOnce",
           "enableDictation",
-          "maxTokens5h",
         ];
         for (const field of fields) {
           if (args[field] !== undefined) {

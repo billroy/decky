@@ -17,12 +17,9 @@ type ApprovalTargetApp = "claude" | "codex";
 type LayoutDef = Record<number, SlotConfig>;
 type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";
 type ConnectionStatus = "connected" | "disconnected" | "connecting";
-type WidgetKind = "bridge-status" | "rate-limit";
-type WidgetRefreshMode = "onClick" | "interval";
+type WidgetKind = "bridge-status";
 interface WidgetDef {
   kind: WidgetKind;
-  refreshMode?: WidgetRefreshMode;
-  intervalMinutes?: number;
 }
 type Theme =
   | "light"
@@ -944,75 +941,21 @@ function macroSlot(index: number, macro: MacroInput): SlotConfig {
   };
 }
 
-interface RateLimitData {
-  totalTokens5h: number;
-  percentUsed: number | null;
-  resetAt: number | null;
-}
-
 let widgetRenderContext: {
   connectionStatus?: ConnectionStatus;
   state?: string;
   timestamp?: number;
-  rateLimit?: RateLimitData | null;
 } = {};
 
 export function setWidgetRenderContext(context: {
   connectionStatus?: ConnectionStatus;
   state?: string;
   timestamp?: number;
-  rateLimit?: RateLimitData | null;
 }): void {
   widgetRenderContext = { ...context };
 }
 
-/** Format token counts with k/M suffixes: 1234 → "1.2k", 1500000 → "1.5M". */
-function formatTokens(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1000) return `${(n / 1000).toFixed(1)}k`;
-  return String(n);
-}
-
-/** Pick gauge bar color based on % consumed. */
-function rateLimitColor(percent: number): string {
-  if (percent >= 85) return "#ef4444"; // red
-  if (percent >= 60) return "#f59e0b"; // amber
-  return "#22c55e";                    // green
-}
-
-export function rateLimitWidgetSVG(label: string, data: RateLimitData | null | undefined, now = Date.now()): string {
-  const tokLabel = data ? `~${formatTokens(data.totalTokens5h)} / 5h` : "No data";
-  const hasPercent = data !== null && data !== undefined && data.percentUsed !== null;
-  const percent = hasPercent ? Math.min(100, Math.max(0, data!.percentUsed!)) : 0;
-  const barW = Math.round((percent / 100) * 120);
-  const barColor = hasPercent ? rateLimitColor(percent) : "#475569";
-  const pctText = hasPercent ? `${percent.toFixed(0)}%` : "—";
-
-  let resetText = "";
-  if (data?.resetAt) {
-    const diffMs = data.resetAt - now;
-    if (diffMs > 0) {
-      const diffMin = Math.ceil(diffMs / 60_000);
-      resetText = diffMin >= 60
-        ? `~${Math.floor(diffMin / 60)}h reset`
-        : `~${diffMin}m reset`;
-    } else {
-      resetText = "resetting";
-    }
-  }
-
-  return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
-    <rect width="144" height="144" rx="16" fill="#1e293b" />
-    <text x="72" y="26" font-size="13" font-family="sans-serif" text-anchor="middle" fill="#94a3b8" opacity="0.9">${label || "Tokens"}</text>
-    <rect x="12" y="38" width="120" height="14" rx="7" fill="#334155" />
-    <rect x="12" y="38" width="${barW}" height="14" rx="7" fill="${barColor}" />
-    <text x="72" y="74" font-size="22" font-family="sans-serif" text-anchor="middle" fill="#e2e8f0">${pctText}</text>
-    <text x="72" y="96" font-size="13" font-family="sans-serif" text-anchor="middle" fill="#94a3b8">${tokLabel}</text>
-    <text x="72" y="116" font-size="12" font-family="sans-serif" text-anchor="middle" fill="#64748b" opacity="0.9">${resetText}</text>
-  </svg>`;
-}
-
-function widgetSVG(slotIndex: number, label: string, widget: WidgetDef): string {
+function widgetSVG(slotIndex: number, label: string, _widget: WidgetDef): string {
   const p = resolveThemePaletteForSlot(currentTheme, slotIndex);
   const bg = resolveColor(p.macroBg, defaultColors.bg, undefined);
   const fg = resolveColor(p.macroLabel, defaultColors.text, undefined);
@@ -1022,30 +965,22 @@ function widgetSVG(slotIndex: number, label: string, widget: WidgetDef): string 
   const stamp = widgetRenderContext.timestamp ?? Date.now();
   const ageSec = Math.max(0, Math.floor((Date.now() - stamp) / 1000));
   const ageText = ageSec < 60 ? `${ageSec}s` : `${Math.floor(ageSec / 60)}m`;
-  const mode = widget.refreshMode === "interval" ? `I:${widget.intervalMinutes ?? 1}m` : "Click";
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <rect width="144" height="144" rx="16" fill="${bg}" />
     <text x="72" y="28" font-size="16" font-family="sans-serif" text-anchor="middle" fill="${fg}" opacity="0.9">${label || "Widget"}</text>
     <text x="72" y="64" font-size="18" font-family="sans-serif" text-anchor="middle" fill="${fg}">${conn === "connected" ? "Bridge:OK" : "Bridge:OFF"}</text>
     <text x="72" y="90" font-size="16" font-family="sans-serif" text-anchor="middle" fill="${fg}">State:${state}</text>
-    <text x="72" y="116" font-size="14" font-family="sans-serif" text-anchor="middle" fill="${fg}" opacity="0.85">${mode} · ${ageText}</text>
+    <text x="72" y="116" font-size="14" font-family="sans-serif" text-anchor="middle" fill="${fg}" opacity="0.85">${ageText}</text>
   </svg>`;
 }
 
 function widgetSlot(index: number, macro: MacroInput): SlotConfig {
   const widget = macro.widget ?? { kind: "bridge-status" };
-  const svg = widget.kind === "rate-limit"
-    ? rateLimitWidgetSVG(macro.label, widgetRenderContext.rateLimit)
-    : widgetSVG(index, macro.label, widget);
   return {
-    svg,
+    svg: widgetSVG(index, macro.label, widget),
     title: macro.label,
     action: "widget-refresh",
-    data: {
-      widgetKind: widget.kind,
-      refreshMode: widget.refreshMode ?? "onClick",
-      intervalMinutes: widget.intervalMinutes ?? 1,
-    },
+    data: { widgetKind: widget.kind },
   };
 }
 

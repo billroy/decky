@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { buildFeedback, stateLabel, rateLimitColor } from "../actions/encoder.js";
+import { buildFeedback, stateLabel } from "../actions/encoder.js";
 import type { StateSnapshot } from "../bridge-client.js";
 
 function makeSnapshot(overrides: Partial<StateSnapshot> = {}): StateSnapshot {
@@ -18,7 +18,6 @@ function makeSnapshot(overrides: Partial<StateSnapshot> = {}): StateSnapshot {
     timestamp: Date.now(),
     approval: null,
     question: null,
-    rateLimit: null,
     ...overrides,
   };
 }
@@ -41,55 +40,10 @@ describe("stateLabel", () => {
   });
 });
 
-describe("rateLimitColor", () => {
-  it("returns green for < 60%", () => {
-    expect(rateLimitColor(0)).toBe("#22c55e");
-    expect(rateLimitColor(59)).toBe("#22c55e");
-  });
-
-  it("returns amber for 60–84%", () => {
-    expect(rateLimitColor(60)).toBe("#f59e0b");
-    expect(rateLimitColor(84)).toBe("#f59e0b");
-  });
-
-  it("returns red for >= 85%", () => {
-    expect(rateLimitColor(85)).toBe("#ef4444");
-    expect(rateLimitColor(100)).toBe("#ef4444");
-  });
-});
-
 describe("buildFeedback — idle state", () => {
-  it("shows Idle label and empty value when no rate limit data", () => {
+  it("shows Idle label and empty value", () => {
     const fb = buildFeedback(makeSnapshot(), 0);
     expect(fb.title).toBe("Idle");
-    expect(fb.value).toBe("");
-    expect(fb.indicator).toBe(0);
-  });
-
-  it("shows rate limit % when percentUsed is available", () => {
-    const snapshot = makeSnapshot({
-      rateLimit: { totalTokens5h: 50000, percentUsed: 72, resetAt: null },
-    });
-    const fb = buildFeedback(snapshot, 0);
-    expect(fb.title).toBe("Idle");
-    expect(fb.value).toBe("72% used");
-    expect(fb.indicator).toBe(72);
-  });
-
-  it("rounds fractional percentUsed", () => {
-    const snapshot = makeSnapshot({
-      rateLimit: { totalTokens5h: 50000, percentUsed: 72.6, resetAt: null },
-    });
-    const fb = buildFeedback(snapshot, 0);
-    expect(fb.value).toBe("73% used");
-    expect(fb.indicator).toBe(73);
-  });
-
-  it("shows empty value when percentUsed is null", () => {
-    const snapshot = makeSnapshot({
-      rateLimit: { totalTokens5h: 0, percentUsed: null, resetAt: null },
-    });
-    const fb = buildFeedback(snapshot, 0);
     expect(fb.value).toBe("");
     expect(fb.indicator).toBe(0);
   });

@@ -12,7 +12,6 @@ import {
   setDefaultColors,
   setTargetBadgeOptions,
   setWidgetRenderContext,
-  rateLimitWidgetSVG,
   type MacroInput,
   type QuestionUiMeta,
 } from "../layouts.js";
@@ -673,7 +672,7 @@ describe("layouts", () => {
           label: "Status",
           text: "",
           type: "widget",
-          widget: { kind: "bridge-status", refreshMode: "onClick" },
+          widget: { kind: "bridge-status" },
         },
       ];
       const config = getSlotConfig("idle", 0, null, macros);
@@ -682,28 +681,6 @@ describe("layouts", () => {
       expect(config.svg).toContain("State:idle");
     });
 
-    it("rate-limit widget renders token gauge instead of bridge status", () => {
-      setTheme("dark");
-      setWidgetRenderContext({
-        connectionStatus: "connected",
-        state: "idle",
-        timestamp: Date.now(),
-        rateLimit: { totalTokens5h: 50000, percentUsed: 42, resetAt: null },
-      });
-      const macros: MacroInput[] = [
-        {
-          label: "Tokens",
-          text: "",
-          type: "widget",
-          widget: { kind: "rate-limit", refreshMode: "onClick" },
-        },
-      ];
-      const config = getSlotConfig("idle", 0, null, macros);
-      expect(config.action).toBe("widget-refresh");
-      expect(config.svg).toContain("42%");
-      expect(config.svg).toContain("50.0k");
-      expect(config.svg).not.toContain("Bridge:OK");
-    });
   });
 
   describe("animation frame helpers", () => {
@@ -840,82 +817,4 @@ describe("layouts", () => {
     });
   });
 
-  describe("rateLimitWidgetSVG", () => {
-    it("returns 'No data' text when data is null", () => {
-      const svg = rateLimitWidgetSVG("Tokens", null);
-      expect(svg).toContain("No data");
-      expect(svg).toContain("—");
-    });
-
-    it("returns 'No data' text when data is undefined", () => {
-      const svg = rateLimitWidgetSVG("Tokens", undefined);
-      expect(svg).toContain("No data");
-    });
-
-    it("shows green bar color when percentUsed < 60", () => {
-      const svg = rateLimitWidgetSVG("Tokens", { totalTokens5h: 10000, percentUsed: 30, resetAt: null });
-      expect(svg).toContain("#22c55e");
-      expect(svg).toContain("30%");
-    });
-
-    it("shows amber bar color when percentUsed is between 60 and 85", () => {
-      const svg = rateLimitWidgetSVG("Tokens", { totalTokens5h: 82000, percentUsed: 82, resetAt: null });
-      expect(svg).toContain("#f59e0b");
-      expect(svg).toContain("82%");
-    });
-
-    it("shows red bar color when percentUsed >= 85", () => {
-      const svg = rateLimitWidgetSVG("Tokens", { totalTokens5h: 95000, percentUsed: 95, resetAt: null });
-      expect(svg).toContain("#ef4444");
-      expect(svg).toContain("95%");
-    });
-
-    it("formats token count with k suffix", () => {
-      const svg = rateLimitWidgetSVG("Rate", { totalTokens5h: 1500, percentUsed: null, resetAt: null });
-      expect(svg).toContain("~1.5k / 5h");
-    });
-
-    it("formats token count with M suffix", () => {
-      const svg = rateLimitWidgetSVG("Rate", { totalTokens5h: 1_500_000, percentUsed: null, resetAt: null });
-      expect(svg).toContain("~1.5M / 5h");
-    });
-
-    it("shows reset time in minutes when resetAt is within 1 hour", () => {
-      const now = Date.now();
-      const resetAt = now + 30 * 60_000; // 30 minutes from now
-      const svg = rateLimitWidgetSVG("Rate", { totalTokens5h: 1000, percentUsed: 10, resetAt }, now);
-      expect(svg).toContain("m reset");
-      expect(svg).toContain("~30m reset");
-    });
-
-    it("shows reset time in hours when resetAt is >= 1 hour away", () => {
-      const now = Date.now();
-      const resetAt = now + 2 * 60 * 60_000; // 2 hours from now
-      const svg = rateLimitWidgetSVG("Rate", { totalTokens5h: 1000, percentUsed: 10, resetAt }, now);
-      expect(svg).toContain("~2h reset");
-    });
-
-    it("shows 'resetting' when resetAt is in the past", () => {
-      const now = Date.now();
-      const svg = rateLimitWidgetSVG("Rate", { totalTokens5h: 1000, percentUsed: 10, resetAt: now - 1000 }, now);
-      expect(svg).toContain("resetting");
-    });
-
-    it("shows custom label in SVG", () => {
-      const svg = rateLimitWidgetSVG("My Limit", { totalTokens5h: 100, percentUsed: null, resetAt: null });
-      expect(svg).toContain("My Limit");
-    });
-
-    it("defaults label to 'Tokens' when label is empty string", () => {
-      const svg = rateLimitWidgetSVG("", { totalTokens5h: 100, percentUsed: null, resetAt: null });
-      expect(svg).toContain("Tokens");
-    });
-
-    it("renders as an SVG element with correct dimensions", () => {
-      const svg = rateLimitWidgetSVG("Rate", null);
-      expect(svg).toContain('width="144"');
-      expect(svg).toContain('height="144"');
-      expect(svg).toMatch(/^<svg /);
-    });
-  });
 });

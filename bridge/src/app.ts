@@ -43,7 +43,6 @@ import {
 } from "./macro-exec.js";
 import { getBridgeToken, readRequestToken, redactActionForLog } from "./security.js";
 import { ApprovalTraceStore } from "./approval-trace.js";
-import { RateLimitStore, type RateLimitSummary } from "./rate-limit.js";
 
 const MAX_MACRO_ACTION_TEXT = 2000;
 
@@ -155,7 +154,6 @@ interface StatePayload {
     text: string | null;
     options: QuestionOption[];
   } | null;
-  rateLimit: RateLimitSummary | null;
   uptimeSeconds: number;
   deck: SlotHeartbeatPayload | null;
 }
@@ -214,7 +212,6 @@ export function createApp(): DeckyApp {
   const bridgeToken = getBridgeToken();
   const approvalTrace = new ApprovalTraceStore();
   const approvalQueue: ApprovalQueueItem[] = [];
-  const rateLimitStore = new RateLimitStore();
   const startedAt = Date.now();
   const deckState = new Map<string, SlotHeartbeatPayload>();
   let lastHeartbeatDeviceId: string | null = null;
@@ -277,7 +274,6 @@ export function createApp(): DeckyApp {
 
   // Load config from ~/.decky/config.json
   loadConfig();
-  if (getConfig().maxTokens5h) rateLimitStore.setLimit(getConfig().maxTokens5h!);
 
   function currentApproval(): ApprovalQueueItem | null {
     return approvalQueue.length > 0 ? approvalQueue[0] : null;
@@ -339,7 +335,6 @@ export function createApp(): DeckyApp {
         }
         : null,
       question: pendingQuestion,
-      rateLimit: rateLimitStore.getSummary(),
       uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
       deck: deckEntry,
     };
@@ -444,19 +439,6 @@ export function createApp(): DeckyApp {
     ) {
       pendingQuestion = null;
       clearQuestionResponse();
-    }
-
-    // Extract token usage from Stop/SubagentStop payloads if present.
-    if (payload.event === "Stop" || payload.event === "SubagentStop") {
-      const usageRaw = (payload as Record<string, unknown>).usage;
-      if (usageRaw && typeof usageRaw === "object") {
-        const usage = usageRaw as Record<string, unknown>;
-        const inputTokens = typeof usage.input_tokens === "number" ? usage.input_tokens : 0;
-        const outputTokens = typeof usage.output_tokens === "number" ? usage.output_tokens : 0;
-        if (inputTokens > 0 || outputTokens > 0) {
-          rateLimitStore.addUsage(inputTokens, outputTokens);
-        }
-      }
     }
 
     let snapshot = sm.processEvent(payload);
@@ -633,7 +615,6 @@ export function createApp(): DeckyApp {
     const body = req.body as Record<string, unknown>;
     try {
       const config = saveConfig(body);
-      if (config.maxTokens5h) rateLimitStore.setLimit(config.maxTokens5h);
       io.emit("configUpdate", config);
       res.json({ ok: true, config });
     } catch (err) {
@@ -647,7 +628,6 @@ export function createApp(): DeckyApp {
 
   app.post("/config/reload", (_req, res) => {
     const config = loadConfig();
-    if (config.maxTokens5h) rateLimitStore.setLimit(config.maxTokens5h);
     io.emit("configUpdate", config);
     res.json({ ok: true, config });
   });
@@ -662,7 +642,6 @@ export function createApp(): DeckyApp {
     const index = typeof idxRaw === "number" ? Math.floor(idxRaw) : Number.NaN;
     try {
       const config = restoreConfigBackup(index);
-      if (config.maxTokens5h) rateLimitStore.setLimit(config.maxTokens5h);
       io.emit("configUpdate", config);
       res.json({ ok: true, config, restoredIndex: index, backups: listConfigBackups() });
     } catch (err) {
@@ -672,25 +651,6 @@ export function createApp(): DeckyApp {
       }
       res.status(500).json({ error: "Failed to restore config backup" });
     }
-  });
-
-  app.get("/rate-limit", (_req, res) => {
-    res.json(rateLimitStore.getSummary());
-  });
-
-  app.post("/rate-limit", (req, res) => {
-    const body = req.body as Record<string, unknown>;
-    const inputTokens = typeof body.inputTokens === "number" ? body.inputTokens : 0;
-    const outputTokens = typeof body.outputTokens === "number" ? body.outputTokens : 0;
-    if (inputTokens <= 0 && outputTokens <= 0) {
-      res.status(400).json({ error: "inputTokens or outputTokens must be > 0" });
-      return;
-    }
-    if (typeof body.limitTokens5h === "number" && body.limitTokens5h > 0) {
-      rateLimitStore.setLimit(body.limitTokens5h);
-    }
-    rateLimitStore.addUsage(inputTokens, outputTokens);
-    res.json({ ok: true, ...rateLimitStore.getSummary() });
   });
 
   app.get("/rules", (_req, res) => {
@@ -745,7 +705,7 @@ export function createApp(): DeckyApp {
     socket.emit("configUpdate", getConfig());
 
     const ACTION_THROTTLE_MS = 200;
-    const THROTTLE_EXEMPT = new Set(["approve", "deny", "cancel", "restart", "approveOnceInClaude", "selectOption", "alwaysAllow"]);
+    const THROTTLE_EXEMPT = new Set(["approve", "deny", "cancel", "restart", "approveOnceInClaude", "selectOption", "alwaysAllow", "requestState"]);
     let lastThrottledActionTime = 0;
 
     socket.on("action", (data: { action: string; [key: string]: unknown }) => {
@@ -1075,7 +1035,6 @@ export function createApp(): DeckyApp {
         if (Object.keys(update).length > 0) {
           try {
             const config = saveConfig(update);
-            if (config.maxTokens5h) rateLimitStore.setLimit(config.maxTokens5h);
             io.emit("configUpdate", config);
             socket.emit("updateConfigAck", {
               requestId: requestId ?? null,
@@ -1101,6 +1060,8 @@ export function createApp(): DeckyApp {
             socket.emit("error", { error: "Failed to save config" });
           }
         }
+      } else if (data.action === "requestState") {
+        socket.emit("stateChange", statePayload());
       } else {
         console.log(`[io] unknown action: ${data.action}`);
       }

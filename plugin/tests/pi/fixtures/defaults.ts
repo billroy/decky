@@ -7,8 +7,6 @@ export interface TestMacro {
   type?: "macro" | "widget";
   widget?: {
     kind?: "bridge-status";
-    refreshMode?: "onClick" | "interval";
-    intervalMinutes?: number;
   } | null;
   colors?: { bg?: string; text?: string; icon?: string };
 }

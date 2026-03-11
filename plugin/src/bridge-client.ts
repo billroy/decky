@@ -43,11 +43,6 @@ export interface StateSnapshot {
     text: string | null;
     options: QuestionOption[];
   } | null;
-  rateLimit?: {
-    totalTokens5h: number;
-    percentUsed: number | null;
-    resetAt: number | null;
-  } | null;
 }
 
 export interface ColorOverrides {
@@ -56,13 +51,10 @@ export interface ColorOverrides {
   icon?: string;
 }
 
-export type WidgetKind = "bridge-status" | "rate-limit";
-export type WidgetRefreshMode = "onClick" | "interval";
+export type WidgetKind = "bridge-status";
 
 export interface WidgetDef {
   kind: WidgetKind;
-  refreshMode?: WidgetRefreshMode;
-  intervalMinutes?: number;
 }
 
 export type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";

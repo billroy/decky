@@ -89,7 +89,6 @@ describe("status tools", () => {
       previousState: "idle",
       tool: "Bash",
       approval: null,
-      rateLimit: { percentUsed: 20, totalTokens5h: 50000, resetAt: Date.now() + 1000 },
       deck: null,
       uptimeSeconds: 100,
     });
@@ -99,17 +98,6 @@ describe("status tools", () => {
     expect(data.state).toBe("thinking");
   });
 
-  it("decky_get_rate_limit returns token usage", async () => {
-    mockBridge.get.mockResolvedValue({
-      totalTokens5h: 100000,
-      maxTokens5h: 500000,
-      percentUsed: 20,
-      resetAt: Date.now() + 5000,
-    });
-    const text = await callTool(client, "decky_get_rate_limit");
-    const data = parseJson(text) as Record<string, unknown>;
-    expect(data.totalTokens5h).toBe(100000);
-  });
 });
 
 describe("config read tools", () => {

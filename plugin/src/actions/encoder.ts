@@ -2,8 +2,8 @@
  * Encoder action — Stream Deck+ dial/touch-strip support.
  *
  * Each dial shows:
- *  - Touch strip: state label + pending count (awaiting-approval) or rate-limit % (idle)
- *  - Indicator bar: approval countdown progress or rate-limit fill
+ *  - Touch strip: state label + pending count (awaiting-approval)
+ *  - Indicator bar: approval countdown progress
  *  - Dial press: approve (when awaiting-approval)
  *  - Dial rotation: cycle queue preview (when pending > 1)
  */
@@ -42,17 +42,11 @@ function stateLabel(snapshot: StateSnapshot): string {
   }
 }
 
-function rateLimitColor(percent: number): string {
-  if (percent >= 85) return "#ef4444"; // red
-  if (percent >= 60) return "#f59e0b"; // amber
-  return "#22c55e"; // green
-}
-
 function buildFeedback(snapshot: StateSnapshot, previewIdx: number): FeedbackPayload {
   const approval = snapshot.approval;
   const pending = approval?.pending ?? 0;
 
-  // Value line: tool name + count, or rate-limit info, or empty
+  // Value line: tool name + count, or empty
   let value = "";
   let indicator = 0;
 
@@ -62,12 +56,6 @@ function buildFeedback(snapshot: StateSnapshot, previewIdx: number): FeedbackPay
     value = `${snapshot.tool ?? "Tool"}${countLabel}`;
     // Indicator: no timing data available — show half-filled as default
     indicator = 50;
-  } else {
-    const rl = snapshot.rateLimit;
-    if (rl && rl.percentUsed != null) {
-      value = `${Math.round(rl.percentUsed)}% used`;
-      indicator = Math.round(rl.percentUsed);
-    }
   }
 
   return {
@@ -145,4 +133,4 @@ export function initEncoderStateListener(client: BridgeClient): void {
 }
 
 // Re-export for testing
-export { buildFeedback, stateLabel, rateLimitColor };
+export { buildFeedback, stateLabel };

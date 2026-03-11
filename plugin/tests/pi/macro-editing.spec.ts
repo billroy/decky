@@ -92,12 +92,10 @@ test.describe("PI macro editing", () => {
     await expect(page.locator('#macro-list select[data-field="targetApp"][data-index="0"]')).toHaveValue("chatgpt");
   });
 
-  test("macro can be switched to bridge-status widget with interval refresh", async ({ piHarness }) => {
+  test("macro can be switched to bridge-status widget", async ({ piHarness }) => {
     const { page } = piHarness;
 
     await page.selectOption('#macro-list select[data-widget-type="0"]', "widget");
-    await page.selectOption('#macro-list select[data-widget-refresh="0"]', "interval");
-    await page.fill('#macro-list input[data-widget-interval="0"]', "7");
     await page.click("#btn-save");
 
     const update = await piHarness.waitForUpdateConfig();
@@ -105,14 +103,10 @@ test.describe("PI macro editing", () => {
     expect(macro0.type).toBe("widget");
     expect(macro0.widget).toEqual({
       kind: "bridge-status",
-      refreshMode: "interval",
-      intervalMinutes: 7,
     });
 
     await piHarness.ackWithSnapshot(update);
     await expect(page.locator('#macro-list select[data-widget-type="0"]')).toHaveValue("widget");
-    await expect(page.locator('#macro-list select[data-widget-refresh="0"]')).toHaveValue("interval");
-    await expect(page.locator('#macro-list input[data-widget-interval="0"]')).toHaveValue("7");
   });
 
   test("switching widget back to command clears widget payload", async ({ piHarness }) => {

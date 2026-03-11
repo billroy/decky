@@ -140,15 +140,12 @@ export const SLOT_TYPES = [
       "label",
       "colors",
       "widget.kind",
-      "widget.refreshMode",
-      "widget.intervalMinutes",
     ],
   },
 ];
 
 export const WIDGET_KINDS = [
   { kind: "bridge-status", description: "Shows bridge connection status (green/red dot)" },
-  { kind: "rate-limit", description: "Shows 5-hour token usage percentage" },
 ];
 
 export const TARGET_APPS = [

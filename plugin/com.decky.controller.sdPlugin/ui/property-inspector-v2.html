@@ -737,11 +737,6 @@
     ];
     const WIDGET_KINDS = [
       { value: "bridge-status", label: "Bridge status" },
-      { value: "rate-limit", label: "Rate limit" },
-    ];
-    const WIDGET_REFRESH_MODES = [
-      { value: "onClick", label: "On click" },
-      { value: "interval", label: "Interval" },
     ];
     const SLOT_ACTION_TYPES = {
       approve: true,
@@ -882,16 +877,8 @@
           }
           if (macroType === "widget") {
             o.type = "widget";
-            var refreshMode = m.widget && m.widget.refreshMode === "interval" ? "interval" : "onClick";
-            var intervalMinutes = 1;
-            if (m.widget && Number.isFinite(m.widget.intervalMinutes)) {
-              var n = Math.floor(Number(m.widget.intervalMinutes));
-              if (n >= 1 && n <= 60) intervalMinutes = n;
-            }
             o.widget = {
               kind: (m.widget && m.widget.kind) || "bridge-status",
-              refreshMode: refreshMode,
-              intervalMinutes: intervalMinutes,
             };
           } else if (macroType !== "macro") {
             o.type = macroType;
@@ -1309,10 +1296,6 @@
         const macro = macros[i];
         const macroType = macro.type === "widget" || SLOT_ACTION_TYPES[macro.type] ? macro.type : "macro";
         const widgetKind = (macro.widget && macro.widget.kind) ? macro.widget.kind : "bridge-status";
-        const widgetRefreshMode = macro.widget && macro.widget.refreshMode === "interval" ? "interval" : "onClick";
-        const widgetInterval = macro.widget && Number.isFinite(macro.widget.intervalMinutes)
-          ? Math.min(60, Math.max(1, Math.floor(Number(macro.widget.intervalMinutes))))
-          : 1;
         const item = document.createElement("div");
         item.className = "macro-item";
         item.draggable = showAllMacros;
@@ -1347,9 +1330,6 @@
         ).join("");
         const widgetKindOptions = WIDGET_KINDS.map(
           (opt) => '<option value="' + esc(opt.value) + '"' + (widgetKind === opt.value ? " selected" : "") + ">" + esc(opt.label) + "</option>"
-        ).join("");
-        const widgetRefreshOptions = WIDGET_REFRESH_MODES.map(
-          (opt) => '<option value="' + esc(opt.value) + '"' + (widgetRefreshMode === opt.value ? " selected" : "") + ">" + esc(opt.label) + "</option>"
         ).join("");
 
         item.innerHTML =
@@ -1393,16 +1373,6 @@
                   "<label>Widget</label>" +
                   '<select data-widget-kind="' + i + '">' + widgetKindOptions + "</select>" +
                 "</div>" +
-                '<div class="field-group">' +
-                  "<label>Refresh</label>" +
-                  '<select data-widget-refresh="' + i + '">' + widgetRefreshOptions + "</select>" +
-                "</div>" +
-                (widgetRefreshMode === "interval"
-                  ? '<div class="field-group">' +
-                      "<label>Interval (m)</label>" +
-                      '<input type="number" min="1" max="60" data-widget-interval="' + i + '" value="' + widgetInterval + '" />' +
-                    "</div>"
-                  : "") +
               "</div>"
             : (macroType === "macro"
               ? '<div class="field-row"><div class="field-group">' +
@@ -1475,8 +1445,6 @@
           if (nextType === "widget") {
             macros[idx].widget = {
               kind: "bridge-status",
-              refreshMode: "onClick",
-              intervalMinutes: 1,
             };
             macros[idx].text = "";
             macros[idx].targetApp = "";
@@ -1508,32 +1476,6 @@
           if (!Number.isFinite(idx) || !macros[idx]) return;
           if (!macros[idx].widget) macros[idx].widget = {};
           macros[idx].widget.kind = e.target.value || "bridge-status";
-          markDirty();
-        });
-      });
-      list.querySelectorAll("[data-widget-refresh]").forEach(function (el) {
-        el.addEventListener("change", function (e) {
-          var idx = parseInt(e.target.dataset.widgetRefresh, 10);
-          if (!Number.isFinite(idx) || !macros[idx]) return;
-          if (!macros[idx].widget) macros[idx].widget = {};
-          macros[idx].widget.refreshMode = e.target.value === "interval" ? "interval" : "onClick";
-          if (macros[idx].widget.refreshMode !== "interval") {
-            macros[idx].widget.intervalMinutes = 1;
-          }
-          renderMacros();
-          markDirty();
-        });
-      });
-      list.querySelectorAll("[data-widget-interval]").forEach(function (el) {
-        el.addEventListener("input", function (e) {
-          var idx = parseInt(e.target.dataset.widgetInterval, 10);
-          if (!Number.isFinite(idx) || !macros[idx]) return;
-          if (!macros[idx].widget) macros[idx].widget = {};
-          var n = Math.floor(Number(e.target.value));
-          if (!Number.isFinite(n)) n = 1;
-          n = Math.min(60, Math.max(1, n));
-          macros[idx].widget.intervalMinutes = n;
-          e.target.value = String(n);
           markDirty();
         });
       });
