@@ -291,6 +291,19 @@ export class BridgeClient {
     return this.lastConfig;
   }
 
+  /**
+   * Locally patch the cached config and fire config listeners.
+   * Used for instant preview (e.g. encoder theme cycling) without a bridge round-trip.
+   * The bridge is NOT notified — call sendAction("updateConfig", ...) separately to persist.
+   */
+  patchLocalConfig(patch: Partial<DeckyConfig>): void {
+    if (!this.lastConfig) return;
+    this.lastConfig = { ...this.lastConfig, ...patch };
+    for (const listener of this.configListeners) {
+      try { listener(this.lastConfig); } catch { /* listener errors must not crash the client */ }
+    }
+  }
+
   onConfigChange(listener: ConfigListener): () => void {
     this.configListeners.push(listener);
     return () => {

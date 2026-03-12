@@ -1,0 +1,491 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1100 820" width="1100" height="820" font-family="'SF Pro Display', 'Segoe UI', system-ui, sans-serif">
+  <defs>
+    <!-- Background gradient -->
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f1117"/>
+      <stop offset="100%" style="stop-color:#1a1d2e"/>
+    </linearGradient>
+
+    <!-- Zone fills -->
+    <linearGradient id="bridgeGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1e2a4a;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#162038;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="pluginGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a2e1a;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#112211;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="aiGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2a1e3a;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#1e1228;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="hwGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2a1e10;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#1e1408;stop-opacity:1"/>
+    </linearGradient>
+    <linearGradient id="mcpGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#111120;stop-opacity:1"/>
+    </linearGradient>
+
+    <!-- Box fills -->
+    <linearGradient id="boxBlue" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#2563eb"/>
+      <stop offset="100%" style="stop-color:#1d4ed8"/>
+    </linearGradient>
+    <linearGradient id="boxGreen" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#059669"/>
+      <stop offset="100%" style="stop-color:#047857"/>
+    </linearGradient>
+    <linearGradient id="boxPurple" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#7c3aed"/>
+      <stop offset="100%" style="stop-color:#6d28d9"/>
+    </linearGradient>
+    <linearGradient id="boxOrange" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#d97706"/>
+      <stop offset="100%" style="stop-color:#b45309"/>
+    </linearGradient>
+    <linearGradient id="boxSlate" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#334155"/>
+      <stop offset="100%" style="stop-color:#1e293b"/>
+    </linearGradient>
+    <linearGradient id="boxTeal" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#0891b2"/>
+      <stop offset="100%" style="stop-color:#0e7490"/>
+    </linearGradient>
+    <linearGradient id="boxPink" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#db2777"/>
+      <stop offset="100%" style="stop-color:#be185d"/>
+    </linearGradient>
+
+    <!-- State pill fills -->
+    <linearGradient id="stateIdle" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#1d4ed8"/>
+      <stop offset="100%" style="stop-color:#2563eb"/>
+    </linearGradient>
+
+    <!-- Arrow markers -->
+    <marker id="arrowBlue" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#60a5fa"/>
+    </marker>
+    <marker id="arrowGreen" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#34d399"/>
+    </marker>
+    <marker id="arrowOrange" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#fbbf24"/>
+    </marker>
+    <marker id="arrowPurple" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#a78bfa"/>
+    </marker>
+    <marker id="arrowTeal" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#67e8f9"/>
+    </marker>
+    <marker id="arrowGray" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L8,3 z" fill="#94a3b8"/>
+    </marker>
+
+    <!-- Drop shadow filter -->
+    <filter id="shadow" x="-5%" y="-5%" width="110%" height="110%">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000000" flood-opacity="0.4"/>
+    </filter>
+    <filter id="glowBlue" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#3b82f6" flood-opacity="0.5"/>
+    </filter>
+    <filter id="glowGreen" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="0" stdDeviation="6" flood-color="#10b981" flood-opacity="0.5"/>
+    </filter>
+
+    <!-- Subtle grid pattern -->
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 0 40" fill="none" stroke="#ffffff" stroke-width="0.3" stroke-opacity="0.04"/>
+    </pattern>
+  </defs>
+
+  <!-- ═══════════ BACKGROUND ═══════════ -->
+  <rect width="1100" height="820" fill="url(#bg)"/>
+  <rect width="1100" height="820" fill="url(#grid)"/>
+
+  <!-- Title bar -->
+  <rect x="0" y="0" width="1100" height="56" fill="#0d1020" opacity="0.9"/>
+  <text x="550" y="34" text-anchor="middle" font-size="20" font-weight="700" fill="#f8fafc" letter-spacing="2">DECKY — SYSTEM ARCHITECTURE</text>
+  <text x="550" y="50" text-anchor="middle" font-size="10" fill="#64748b" letter-spacing="3">STREAM DECK CONTROLLER FOR AI CODING ASSISTANTS</text>
+
+  <!-- ═══════════ ZONE: AI ASSISTANTS (left) ═══════════ -->
+  <rect x="24" y="72" width="200" height="420" rx="12" fill="url(#aiGrad)" stroke="#7c3aed" stroke-width="1.5" stroke-opacity="0.6" filter="url(#shadow)"/>
+  <rect x="24" y="72" width="200" height="28" rx="12" fill="#7c3aed" opacity="0.8"/>
+  <rect x="24" y="88" width="200" height="12" fill="#7c3aed" opacity="0.8"/>
+  <text x="124" y="91" text-anchor="middle" font-size="10" font-weight="700" fill="#fff" letter-spacing="1.5">AI ASSISTANTS</text>
+
+  <!-- Claude Code — primary -->
+  <rect x="40" y="114" width="168" height="60" rx="8" fill="url(#boxPurple)" filter="url(#glowBlue)" opacity="0.95"/>
+  <text x="124" y="138" text-anchor="middle" font-size="13" font-weight="700" fill="#fff">Claude Code</text>
+  <text x="124" y="154" text-anchor="middle" font-size="9" fill="#c4b5fd">Primary hook source</text>
+  <!-- Hook labels on Claude box -->
+  <rect x="48" y="162" width="60" height="8" rx="3" fill="#4c1d95" opacity="0.8"/>
+  <text x="78" y="169" text-anchor="middle" font-size="7" fill="#c4b5fd">PreToolUse</text>
+  <rect x="116" y="162" width="84" height="8" rx="3" fill="#4c1d95" opacity="0.8"/>
+  <text x="158" y="169" text-anchor="middle" font-size="7" fill="#c4b5fd">PostToolUse · Stop · Notification</text>
+
+  <!-- Divider + label -->
+  <line x1="40" y1="184" x2="208" y2="184" stroke="#7c3aed" stroke-width="0.5" stroke-opacity="0.4"/>
+  <text x="124" y="198" text-anchor="middle" font-size="9" fill="#94a3b8" letter-spacing="1">VIA CLAUDE HOOKS</text>
+
+  <!-- Other AI apps -->
+  <rect x="40" y="204" width="74" height="38" rx="6" fill="url(#boxSlate)" opacity="0.9"/>
+  <text x="77" y="220" text-anchor="middle" font-size="10" font-weight="600" fill="#e2e8f0">Codex CLI</text>
+  <text x="77" y="234" text-anchor="middle" font-size="8" fill="#94a3b8">Tested</text>
+
+  <rect x="122" y="204" width="86" height="38" rx="6" fill="url(#boxSlate)" opacity="0.7"/>
+  <text x="165" y="220" text-anchor="middle" font-size="10" font-weight="600" fill="#e2e8f0">ChatGPT</text>
+  <text x="165" y="234" text-anchor="middle" font-size="8" fill="#94a3b8">Cmd inject only</text>
+
+  <rect x="40" y="250" width="74" height="38" rx="6" fill="url(#boxSlate)" opacity="0.7"/>
+  <text x="77" y="266" text-anchor="middle" font-size="10" font-weight="600" fill="#e2e8f0">Cursor</text>
+  <text x="77" y="280" text-anchor="middle" font-size="8" fill="#94a3b8">Experimental</text>
+
+  <rect x="122" y="250" width="86" height="38" rx="6" fill="url(#boxSlate)" opacity="0.7"/>
+  <text x="165" y="266" text-anchor="middle" font-size="10" font-weight="600" fill="#e2e8f0">Windsurf</text>
+  <text x="165" y="280" text-anchor="middle" font-size="8" fill="#94a3b8">Cmd inject only</text>
+
+  <!-- Platform APIs section -->
+  <line x1="40" y1="300" x2="208" y2="300" stroke="#7c3aed" stroke-width="0.5" stroke-opacity="0.4"/>
+  <text x="124" y="314" text-anchor="middle" font-size="9" fill="#94a3b8" letter-spacing="1">PLATFORM AUTOMATION</text>
+
+  <rect x="40" y="320" width="50" height="50" rx="6" fill="#1e1030" stroke="#7c3aed" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="65" y="340" text-anchor="middle" font-size="8" font-weight="600" fill="#c4b5fd">macOS</text>
+  <text x="65" y="352" text-anchor="middle" font-size="7" fill="#6b21a8">Apple</text>
+  <text x="65" y="362" text-anchor="middle" font-size="7" fill="#6b21a8">Script</text>
+
+  <rect x="99" y="320" width="50" height="50" rx="6" fill="#1e1030" stroke="#7c3aed" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="124" y="340" text-anchor="middle" font-size="8" font-weight="600" fill="#c4b5fd">Windows</text>
+  <text x="124" y="352" text-anchor="middle" font-size="7" fill="#6b21a8">.NET</text>
+  <text x="124" y="362" text-anchor="middle" font-size="7" fill="#6b21a8">UIA</text>
+
+  <rect x="158" y="320" width="50" height="50" rx="6" fill="#1e1030" stroke="#7c3aed" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="183" y="340" text-anchor="middle" font-size="8" font-weight="600" fill="#c4b5fd">Linux</text>
+  <text x="183" y="352" text-anchor="middle" font-size="7" fill="#6b21a8">xdotool</text>
+  <text x="183" y="362" text-anchor="middle" font-size="7" fill="#6b21a8">xclip</text>
+
+  <!-- Clipboard inject -->
+  <rect x="40" y="380" width="168" height="28" rx="6" fill="#2d1c58" stroke="#7c3aed" stroke-width="1" stroke-opacity="0.4"/>
+  <text x="124" y="394" text-anchor="middle" font-size="9" fill="#c4b5fd">📋  Clipboard + Paste Injection</text>
+  <text x="124" y="404" text-anchor="middle" font-size="7" fill="#6b21a8">pbcopy · clip.exe · xclip</text>
+
+  <!-- Approval button click -->
+  <rect x="40" y="416" width="168" height="28" rx="6" fill="#2d1c58" stroke="#7c3aed" stroke-width="1" stroke-opacity="0.4"/>
+  <text x="124" y="430" text-anchor="middle" font-size="9" fill="#c4b5fd">🖱  Approval Button Click</text>
+  <text x="124" y="440" text-anchor="middle" font-size="7" fill="#6b21a8">Accessibility API · AppleScript · UIA</text>
+
+  <!-- ═══════════ ZONE: HOOK SCRIPTS (center-left) ═══════════ -->
+  <rect x="244" y="72" width="170" height="200" rx="12" fill="#161a26" stroke="#f59e0b" stroke-width="1.5" stroke-opacity="0.6" filter="url(#shadow)"/>
+  <rect x="244" y="72" width="170" height="28" rx="12" fill="#d97706" opacity="0.8"/>
+  <rect x="244" y="88" width="170" height="12" fill="#d97706" opacity="0.8"/>
+  <text x="329" y="91" text-anchor="middle" font-size="10" font-weight="700" fill="#fff" letter-spacing="1.5">HOOK SCRIPTS</text>
+  <text x="329" y="106" text-anchor="middle" font-size="8" fill="#fde68a">~/.decky/hooks/</text>
+
+  <!-- Hook script boxes -->
+  <rect x="258" y="116" width="142" height="26" rx="5" fill="#1c1408" stroke="#f59e0b" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="259" y="130" font-size="8" font-weight="700" fill="#fbbf24">▶</text>
+  <text x="274" y="130" font-size="9" font-weight="600" fill="#fde68a">pre-tool-use.sh/.js</text>
+  <text x="274" y="140" font-size="7" fill="#78716c">blocks on approval gate</text>
+
+  <rect x="258" y="150" width="142" height="26" rx="5" fill="#1c1408" stroke="#f59e0b" stroke-width="1" stroke-opacity="0.4"/>
+  <text x="259" y="164" font-size="8" font-weight="700" fill="#fbbf24">▶</text>
+  <text x="274" y="164" font-size="9" font-weight="600" fill="#fde68a">post-tool-use.sh/.js</text>
+  <text x="274" y="174" font-size="7" fill="#78716c">signals tool complete</text>
+
+  <rect x="258" y="184" width="142" height="26" rx="5" fill="#1c1408" stroke="#f59e0b" stroke-width="1" stroke-opacity="0.4"/>
+  <text x="259" y="198" font-size="8" font-weight="700" fill="#fbbf24">▶</text>
+  <text x="274" y="198" font-size="9" font-weight="600" fill="#fde68a">stop.sh/.js</text>
+  <text x="274" y="208" font-size="7" fill="#78716c">session ended / idle</text>
+
+  <rect x="258" y="218" width="142" height="26" rx="5" fill="#1c1408" stroke="#f59e0b" stroke-width="1" stroke-opacity="0.4"/>
+  <text x="259" y="232" font-size="8" font-weight="700" fill="#fbbf24">▶</text>
+  <text x="274" y="232" font-size="9" font-weight="600" fill="#fde68a">notification.sh/.js</text>
+  <text x="274" y="242" font-size="7" fill="#78716c">non-approval message</text>
+
+  <text x="329" y="262" text-anchor="middle" font-size="8" fill="#92400e">reads stdin → HTTP POST</text>
+
+  <!-- Approval gate file -->
+  <rect x="244" y="290" width="170" height="48" rx="8" fill="#1c1a08" stroke="#fbbf24" stroke-width="1.5" stroke-opacity="0.7"/>
+  <text x="329" y="308" text-anchor="middle" font-size="10" font-weight="600" fill="#fde68a">⚙  Approval Gate File</text>
+  <text x="329" y="322" text-anchor="middle" font-size="8" fill="#a16207">~/.decky/approval-gate</text>
+  <text x="329" y="332" text-anchor="middle" font-size="7" fill="#78716c">hook polls · bridge resolves</text>
+
+  <!-- Config file -->
+  <rect x="244" y="348" width="170" height="48" rx="8" fill="#0f1c1a" stroke="#34d399" stroke-width="1.5" stroke-opacity="0.6"/>
+  <text x="329" y="366" text-anchor="middle" font-size="10" font-weight="600" fill="#6ee7b7">📄  Config</text>
+  <text x="329" y="380" text-anchor="middle" font-size="8" fill="#047857">~/.decky/config.json</text>
+  <text x="329" y="390" text-anchor="middle" font-size="7" fill="#78716c">slots · macros · theme · auth token</text>
+
+  <!-- Bridge token -->
+  <rect x="244" y="406" width="170" height="36" rx="8" fill="#0f1c1a" stroke="#34d399" stroke-width="1" stroke-opacity="0.4"/>
+  <text x="329" y="420" text-anchor="middle" font-size="9" font-weight="600" fill="#6ee7b7">🔑  Bridge Token</text>
+  <text x="329" y="434" text-anchor="middle" font-size="7" fill="#78716c">~/.decky/bridge-token · Bearer auth</text>
+
+  <!-- ═══════════ ZONE: BRIDGE SERVER (center) ═══════════ -->
+  <rect x="434" y="72" width="270" height="488" rx="12" fill="url(#bridgeGrad)" stroke="#3b82f6" stroke-width="2" stroke-opacity="0.8" filter="url(#glowBlue)"/>
+  <rect x="434" y="72" width="270" height="28" rx="12" fill="#1d4ed8" opacity="0.9"/>
+  <rect x="434" y="88" width="270" height="12" fill="#1d4ed8" opacity="0.9"/>
+  <text x="569" y="91" text-anchor="middle" font-size="10" font-weight="700" fill="#fff" letter-spacing="1.5">DECKY BRIDGE SERVER</text>
+  <text x="569" y="106" text-anchor="middle" font-size="8" fill="#93c5fd">Node.js · Express · Socket.io · :9130</text>
+
+  <!-- REST API endpoints -->
+  <rect x="448" y="116" width="242" height="116" rx="8" fill="#0f1e3a" stroke="#3b82f6" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="569" y="132" text-anchor="middle" font-size="9" font-weight="700" fill="#93c5fd" letter-spacing="1">REST API ENDPOINTS</text>
+
+  <!-- endpoint rows -->
+  <rect x="458" y="138" width="30" height="12" rx="3" fill="#065f46"/>
+  <text x="473" y="148" text-anchor="middle" font-size="7" font-weight="700" fill="#6ee7b7">POST</text>
+  <text x="498" y="148" font-size="8" fill="#bfdbfe">/hook</text>
+  <text x="600" y="148" font-size="7" fill="#64748b">receive hook events</text>
+
+  <rect x="458" y="155" width="26" height="12" rx="3" fill="#1e3a5f"/>
+  <text x="471" y="165" text-anchor="middle" font-size="7" font-weight="700" fill="#93c5fd">GET</text>
+  <text x="494" y="165" font-size="8" fill="#bfdbfe">/status</text>
+  <text x="600" y="165" font-size="7" fill="#64748b">current state</text>
+
+  <rect x="458" y="172" width="26" height="12" rx="3" fill="#1e3a5f"/>
+  <text x="471" y="182" text-anchor="middle" font-size="7" font-weight="700" fill="#93c5fd">GET</text>
+  <text x="494" y="182" font-size="8" fill="#bfdbfe">/config</text>
+  <text x="600" y="182" font-size="7" fill="#64748b">read configuration</text>
+
+  <rect x="458" y="189" width="26" height="12" rx="3" fill="#292524"/>
+  <text x="471" y="199" text-anchor="middle" font-size="7" font-weight="700" fill="#fcd34d">PUT</text>
+  <text x="494" y="199" font-size="8" fill="#bfdbfe">/config</text>
+  <text x="600" y="199" font-size="7" fill="#64748b">write (if !readOnly)</text>
+
+  <rect x="458" y="206" width="26" height="12" rx="3" fill="#1e3a5f"/>
+  <text x="471" y="216" text-anchor="middle" font-size="7" font-weight="700" fill="#93c5fd">GET</text>
+  <text x="494" y="216" font-size="8" fill="#bfdbfe">/logs</text>
+  <text x="600" y="216" font-size="7" fill="#64748b">recent log lines</text>
+
+  <!-- State machine -->
+  <rect x="448" y="242" width="242" height="130" rx="8" fill="#0f1e3a" stroke="#3b82f6" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="569" y="258" text-anchor="middle" font-size="9" font-weight="700" fill="#93c5fd" letter-spacing="1">STATE MACHINE</text>
+
+  <!-- States as colored pills in a flow -->
+  <rect x="458" y="265" width="66" height="18" rx="9" fill="#1d4ed8"/>
+  <text x="491" y="278" text-anchor="middle" font-size="8" font-weight="600" fill="#fff">idle</text>
+
+  <rect x="534" y="265" width="78" height="18" rx="9" fill="#0891b2"/>
+  <text x="573" y="278" text-anchor="middle" font-size="8" font-weight="600" fill="#fff">thinking</text>
+
+  <rect x="622" y="265" width="60" height="18" rx="9" fill="#d97706"/>
+  <text x="652" y="278" text-anchor="middle" font-size="8" font-weight="600" fill="#fff">stopped</text>
+
+  <rect x="458" y="292" width="132" height="18" rx="9" fill="#dc2626"/>
+  <text x="524" y="305" text-anchor="middle" font-size="8" font-weight="600" fill="#fff">awaiting-approval</text>
+
+  <rect x="600" y="292" width="82" height="18" rx="9" fill="#059669"/>
+  <text x="641" y="305" text-anchor="middle" font-size="8" font-weight="600" fill="#fff">tool-executing</text>
+
+  <!-- State flow arrows (simple) -->
+  <path d="M524 265 L574 265" stroke="#60a5fa" stroke-width="1" fill="none" marker-end="url(#arrowBlue)"/>
+  <path d="M491 283 L491 292" stroke="#60a5fa" stroke-width="1" fill="none" marker-end="url(#arrowBlue)"/>
+  <path d="M524 310 L600 305" stroke="#34d399" stroke-width="1" fill="none" marker-end="url(#arrowGreen)"/>
+  <path d="M641 292 L641 265" stroke="#34d399" stroke-width="1" fill="none" stroke-dasharray="3,2" marker-end="url(#arrowGreen)"/>
+
+  <text x="569" y="334" text-anchor="middle" font-size="8" fill="#64748b">user send → hook events → approval</text>
+  <text x="569" y="346" text-anchor="middle" font-size="8" fill="#64748b">response → tool complete → idle</text>
+  <text x="569" y="358" text-anchor="middle" font-size="8" fill="#64748b">any state → stopped on interrupt</text>
+
+  <!-- Security layer -->
+  <rect x="448" y="382" width="242" height="54" rx="8" fill="#1a0f0f" stroke="#ef4444" stroke-width="1" stroke-opacity="0.6"/>
+  <text x="569" y="398" text-anchor="middle" font-size="9" font-weight="700" fill="#fca5a5" letter-spacing="1">SECURITY</text>
+  <text x="569" y="412" text-anchor="middle" font-size="8" fill="#94a3b8">Bearer token auth · rate limiting (200/min hook)</text>
+  <text x="569" y="424" text-anchor="middle" font-size="8" fill="#94a3b8">readOnly mode · atomic config writes · 10 backups</text>
+
+  <!-- Socket.io emitter -->
+  <rect x="448" y="446" width="242" height="46" rx="8" fill="#0f1e3a" stroke="#818cf8" stroke-width="1" stroke-opacity="0.6"/>
+  <text x="569" y="462" text-anchor="middle" font-size="9" font-weight="700" fill="#a5b4fc" letter-spacing="1">SOCKET.IO SERVER</text>
+  <text x="569" y="476" text-anchor="middle" font-size="8" fill="#94a3b8">emits: stateChange · configUpdate · logs</text>
+  <text x="569" y="487" text-anchor="middle" font-size="8" fill="#94a3b8">receives: action (approve · deny · cancel · macro)</text>
+
+  <!-- Macro executor -->
+  <rect x="448" y="502" width="242" height="46" rx="8" fill="#0f1e3a" stroke="#818cf8" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="569" y="518" text-anchor="middle" font-size="9" font-weight="700" fill="#a5b4fc" letter-spacing="1">MACRO EXECUTOR</text>
+  <text x="569" y="532" text-anchor="middle" font-size="8" fill="#94a3b8">macro-exec-darwin/win32/linux.ts</text>
+  <text x="569" y="543" text-anchor="middle" font-size="8" fill="#94a3b8">activate app → paste text → optional submit</text>
+
+  <!-- ═══════════ ZONE: MCP SERVER (right of bridge, top) ═══════════ -->
+  <rect x="724" y="72" width="180" height="196" rx="12" fill="url(#mcpGrad)" stroke="#818cf8" stroke-width="1.5" stroke-opacity="0.6" filter="url(#shadow)"/>
+  <rect x="724" y="72" width="180" height="28" rx="12" fill="#4f46e5" opacity="0.8"/>
+  <rect x="724" y="88" width="180" height="12" fill="#4f46e5" opacity="0.8"/>
+  <text x="814" y="91" text-anchor="middle" font-size="10" font-weight="700" fill="#fff" letter-spacing="1.5">MCP SERVER</text>
+  <text x="814" y="106" text-anchor="middle" font-size="8" fill="#c7d2fe">@decky/mcp · optional</text>
+
+  <text x="814" y="124" text-anchor="middle" font-size="8" fill="#6366f1" letter-spacing="1">READ-ONLY TOOLS (default)</text>
+
+  <rect x="736" y="130" width="156" height="14" rx="4" fill="#1e1b4b" opacity="0.8"/>
+  <text x="814" y="141" text-anchor="middle" font-size="8" fill="#a5b4fc">get_status · get_config · get_logs</text>
+
+  <text x="814" y="162" text-anchor="middle" font-size="8" fill="#6366f1" letter-spacing="1">WRITE TOOLS (opt-in)</text>
+  <text x="814" y="175" text-anchor="middle" font-size="8" fill="#c7d2fe">DECKY_READONLY=0</text>
+
+  <rect x="736" y="180" width="156" height="14" rx="4" fill="#1e1b4b" opacity="0.8"/>
+  <text x="814" y="191" text-anchor="middle" font-size="8" fill="#a5b4fc">set_config · set_theme · update_slot</text>
+
+  <text x="814" y="210" text-anchor="middle" font-size="8" fill="#818cf8">Natural language control</text>
+  <text x="814" y="222" text-anchor="middle" font-size="8" fill="#64748b">"Set theme to Dracula"</text>
+  <text x="814" y="234" text-anchor="middle" font-size="8" fill="#64748b">"What's in the approval queue?"</text>
+  <text x="814" y="250" text-anchor="middle" font-size="8" fill="#64748b">connects to bridge REST API</text>
+
+  <!-- ═══════════ ZONE: STREAM DECK PLUGIN (right) ═══════════ -->
+  <rect x="724" y="282" width="180" height="278" rx="12" fill="url(#pluginGrad)" stroke="#10b981" stroke-width="2" stroke-opacity="0.8" filter="url(#glowGreen)"/>
+  <rect x="724" y="282" width="180" height="28" rx="12" fill="#059669" opacity="0.9"/>
+  <rect x="724" y="298" width="180" height="12" fill="#059669" opacity="0.9"/>
+  <text x="814" y="301" text-anchor="middle" font-size="10" font-weight="700" fill="#fff" letter-spacing="1.5">STREAM DECK PLUGIN</text>
+  <text x="814" y="316" text-anchor="middle" font-size="8" fill="#6ee7b7">TypeScript · @elgato/streamdeck SDK</text>
+
+  <text x="814" y="336" text-anchor="middle" font-size="9" font-weight="700" fill="#34d399" letter-spacing="1">SLOT TYPES</text>
+
+  <!-- Slot type badges -->
+  <rect x="734" y="342" width="60" height="18" rx="9" fill="#064e3b"/>
+  <text x="764" y="355" text-anchor="middle" font-size="8" fill="#6ee7b7">Approve</text>
+
+  <rect x="802" y="342" width="40" height="18" rx="9" fill="#7f1d1d"/>
+  <text x="822" y="355" text-anchor="middle" font-size="8" fill="#fca5a5">Deny</text>
+
+  <rect x="850" y="342" width="44" height="18" rx="9" fill="#78350f"/>
+  <text x="872" y="355" text-anchor="middle" font-size="8" fill="#fde68a">Stop</text>
+
+  <rect x="734" y="366" width="64" height="18" rx="9" fill="#1e3a5f"/>
+  <text x="766" y="379" text-anchor="middle" font-size="8" fill="#93c5fd">Command</text>
+
+  <rect x="806" y="366" width="56" height="18" rx="9" fill="#064e3b"/>
+  <text x="834" y="379" text-anchor="middle" font-size="8" fill="#6ee7b7">Restart</text>
+
+  <rect x="734" y="390" width="60" height="18" rx="9" fill="#1e3a5f"/>
+  <text x="764" y="403" text-anchor="middle" font-size="8" fill="#93c5fd">Widget</text>
+
+  <rect x="802" y="390" width="92" height="18" rx="9" fill="#4c1d95"/>
+  <text x="848" y="403" text-anchor="middle" font-size="8" fill="#c4b5fd">Approve Once</text>
+
+  <!-- Property Inspector -->
+  <rect x="734" y="416" width="160" height="54" rx="7" fill="#0a1f0f" stroke="#10b981" stroke-width="1" stroke-opacity="0.5"/>
+  <text x="814" y="432" text-anchor="middle" font-size="9" font-weight="700" fill="#34d399">Property Inspector</text>
+  <text x="814" y="446" text-anchor="middle" font-size="8" fill="#94a3b8">HTML · in Stream Deck app</text>
+  <text x="814" y="458" text-anchor="middle" font-size="8" fill="#94a3b8">slot config · labels · colors · icons</text>
+  <text x="814" y="467" text-anchor="middle" font-size="7" fill="#065f46">GET/PUT /config via bridge REST</text>
+
+  <!-- Dynamic key rendering -->
+  <rect x="734" y="478" width="160" height="38" rx="7" fill="#0a1f0f" stroke="#10b981" stroke-width="1" stroke-opacity="0.4"/>
+  <text x="814" y="494" text-anchor="middle" font-size="9" font-weight="700" fill="#34d399">Dynamic Key Rendering</text>
+  <text x="814" y="507" text-anchor="middle" font-size="8" fill="#94a3b8">canvas · icons · labels · color themes</text>
+
+  <!-- Themes -->
+  <rect x="734" y="524" width="160" height="26" rx="6" fill="#0a1f0f" stroke="#10b981" stroke-width="1" stroke-opacity="0.3"/>
+  <text x="814" y="541" text-anchor="middle" font-size="8" fill="#6ee7b7">13 themes · Dracula · Nord · Monokai …</text>
+
+  <!-- ═══════════ ZONE: STREAM DECK HARDWARE (bottom center) ═══════════ -->
+  <rect x="310" y="580" width="490" height="140" rx="12" fill="url(#hwGrad)" stroke="#f59e0b" stroke-width="2" stroke-opacity="0.7" filter="url(#shadow)"/>
+  <rect x="310" y="580" width="490" height="28" rx="12" fill="#b45309" opacity="0.9"/>
+  <rect x="310" y="596" width="490" height="12" fill="#b45309" opacity="0.9"/>
+  <text x="555" y="599" text-anchor="middle" font-size="10" font-weight="700" fill="#fff" letter-spacing="1.5">ELGATO STREAM DECK HARDWARE</text>
+  <text x="555" y="614" text-anchor="middle" font-size="8" fill="#fde68a">HID over USB · any model · dynamic LCD key grid</text>
+
+  <!-- Key grid representation -->
+  <g transform="translate(340, 620)">
+    <!-- Row 1 -->
+    <rect x="0"   y="0" width="40" height="38" rx="5" fill="#dc2626" stroke="#fca5a5" stroke-width="1"/>
+    <text x="20" y="16" text-anchor="middle" font-size="9" fill="#fff">✓</text>
+    <text x="20" y="30" text-anchor="middle" font-size="7" fill="#fca5a5">Approve</text>
+
+    <rect x="46"  y="0" width="40" height="38" rx="5" fill="#7f1d1d" stroke="#fca5a5" stroke-width="1"/>
+    <text x="66" y="16" text-anchor="middle" font-size="9" fill="#fff">✗</text>
+    <text x="66" y="30" text-anchor="middle" font-size="7" fill="#fca5a5">Deny</text>
+
+    <rect x="92"  y="0" width="40" height="38" rx="5" fill="#78350f" stroke="#fde68a" stroke-width="1"/>
+    <text x="112" y="16" text-anchor="middle" font-size="9" fill="#fff">⏹</text>
+    <text x="112" y="30" text-anchor="middle" font-size="7" fill="#fde68a">Stop</text>
+
+    <rect x="138" y="0" width="40" height="38" rx="5" fill="#1d4ed8" stroke="#93c5fd" stroke-width="1"/>
+    <text x="158" y="16" text-anchor="middle" font-size="8" fill="#fff">→</text>
+    <text x="158" y="30" text-anchor="middle" font-size="7" fill="#93c5fd">Commit</text>
+
+    <rect x="184" y="0" width="40" height="38" rx="5" fill="#1d4ed8" stroke="#93c5fd" stroke-width="1"/>
+    <text x="204" y="16" text-anchor="middle" font-size="8" fill="#fff">▷</text>
+    <text x="204" y="30" text-anchor="middle" font-size="7" fill="#93c5fd">Continue</text>
+
+    <rect x="230" y="0" width="40" height="38" rx="5" fill="#064e3b" stroke="#6ee7b7" stroke-width="1"/>
+    <text x="250" y="16" text-anchor="middle" font-size="8" fill="#fff">●</text>
+    <text x="250" y="30" text-anchor="middle" font-size="7" fill="#6ee7b7">Status</text>
+
+    <!-- Row 2 -->
+    <rect x="276" y="0" width="40" height="38" rx="5" fill="#1d4ed8" stroke="#93c5fd" stroke-width="1"/>
+    <text x="296" y="16" text-anchor="middle" font-size="8" fill="#fff">?</text>
+    <text x="296" y="30" text-anchor="middle" font-size="7" fill="#93c5fd">Summarize</text>
+
+    <rect x="322" y="0" width="40" height="38" rx="5" fill="#4c1d95" stroke="#c4b5fd" stroke-width="1"/>
+    <text x="342" y="16" text-anchor="middle" font-size="8" fill="#fff">✓¹</text>
+    <text x="342" y="30" text-anchor="middle" font-size="7" fill="#c4b5fd">Apv Once</text>
+
+    <rect x="368" y="0" width="40" height="38" rx="5" fill="#374151" stroke="#9ca3af" stroke-width="1"/>
+    <text x="388" y="16" text-anchor="middle" font-size="8" fill="#fff">↺</text>
+    <text x="388" y="30" text-anchor="middle" font-size="7" fill="#9ca3af">Restart</text>
+  </g>
+
+  <!-- ═══════════ ARROWS / DATA FLOWS ═══════════ -->
+
+  <!-- 1. Claude Code → Hook Scripts (hooks fire) -->
+  <path d="M224 155 L244 155" stroke="#a78bfa" stroke-width="2" fill="none" marker-end="url(#arrowPurple)"/>
+  <text x="234" y="150" text-anchor="middle" font-size="7" fill="#a78bfa">hook</text>
+
+  <!-- 2. Hook Scripts → Bridge (HTTP POST) -->
+  <path d="M414 180 L434 180" stroke="#fbbf24" stroke-width="2" fill="none" marker-end="url(#arrowOrange)"/>
+  <text x="424" y="174" text-anchor="middle" font-size="7" fill="#fbbf24">POST</text>
+
+  <!-- 3. Bridge ↔ Hook (approval gate file) -->
+  <path d="M434 316 L414 316" stroke="#fbbf24" stroke-width="1.5" fill="none" stroke-dasharray="4,2" marker-end="url(#arrowOrange)"/>
+  <text x="424" y="310" text-anchor="middle" font-size="7" fill="#fbbf24">gate</text>
+
+  <!-- 4. Bridge → Plugin (Socket.io stateChange) -->
+  <path d="M704 486 L724 486" stroke="#60a5fa" stroke-width="2" fill="none" marker-end="url(#arrowBlue)"/>
+  <path d="M724 420 L704 420" stroke="#34d399" stroke-width="2" fill="none" stroke-dasharray="4,2" marker-end="url(#arrowGreen)"/>
+  <text x="714" y="481" text-anchor="middle" font-size="7" fill="#60a5fa">stateChange</text>
+  <text x="714" y="414" text-anchor="middle" font-size="7" fill="#34d399">action</text>
+
+  <!-- 5. Bridge → MCP (REST) -->
+  <path d="M704 165 L724 165" stroke="#818cf8" stroke-width="1.5" fill="none" stroke-dasharray="4,2" marker-end="url(#arrowPurple)"/>
+  <text x="714" y="160" text-anchor="middle" font-size="7" fill="#818cf8">REST</text>
+
+  <!-- 6. Plugin → Hardware (HID) -->
+  <path d="M814 560 L814 580" stroke="#34d399" stroke-width="2" fill="none" marker-end="url(#arrowGreen)"/>
+  <path d="M756 580 L756 560" stroke="#fbbf24" stroke-width="2" fill="none" stroke-dasharray="4,2" marker-end="url(#arrowOrange)"/>
+  <text x="840" y="572" text-anchor="middle" font-size="7" fill="#34d399">render keys</text>
+  <text x="732" y="572" text-anchor="middle" font-size="7" fill="#fbbf24">key press</text>
+
+  <!-- 7. Bridge → Platform APIs (macro exec) -->
+  <path d="M449 530 L224 410" stroke="#c4b5fd" stroke-width="1.5" fill="none" stroke-dasharray="4,2" marker-end="url(#arrowPurple)"/>
+  <text x="310" y="465" text-anchor="middle" font-size="7" fill="#c4b5fd" transform="rotate(-22, 310, 465)">inject text / click button</text>
+
+  <!-- ═══════════ LEGEND (bottom) ═══════════ -->
+  <rect x="24" y="730" width="680" height="68" rx="8" fill="#0d1020" stroke="#334155" stroke-width="1" opacity="0.9"/>
+  <text x="44" y="748" font-size="9" font-weight="700" fill="#94a3b8" letter-spacing="1">DATA FLOWS</text>
+
+  <line x1="44" y1="758" x2="74" y2="758" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrowOrange)"/>
+  <text x="80" y="762" font-size="8" fill="#94a3b8">HTTP POST (hook events)</text>
+
+  <line x1="44" y1="774" x2="74" y2="774" stroke="#60a5fa" stroke-width="2" marker-end="url(#arrowBlue)"/>
+  <text x="80" y="778" font-size="8" fill="#94a3b8">Socket.io (real-time state)</text>
+
+  <line x1="200" y1="758" x2="230" y2="758" stroke="#34d399" stroke-width="2" stroke-dasharray="4,2" marker-end="url(#arrowGreen)"/>
+  <text x="236" y="762" font-size="8" fill="#94a3b8">Key press / action response</text>
+
+  <line x1="200" y1="774" x2="230" y2="774" stroke="#818cf8" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arrowPurple)"/>
+  <text x="236" y="778" font-size="8" fill="#94a3b8">REST API (MCP / PI)</text>
+
+  <line x1="380" y1="758" x2="410" y2="758" stroke="#a78bfa" stroke-width="2" marker-end="url(#arrowPurple)"/>
+  <text x="416" y="762" font-size="8" fill="#94a3b8">Claude Code hooks fire</text>
+
+  <line x1="380" y1="774" x2="410" y2="774" stroke="#c4b5fd" stroke-width="1.5" stroke-dasharray="4,2" marker-end="url(#arrowPurple)"/>
+  <text x="416" y="778" font-size="8" fill="#94a3b8">Platform automation (inject / click)</text>
+
+  <!-- Install path note -->
+  <rect x="714" y="730" width="362" height="68" rx="8" fill="#0d1020" stroke="#334155" stroke-width="1" opacity="0.9"/>
+  <text x="895" y="748" text-anchor="middle" font-size="9" font-weight="700" fill="#94a3b8" letter-spacing="1">INSTALLATION</text>
+  <text x="895" y="764" text-anchor="middle" font-size="8" fill="#64748b">npx @decky/setup  ·  node setup.js</text>
+  <text x="895" y="778" text-anchor="middle" font-size="8" fill="#64748b">hooks → ~/.decky/hooks/   ·   ~/.claude/settings.json</text>
+  <text x="895" y="792" text-anchor="middle" font-size="8" fill="#64748b">plugin linked via:  streamdeck link com.decky.controller.sdPlugin</text>
+</svg>

@@ -30,7 +30,7 @@
     {
       "UUID": "com.decky.controller.encoder",
       "Name": "Decky Encoder",
-      "Tooltip": "Stream Deck+ dial — shows approval queue and rate limit. Press to approve, rotate to preview queue.",
+      "Tooltip": "Stream Deck+ dial — shows approval queue. Press to approve, rotate to preview queue, press+rotate to cycle themes.",
       "Icon": "imgs/actions/slot/icon",
       "Controllers": ["Encoder"],
       "States": [
@@ -39,7 +39,7 @@
       "Encoder": {
         "layout": "layouts/encoder.json",
         "TriggerDescription": {
-          "Rotate": "Preview next queued approval",
+          "Rotate": "Preview queue / Cycle themes (pressed)",
           "Push": "Approve current request",
           "Touch": "Show approval details"
         }

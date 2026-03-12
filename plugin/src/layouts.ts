@@ -36,6 +36,12 @@ type Theme =
   | "rainbow"
   | "random";
 
+/** Ordered theme list for cycling (encoder press+rotate). */
+export const THEME_LIST: Theme[] = [
+  "light", "dark", "dracula", "monokai", "solarized-dark", "solarized-light",
+  "nord", "github-dark", "candy-cane", "gradient-blue", "wormhole", "rainbow", "random",
+];
+
 // --- Theme palettes ---
 
 interface ThemePalette {

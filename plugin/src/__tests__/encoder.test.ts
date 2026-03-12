@@ -6,7 +6,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { buildFeedback, stateLabel } from "../actions/encoder.js";
+import { buildFeedback, stateLabel, buildThemeFeedback } from "../actions/encoder.js";
+import { THEME_LIST } from "../layouts.js";
 import type { StateSnapshot } from "../bridge-client.js";
 
 function makeSnapshot(overrides: Partial<StateSnapshot> = {}): StateSnapshot {
@@ -113,5 +114,58 @@ describe("buildFeedback — other states", () => {
   it("done state shows Done ✓ label", () => {
     const fb = buildFeedback(makeSnapshot({ state: "done" }), 0);
     expect(fb.title).toBe("Done ✓");
+  });
+});
+
+describe("buildThemeFeedback", () => {
+  it("shows theme name as title and 'Theme' as value", () => {
+    const fb = buildThemeFeedback("dracula");
+    expect(fb.title).toBe("dracula");
+    expect(fb.value).toBe("Theme");
+    expect(fb.indicator).toBe(0);
+  });
+});
+
+describe("THEME_LIST — cycling arithmetic", () => {
+  it("contains all 13 themes in order", () => {
+    expect(THEME_LIST).toHaveLength(13);
+    expect(THEME_LIST[0]).toBe("light");
+    expect(THEME_LIST[THEME_LIST.length - 1]).toBe("random");
+  });
+
+  it("advances forward by ticks", () => {
+    const idx = THEME_LIST.indexOf("dark"); // 1
+    const next = (idx + 1) % THEME_LIST.length;
+    expect(THEME_LIST[next]).toBe("dracula");
+  });
+
+  it("retreats backward by ticks", () => {
+    const idx = THEME_LIST.indexOf("dark"); // 1
+    const next = ((idx - 1) % THEME_LIST.length + THEME_LIST.length) % THEME_LIST.length;
+    expect(THEME_LIST[next]).toBe("light");
+  });
+
+  it("wraps forward from last to first", () => {
+    const idx = THEME_LIST.indexOf("random"); // 12
+    const next = (idx + 1) % THEME_LIST.length;
+    expect(THEME_LIST[next]).toBe("light");
+  });
+
+  it("wraps backward from first to last", () => {
+    const idx = THEME_LIST.indexOf("light"); // 0
+    const next = ((idx - 1) % THEME_LIST.length + THEME_LIST.length) % THEME_LIST.length;
+    expect(THEME_LIST[next]).toBe("random");
+  });
+
+  it("handles multi-tick jumps", () => {
+    const idx = THEME_LIST.indexOf("dark"); // 1
+    const next = ((idx + 5) % THEME_LIST.length + THEME_LIST.length) % THEME_LIST.length;
+    expect(THEME_LIST[next]).toBe("nord"); // index 6
+  });
+
+  it("handles multi-tick backward jumps", () => {
+    const idx = THEME_LIST.indexOf("dark"); // 1
+    const next = ((idx - 3) % THEME_LIST.length + THEME_LIST.length) % THEME_LIST.length;
+    expect(THEME_LIST[next]).toBe("rainbow"); // index 11 (1 - 3 + 13 = 11)
   });
 });

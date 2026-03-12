@@ -6,6 +6,7 @@
  *  - Indicator bar: approval countdown progress
  *  - Dial press: approve (when awaiting-approval)
  *  - Dial rotation: cycle queue preview (when pending > 1)
+ *  - Press+rotate: cycle through themes (saved on release)
  */
 
 import {
@@ -13,17 +14,23 @@ import {
   SingletonAction,
   type DialDownEvent,
   type DialRotateEvent,
+  type DialUpEvent,
   type WillAppearEvent,
   type WillDisappearEvent,
 } from "@elgato/streamdeck";
 import type { DialAction, FeedbackPayload } from "@elgato/streamdeck";
 import type { JsonObject } from "@elgato/utils";
 import type { BridgeClient, StateSnapshot } from "../bridge-client.js";
+import { THEME_LIST } from "../layouts.js";
 
 
 let bridgeRef: BridgeClient | null = null;
 let lastSnapshot: StateSnapshot | null = null;
 let previewOffset = 0; // rotation-driven queue preview index
+
+// Theme cycling state (press+rotate)
+let pendingTheme: string | null = null;  // non-null while press-rotating
+let originalTheme: string | null = null; // theme when press started
 
 export function setEncoderClient(client: BridgeClient): void {
   bridgeRef = client;
@@ -65,6 +72,14 @@ function buildFeedback(snapshot: StateSnapshot, previewIdx: number): FeedbackPay
   };
 }
 
+function buildThemeFeedback(themeName: string): FeedbackPayload {
+  return {
+    title: themeName,
+    value: "Theme",
+    indicator: 0,
+  };
+}
+
 async function refreshAllDials(snapshot: StateSnapshot): Promise<void> {
   const acts = [...(encoderInstance?.actions ?? [])];
   for (const act of acts) {
@@ -72,6 +87,18 @@ async function refreshAllDials(snapshot: StateSnapshot): Promise<void> {
     try {
       await dialAct.setFeedbackLayout("layouts/encoder.json");
       await dialAct.setFeedback(buildFeedback(snapshot, previewOffset));
+    } catch {
+      // SDK may throw if the dial disappeared mid-render; safe to ignore.
+    }
+  }
+}
+
+async function showThemeOnDials(themeName: string): Promise<void> {
+  const acts = [...(encoderInstance?.actions ?? [])];
+  for (const act of acts) {
+    const dialAct = act as DialAction<JsonObject>;
+    try {
+      await dialAct.setFeedback(buildThemeFeedback(themeName));
     } catch {
       // SDK may throw if the dial disappeared mid-render; safe to ignore.
     }
@@ -108,7 +135,27 @@ export class EncoderAction extends SingletonAction {
     void ev; // suppress unused warning
   }
 
+  override onDialUp(_ev: DialUpEvent): void {
+    if (pendingTheme != null && pendingTheme !== originalTheme) {
+      // Single save: send final theme to bridge
+      bridgeRef?.sendAction("updateConfig", { theme: pendingTheme });
+    }
+    if (pendingTheme != null && lastSnapshot) {
+      // Restore normal encoder feedback after theme cycling
+      void refreshAllDials(lastSnapshot);
+    }
+    pendingTheme = null;
+    originalTheme = null;
+  }
+
   override onDialRotate(ev: DialRotateEvent): void {
+    if (ev.payload.pressed) {
+      // Press+rotate: cycle themes locally (saved on dial up)
+      this.cycleThemePreview(ev.payload.ticks);
+      return;
+    }
+
+    // Plain rotate: existing queue preview logic
     const pending = lastSnapshot?.approval?.pending ?? 0;
     if (pending > 1) {
       previewOffset = Math.min(
@@ -119,6 +166,33 @@ export class EncoderAction extends SingletonAction {
         void refreshAllDials(lastSnapshot);
       }
     }
+  }
+
+  private cycleThemePreview(ticks: number): void {
+    // Determine current theme to cycle from
+    const currentTheme = pendingTheme
+      ?? bridgeRef?.getLastConfig()?.theme
+      ?? "dark";
+
+    // Record original theme on first tick of a press+rotate gesture
+    if (originalTheme == null) {
+      originalTheme = currentTheme;
+    }
+
+    const currentIdx = THEME_LIST.indexOf(currentTheme as typeof THEME_LIST[number]);
+    const idx = currentIdx < 0 ? 0 : currentIdx;
+    const next = ((idx + ticks) % THEME_LIST.length + THEME_LIST.length) % THEME_LIST.length;
+    const newTheme = THEME_LIST[next];
+
+    pendingTheme = newTheme;
+
+    // Patch the cached config and fire config listeners — this triggers
+    // SlotAction.renderAll() through the existing onConfigChange pipeline,
+    // giving instant visual feedback on all key buttons without a bridge round-trip.
+    bridgeRef?.patchLocalConfig({ theme: newTheme });
+
+    // Show theme name on encoder touch strip
+    void showThemeOnDials(newTheme);
   }
 }
 
@@ -133,4 +207,4 @@ export function initEncoderStateListener(client: BridgeClient): void {
 }
 
 // Re-export for testing
-export { buildFeedback, stateLabel };
+export { buildFeedback, stateLabel, buildThemeFeedback };
