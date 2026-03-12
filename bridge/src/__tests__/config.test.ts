@@ -1,3 +1,6 @@
+// Allow config writes in tests by default; read-only tests manage this explicitly.
+process.env.DECKY_READONLY = "0";
+
 import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { createApp, type DeckyApp } from "../app.js";
@@ -467,6 +470,82 @@ describe("config endpoints", () => {
     });
   });
 
+  describe("read-only mode", () => {
+    it("rejects PUT /config with 403 when readOnly is true (default)", async () => {
+      // Remove the test-wide DECKY_READONLY=0 override to test real default behavior
+      delete process.env.DECKY_READONLY;
+      try {
+        const res = await fetch(`${baseUrl}/config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", "x-decky-token": token },
+          body: JSON.stringify({ macros: [{ label: "Test", text: "test" }] }),
+        });
+        expect(res.status).toBe(403);
+        const data = await res.json();
+        expect(data.error).toContain("read-only");
+      } finally {
+        process.env.DECKY_READONLY = "0";
+      }
+    });
+
+    it("allows PUT /config when DECKY_READONLY=0", async () => {
+      // DECKY_READONLY=0 is already set at file level
+      const res = await fetch(`${baseUrl}/config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-decky-token": token },
+        body: JSON.stringify({ macros: [{ label: "Test", text: "test" }] }),
+      });
+      expect(res.status).toBe(200);
+    });
+
+    it("allows PUT /config when readOnly is false in config", async () => {
+      // First write readOnly: false into the config (DECKY_READONLY=0 is set)
+      const setRes = await fetch(`${baseUrl}/config`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json", "x-decky-token": token },
+        body: JSON.stringify({ readOnly: false }),
+      });
+      expect(setRes.status).toBe(200);
+
+      // Now remove env override — readOnly: false in config should still allow writes
+      delete process.env.DECKY_READONLY;
+      try {
+        const res = await fetch(`${baseUrl}/config`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json", "x-decky-token": token },
+          body: JSON.stringify({ macros: [{ label: "Test2", text: "test2" }] }),
+        });
+        expect(res.status).toBe(200);
+      } finally {
+        process.env.DECKY_READONLY = "0";
+      }
+    });
+
+    it("always allows POST /hook regardless of read-only state", async () => {
+      // Default is readOnly: true, but hooks must still work
+      const res = await fetch(`${baseUrl}/hook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-decky-token": token },
+        body: JSON.stringify({ event: "PostToolUse", tool_name: "Bash" }),
+      });
+      expect(res.status).toBe(200);
+    });
+
+    it("always allows POST /config/reload regardless of read-only state", async () => {
+      const res = await fetch(`${baseUrl}/config/reload`, {
+        method: "POST",
+        headers: { "x-decky-token": token },
+      });
+      expect(res.status).toBe(200);
+    });
+
+    it("always allows GET /config regardless of read-only state", async () => {
+      const res = await fetch(`${baseUrl}/config`, {
+        headers: { "x-decky-token": token },
+      });
+      expect(res.status).toBe(200);
+    });
+  });
 
 });
 

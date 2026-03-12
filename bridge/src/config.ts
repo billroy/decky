@@ -87,6 +87,7 @@ interface DeckyConfig {
   enableApproveOnce: boolean;
   enableDictation: boolean;
   toolRiskRules: ToolRiskRule[];
+  readOnly: boolean;
   maxTokens5h?: number;
 }
 
@@ -133,6 +134,7 @@ const DEFAULT_CONFIG: DeckyConfig = {
   enableApproveOnce: true,
   enableDictation: false,
   toolRiskRules: [],
+  readOnly: true,
 };
 
 const MAX_MACROS = 36;
@@ -472,6 +474,10 @@ export function loadConfig(): DeckyConfig {
           ? raw_obj.enableDictation
           : DEFAULT_CONFIG.enableDictation,
       toolRiskRules: normalizeToolRiskRules(raw_obj.toolRiskRules),
+      readOnly:
+        typeof raw_obj.readOnly === "boolean"
+          ? raw_obj.readOnly
+          : DEFAULT_CONFIG.readOnly,
       ...(colors ? { colors } : {}),
       ...(typeof raw_obj.maxTokens5h === "number" && Number.isFinite(raw_obj.maxTokens5h) && raw_obj.maxTokens5h > 0
         ? { maxTokens5h: raw_obj.maxTokens5h }
@@ -495,6 +501,17 @@ export function getConfig(): DeckyConfig {
 /** Get the current tool risk rules (convenience accessor). */
 export function getToolRiskRules(): ToolRiskRule[] {
   return currentConfig.toolRiskRules;
+}
+
+/**
+ * Check if the bridge is in read-only mode.
+ * Read-only blocks config writes via REST/MCP while keeping hooks operational.
+ * Override with DECKY_READONLY=0 environment variable.
+ */
+export function isReadOnly(): boolean {
+  const envOverride = process.env.DECKY_READONLY;
+  if (envOverride === "0" || envOverride === "false") return false;
+  return currentConfig.readOnly;
 }
 
 /** Save config to disk and update in-memory copy. Returns the saved config. */
@@ -622,6 +639,10 @@ export function saveConfig(update: Partial<DeckyConfig>): DeckyConfig {
     toolRiskRules: Array.isArray(update_obj.toolRiskRules)
       ? normalizeToolRiskRules(update_obj.toolRiskRules)
       : currentConfig.toolRiskRules,
+    readOnly:
+      typeof update_obj.readOnly === "boolean"
+        ? update_obj.readOnly
+        : currentConfig.readOnly,
     ...(typeof update_obj.maxTokens5h === "number" && Number.isFinite(update_obj.maxTokens5h) && update_obj.maxTokens5h > 0
       ? { maxTokens5h: update_obj.maxTokens5h }
       : currentConfig.maxTokens5h !== undefined

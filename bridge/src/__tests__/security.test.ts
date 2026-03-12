@@ -1,3 +1,6 @@
+// Allow write operations in tests (default readOnly: true would block PUT /config)
+process.env.DECKY_READONLY = "0";
+
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";

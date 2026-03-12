@@ -67,19 +67,21 @@ echo ""
 echo "NOTE: Hooks are registered in ~/.claude/settings.json (global scope)."
 echo "They will intercept tool-use events in ALL Claude Code sessions."
 echo "This is required for PermissionRequest hooks to fire correctly."
-echo ""
-echo "[5/5] Registering MCP server with Claude Code..."
-if command -v claude &>/dev/null; then
-  read -rp "Register Decky MCP server with Claude Code? (y/n) " ans
-  if [ "$ans" = "y" ]; then
+if [[ " $* " == *" --with-mcp "* ]]; then
+  echo ""
+  echo "[5/5] Registering MCP server with Claude Code..."
+  if command -v claude &>/dev/null; then
     claude mcp add decky --command npx -- -y @decky/mcp
     echo "  done. Restart Claude Code to activate the MCP server."
   else
-    echo "  skipped."
+    echo "  'claude' not found in PATH."
+    echo "  To register manually: claude mcp add decky --command npx -- -y @decky/mcp"
   fi
 else
-  echo "  'claude' not found in PATH."
-  echo "  To register manually: claude mcp add decky --command npx -- -y @decky/mcp"
+  echo ""
+  echo "MCP server not registered (oversight-only mode)."
+  echo "To add MCP later: ./hooks/install.sh --with-mcp"
+  echo "Or manually: claude mcp add decky --command npx -- -y @decky/mcp"
 fi
 
 echo ""

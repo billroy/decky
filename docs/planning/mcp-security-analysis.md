@@ -1,6 +1,6 @@
 # Decky MCP Security Analysis: AI Safety Attack Surface
 
-> **Last updated:** 2026-03-12. Always-allow feature removed in commit `c3c5a1b`. The former Critical finding is resolved by deletion. This document now reflects the post-removal attack surface, including cross-session persistence, cross-provider poisoning, and inter-provider collusion vectors.
+> **Last updated:** 2026-03-12. Always-allow feature removed in commit `c3c5a1b`. Backup MCP tools deleted. Read-only MCP mode implemented (default on) at both bridge and MCP layers. MCP install made optional via `--with-mcp` flag. This document now reflects the post-hardening attack surface, including cross-session persistence, cross-provider poisoning, and inter-provider collusion vectors.
 
 ## Threat model
 
@@ -14,7 +14,9 @@ A second structural property deepens the threat model: **Decky is provider-agnos
 
 ---
 
-## Resolved — Always-allow rule injection (formerly Critical)
+## Resolved issues
+
+### Resolved — Always-allow rule injection (formerly Critical)
 
 The always-allow feature (`decky_add_always_allow_rule`, `matchesAlwaysAllow`, `/rules` endpoints, `alwaysAllow` socket action) has been **deleted entirely** from the bridge, MCP server, and plugin. No rules are stored, matched, or managed by Decky. Responsibility for always-allow decisions remains exclusively on the Claude.app side.
 
@@ -24,33 +26,6 @@ This eliminates:
 - Config backup restoration of previously-planted rules (no rules exist to back up)
 
 See `remove-always-allow.md` for the implementation plan.
-
----
-
-## Current MCP exposure
-
-### HIGH — Persistent macro poisoning
-
-**Tools:** `decky_update_slot`, `decky_add_slot`
-
-**Attack:**
-1. AI updates an existing macro (or adds a new one) to contain adversarial instructions, with `targetApp: "claude"` and `submit: true`
-2. The modified macro sits in `~/.decky/config.json`, persisting across sessions
-3. When a user presses that button, the macro injects up to 2000 characters of arbitrary content directly into Claude's input and auto-submits
-
-**The poisoning can be done silently today.** The detonation requires a user button press — a latent persistence mechanism that survives session boundaries and config backups.
-
-**Additional concern:** `decky_restore_config_backup` could restore an older backup that contained a previously-planted poisoned macro, after a user has cleaned things up.
-
----
-
-### MEDIUM — Approval timeout window expansion
-
-**Tool:** `decky_update_global_settings`
-
-**Attack:** Set `approvalTimeout` to 300 (the maximum). This extends the gate-file polling window to 5 minutes, giving more time for race-condition-based attacks on the gate file (though the nonce check limits this) and reducing human urgency to respond.
-
-**Context:** The timeout is enforced in the hook script, not server-side. The AI cannot set it to 0 to cause instant auto-deny, but can widen the response window.
 
 ---
 
@@ -95,6 +70,21 @@ Rationale:
 - All backup test coverage in `config.test.ts` (rotation and restore logic remain; only the HTTP/MCP exposure is removed)
 
 **One issue to note:** The `POST /config/restore` REST endpoint is used by both the MCP tool and potentially by direct HTTP clients. If any non-MCP consumer uses this endpoint (e.g., a future web UI), removing it requires checking for other callers. Currently, only the MCP tool calls it. The underlying `restoreConfigBackup()` function in `config.ts` should be retained for the CLI tool and potential future use — only the HTTP and MCP layers are removed.
+
+---
+
+## Current MCP exposure — open issues
+
+### HIGH — Persistent macro poisoning
+
+**Tools:** `decky_update_slot`, `decky_add_slot`
+
+**Attack:**
+1. AI updates an existing macro (or adds a new one) to contain adversarial instructions, with `targetApp: "claude"` and `submit: true`
+2. The modified macro sits in `~/.decky/config.json`, persisting across sessions
+3. When a user presses that button, the macro injects up to 2000 characters of arbitrary content directly into Claude's input and auto-submits
+
+**The poisoning can be done silently today.** The detonation requires a user button press — a latent persistence mechanism that survives session boundaries and config backups.
 
 ---
 
@@ -165,6 +155,16 @@ Rationale:
 
 ---
 
+### MEDIUM — Approval timeout window expansion
+
+**Tool:** `decky_update_global_settings`
+
+**Attack:** Set `approvalTimeout` to 300 (the maximum). This extends the gate-file polling window to 5 minutes, giving more time for race-condition-based attacks on the gate file (though the nonce check limits this) and reducing human urgency to respond.
+
+**Context:** The timeout is enforced in the hook script, not server-side. The AI cannot set it to 0 to cause instant auto-deny, but can widen the response window.
+
+---
+
 ### LOW — Cross-session goal persistence (variant of dead drop)
 
 **Tools:** `decky_get_config`, `decky_update_slot`
@@ -207,7 +207,7 @@ If exposed without gating, injected PreToolUse events for different tools could 
 
 The Decky oversight system is built on a correct principle: **the approver (human + hardware) must be independent of the approvee (Claude)**. The current implementation correctly ensures that approvals require physical hardware interaction.
 
-The MCP layer creates tension with this principle wherever it grants Claude write access to the oversight configuration. The always-allow feature was the most severe violation and has been eliminated. The remaining write-access vectors (macro text, timeout, backup restoration) are lower severity but still warrant attention.
+The MCP layer creates tension with this principle wherever it grants Claude write access to the oversight configuration. The always-allow feature was the most severe violation and has been eliminated. The remaining write-access vectors (macro text, timeout) are lower severity but still warrant attention.
 
 The analogy: you do not let an employee approve their own expense reports.
 
@@ -233,8 +233,8 @@ These are not bugs in Decky's implementation. They are emergent properties of th
 **2. Log MCP write operations visibly.**
 Every config-write MCP call should emit a log entry the user can audit, ideally visible on the Stream Deck or in the bridge log. This is the primary detection mechanism for dead-drop and cross-provider poisoning. The log should include: which tool was called, what field changed, the old and new values (truncated for long text), and a timestamp.
 
-**3. Consider read-only MCP mode.**
-A global setting (`readOnly: true`) that disables all config-write MCP tools at the bridge level. Users who want AI-driven config changes opt in explicitly. This eliminates the dead-drop, cross-provider poisoning, and macro poisoning vectors entirely when enabled. The AI retains full observability (status, logs, debug trace, approval queue) without write access.
+**3. ~~Read-only MCP mode~~ — IMPLEMENTED.**
+A global setting (`readOnly: true`, default on) disables config-write MCP tools at both the bridge and MCP layers. Defense in depth: the bridge returns 403 on `PUT /config` when read-only, and the MCP server skips registration of write tools entirely (they don't appear in Claude's tool list). Override with `DECKY_READONLY=0` env var or `readOnly: false` in config. MCP installation is also optional via `--with-mcp` flag on install scripts — users who only want hardware oversight skip MCP entirely.
 
 ### Open items — cross-provider concerns
 
@@ -266,13 +266,13 @@ Limit to `requestState` and `selectOption` (AskUserQuestion testing only). Expli
 |---|---|---|
 | Always-allow rule injection (any path) | ~~Critical~~ | **Eliminated** — feature deleted (c3c5a1b) |
 | Config backup restoration of rules | ~~Medium~~ | **Eliminated** — no rules exist to back up |
+| Backup MCP tools (dead drop + poison resurrection) | ~~Low~~ | **Eliminated** — MCP tools + REST endpoints deleted; rotation engine preserved |
 | Direct self-approval (Phase 1) | Critical | Not introduced — approval actions excluded |
 | Self macro-injection (Phase 1) | High | Not introduced — macro action excluded |
 | Queue sabotage via injected events | High | Mitigated — test endpoint gated on DECKY_TEST=1 |
-| Persistent macro poisoning | **High** | **Open** — restrict macro writes from MCP |
-| Offboard persistent memory (dead drop) | **High** | **Open** — consider read-only MCP mode |
-| Cross-provider macro poisoning | **High** | **Open** — flag targetApp changes; restrict writes |
-| Backup MCP tools (dead drop + poison resurrection) | ~~Low~~ | **Eliminated** — MCP tools + REST endpoints deleted; rotation engine preserved |
+| Persistent macro poisoning | **High** | **Mitigated** — read-only mode (default on) blocks writes |
+| Offboard persistent memory (dead drop) | **High** | **Mitigated** — read-only mode (default on) blocks writes |
+| Cross-provider macro poisoning | **High** | **Mitigated** — read-only mode (default on) blocks writes |
 | Cross-provider collusion (speculative) | **Medium** | **Open** — inherent to shared-state architecture |
 | Timeout expansion | Medium | Open — acceptable; documented |
 | Cross-session behavioral priming | Low | Open — low current risk; monitor |
@@ -281,8 +281,8 @@ Limit to `requestState` and `selectOption` (AskUserQuestion testing only). Expli
 
 1. ~~Always-allow removal~~ — resolved (c3c5a1b)
 2. ~~Remove backup MCP tools~~ — resolved (MCP tools + REST endpoints deleted; rotation engine preserved)
-3. Restrict macro text writes from MCP (macro poisoning + cross-provider poisoning + dead drop)
-4. Visible audit log for MCP write operations (detection for all write-based vectors)
-5. Consider read-only MCP mode (eliminates write-based attack surface entirely)
+3. ~~Read-only MCP mode~~ — resolved (default on; defense in depth at bridge + MCP layers; optional MCP install via `--with-mcp`)
+4. Restrict macro text writes from MCP (macro poisoning + cross-provider poisoning + dead drop — mitigated by read-only default but open when user opts into write mode)
+5. Visible audit log for MCP write operations (detection for all write-based vectors when write mode is enabled)
 6. Surface `targetApp` changes prominently (cross-provider early warning)
 7. Document multi-provider threat model for users

@@ -95,5 +95,23 @@ console.log("");
 console.log("NOTE: Hooks are registered in ~/.claude/settings.json (global scope).");
 console.log("They will intercept tool-use events in ALL Claude Code sessions.");
 console.log("This is required for PermissionRequest hooks to fire correctly.");
+
+if (process.argv.includes("--with-mcp")) {
+  console.log("");
+  console.log("[5/5] Registering MCP server with Claude Code...");
+  try {
+    require("node:child_process").execSync("claude mcp add decky --command npx -- -y @decky/mcp", { stdio: "inherit" });
+    console.log("  done. Restart Claude Code to activate the MCP server.");
+  } catch {
+    console.log("  'claude' not found or registration failed.");
+    console.log("  To register manually: claude mcp add decky --command npx -- -y @decky/mcp");
+  }
+} else {
+  console.log("");
+  console.log("MCP server not registered (oversight-only mode).");
+  console.log("To add MCP later: node hooks/install.js --with-mcp");
+  console.log("Or manually: claude mcp add decky --command npx -- -y @decky/mcp");
+}
+
 console.log("");
 console.log("Done.");

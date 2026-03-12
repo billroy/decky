@@ -22,6 +22,7 @@ import {
   loadConfig,
   getConfig,
   getToolRiskRules,
+  isReadOnly,
   normalizeTheme,
   saveConfig,
   ConfigValidationError,
@@ -580,6 +581,10 @@ export function createApp(): DeckyApp {
   });
 
   app.put("/config", (req, res) => {
+    if (isReadOnly()) {
+      res.status(403).json({ error: "Bridge is in read-only mode. Set readOnly: false in config or DECKY_READONLY=0 to override." });
+      return;
+    }
     const body = req.body as Record<string, unknown>;
     try {
       const config = saveConfig(body);
