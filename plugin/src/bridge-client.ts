@@ -43,6 +43,7 @@ export interface StateSnapshot {
     text: string | null;
     options: QuestionOption[];
   } | null;
+  sessionStats?: { approves: number; denials: number };
 }
 
 export interface ColorOverrides {
@@ -51,7 +52,7 @@ export interface ColorOverrides {
   icon?: string;
 }
 
-export type WidgetKind = "bridge-status";
+export type WidgetKind = "bridge-status" | "session-activity";
 
 export interface WidgetDef {
   kind: WidgetKind;

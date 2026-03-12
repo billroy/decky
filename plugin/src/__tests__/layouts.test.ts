@@ -674,8 +674,48 @@ describe("layouts", () => {
       ];
       const config = getSlotConfig("idle", 0, null, macros);
       expect(config.action).toBe("widget-refresh");
-      expect(config.svg).toContain("Bridge:OK");
-      expect(config.svg).toContain("State:idle");
+      expect(config.svg).toContain("#22c55e");
+      expect(config.svg).toContain("idle");
+    });
+
+    it("renders session-activity widget with approve/deny counts", () => {
+      setTheme("dark");
+      setWidgetRenderContext({
+        connectionStatus: "connected",
+        state: "idle",
+        timestamp: Date.now(),
+        sessionStats: { approves: 5, denials: 3 },
+      });
+      const macros: MacroInput[] = [
+        {
+          label: "Score",
+          text: "",
+          type: "widget",
+          widget: { kind: "session-activity" },
+        },
+      ];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.action).toBe("widget-refresh");
+      expect(config.svg).toContain("Score");
+      expect(config.svg).toContain("#22c55e");
+      expect(config.svg).toContain(">5<");
+      expect(config.svg).toContain("#ef4444");
+      expect(config.svg).toContain(">3<");
+    });
+
+    it("session-activity widget defaults to zero counts", () => {
+      setTheme("light");
+      setWidgetRenderContext({ connectionStatus: "connected", state: "idle" });
+      const macros: MacroInput[] = [
+        {
+          label: "Score",
+          text: "",
+          type: "widget",
+          widget: { kind: "session-activity" },
+        },
+      ];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.svg).toContain(">0<");
     });
 
   });

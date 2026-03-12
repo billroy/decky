@@ -548,6 +548,7 @@ export class SlotAction extends SingletonAction {
       connectionStatus: bridgeRef?.getConnectionStatus() ?? "disconnected",
       state: snap?.state,
       timestamp: snap?.timestamp,
+      sessionStats: snap?.sessionStats,
     });
     setTargetBadgeOptions({
       showTargetBadge: cfg?.showTargetBadge ?? false,

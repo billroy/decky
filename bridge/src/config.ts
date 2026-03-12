@@ -23,7 +23,7 @@ interface ColorOverrides {
   icon?: string;
 }
 
-type WidgetKind = "bridge-status" | "rate-limit";
+type WidgetKind = "bridge-status" | "rate-limit" | "session-activity";
 type WidgetRefreshMode = "onClick" | "interval";
 
 interface WidgetDef {
@@ -257,6 +257,7 @@ function normalizeWidget(value: unknown): WidgetDef | undefined {
   const kind: WidgetKind | undefined =
     obj.kind === "bridge-status" ? "bridge-status" :
     obj.kind === "rate-limit" ? "rate-limit" :
+    obj.kind === "session-activity" ? "session-activity" :
     undefined;
   if (!kind) return undefined;
   const out: WidgetDef = { kind };

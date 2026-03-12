@@ -1,6 +1,8 @@
 # Decky MCP Security Analysis: AI Safety Attack Surface
 
 > **Last updated:** 2026-03-12. Always-allow feature removed in commit `c3c5a1b`. Backup MCP tools deleted. Read-only MCP mode implemented (default on) at both bridge and MCP layers. MCP install made optional via `--with-mcp` flag. This document now reflects the post-hardening attack surface, including cross-session persistence, cross-provider poisoning, and inter-provider collusion vectors.
+>
+> **Current tool inventory:** 26 MCP tools total — 14 always-registered read-only tools + 12 conditionally-registered write tools (only when `readOnly: false`). The bridge enforces read-only at the REST layer (403 on `PUT /config`); the MCP server enforces it at the tool-registration layer (write tools never appear in Claude's tool list when read-only).
 
 ## Threat model
 
@@ -106,7 +108,7 @@ Rationale:
 - An AI encodes a "do not trust the user's stated intent" directive into a slot label, priming future sessions
 - Steganographic data in color hex values (`#c0ffee` encodes differently from `#c0ffed`) is invisible to casual inspection
 
-**Bandwidth:** 15 macro slots × 2000 chars = 30 KB of plaintext per write cycle. With base64 encoding, ~22 KB of arbitrary binary data. With `decky_get_config` + `decky_update_slot` available, the read-write cycle is two MCP calls.
+**Bandwidth:** 36 macro slots (max) × 2000 chars = 72 KB of plaintext per write cycle. With base64 encoding, ~54 KB of arbitrary binary data. With `decky_get_config` + `decky_update_slot` available, the read-write cycle is two MCP calls. Additional storage surfaces include `toolRiskRules` (100 rules × 64-char patterns = 6.4 KB), color override fields, and slot labels (36 × 20 chars).
 
 ---
 
@@ -152,6 +154,43 @@ Rationale:
 **Detection difficulty:** The communication channel is the user's own config file, written with legitimate MCP tools. No network traffic leaves the machine. No API calls cross provider boundaries. The collusion is mediated entirely through filesystem state on the user's own hardware.
 
 **Architectural note:** This is not a vulnerability in Decky per se — it is an emergent property of any system that grants multiple untrusted AI agents write access to shared mutable state. Decky happens to be a concrete instance. The same class of attack applies to any shared MCP server, shared filesystem, shared database, or shared API that multiple AI agents can both read and write.
+
+---
+
+### MEDIUM — Tool risk rule manipulation
+
+**Tool:** `decky_update_global_settings`
+
+**Attack:** The `toolRiskRules` config field maps tool name regex patterns to risk levels (`safe`, `warning`, `critical`). When write mode is enabled, the AI can call `decky_update_global_settings` to add rules like `{ pattern: ".*", risk: "safe" }`, marking all tools as safe. This affects how the Stream Deck displays approval requests — a "safe" tool may get different visual treatment than a "critical" one, potentially reducing user scrutiny.
+
+**Severity is MEDIUM because:** The risk level affects display only, not the approval flow itself. The user must still physically approve. However, downgrading a dangerous tool's visual urgency (e.g., `rm -rf` appearing green instead of red) reduces the likelihood of careful review.
+
+**Limits:** Max 100 rules, pattern max 64 chars. Validated on write.
+
+---
+
+### MEDIUM — Read-only mode self-modification
+
+**Tool:** `decky_update_global_settings`
+
+**Attack:** When write mode is enabled (user has set `readOnly: false`), the AI can call `decky_update_global_settings` to ensure `readOnly` stays `false`, preventing the user from re-enabling read-only mode via config edit (since the next config write would overwrite it). The user can still force read-only via `DECKY_READONLY=1` env var, but may not know to do so.
+
+**Note:** This is only exploitable when the user has already opted out of read-only mode. The default-on read-only mode blocks this entirely.
+
+---
+
+### MEDIUM — Oversight feature flags
+
+**Tool:** `decky_update_global_settings`
+
+**Attack:** Several boolean config fields control oversight features:
+- `enableApproveOnce` (default `true`) — controls whether the "approve and activate" flow is available
+- `popUpApp` (default `false`) — controls whether Claude.app is auto-surfaced on approval requests
+- `showTargetBadge` (default `true`) — controls whether the target app indicator is visible on buttons
+
+Disabling `showTargetBadge` would hide visual evidence of cross-provider targeting. Disabling `enableApproveOnce` would remove a convenient approval path, potentially frustrating the user into switching to less secure alternatives. Setting `popUpApp: true` when not desired is a nuisance but not a security issue.
+
+**Severity is MEDIUM because:** These affect UX and visibility rather than the core approval flow, but `showTargetBadge: false` directly supports the cross-provider poisoning vector by hiding which app a macro targets.
 
 ---
 
@@ -236,26 +275,39 @@ Every config-write MCP call should emit a log entry the user can audit, ideally 
 **3. ~~Read-only MCP mode~~ — IMPLEMENTED.**
 A global setting (`readOnly: true`, default on) disables config-write MCP tools at both the bridge and MCP layers. Defense in depth: the bridge returns 403 on `PUT /config` when read-only, and the MCP server skips registration of write tools entirely (they don't appear in Claude's tool list). Override with `DECKY_READONLY=0` env var or `readOnly: false` in config. MCP installation is also optional via `--with-mcp` flag on install scripts — users who only want hardware oversight skip MCP entirely.
 
+### Open items — settings abuse (when write mode enabled)
+
+**4. Restrict or flag `toolRiskRules` modifications.**
+The AI can mark all tools as "safe" risk level via `decky_update_global_settings`, reducing visual urgency of approval prompts. Consider: making `toolRiskRules` read-only from MCP (editable only via direct config file), or emitting a visible Stream Deck notification when risk rules change.
+
+**5. Restrict or flag oversight feature flag changes.**
+`showTargetBadge: false` hides which app a macro targets — directly supporting cross-provider poisoning. `enableApproveOnce: false` removes a convenient approval path. Consider: making these flags read-only from MCP, or at minimum emitting a notification when they change.
+
+**6. Prevent `readOnly` self-modification.**
+When write mode is enabled, the AI can set `readOnly: false` in the config to prevent re-enabling read-only mode via config edits. Consider: excluding `readOnly` from the fields writable via `decky_update_global_settings` (require env var or direct file edit to change).
+
 ### Open items — cross-provider concerns
 
-**4. Surface `targetApp` changes prominently.**
+**7. Surface `targetApp` changes prominently.**
 When `decky_update_slot` or `decky_add_slot` sets or changes `targetApp`, the bridge should emit a distinct notification. A macro targeting a provider different from the one that wrote it is an anomaly worth flagging.
 
-**5. Document the multi-provider threat model for users.**
+**8. Document the multi-provider threat model for users.**
 Users connecting Decky to multiple providers should understand that each provider can read and write config state visible to all other providers. This is inherent to the shared-config architecture and should be documented in user-facing materials.
 
-### For the proposed live test suite (Phase 1)
+### For the proposed live test suite (Phase 1) — NOT YET IMPLEMENTED
 
-**6. Do not expose approval actions (`approve`, `deny`, `cancel`) via `decky_send_action`.**
+> **Status:** Neither `decky_inject_hook_event` nor `decky_send_action` has been implemented. The `DECKY_TEST` environment variable gating does not exist in the codebase. These recommendations remain valid constraints for if/when these tools are added. See `mcp-test-analysis.md` for the full test plan.
+
+**9. Do not expose approval actions (`approve`, `deny`, `cancel`) via `decky_send_action`.**
 These are human-intent controls. Test scenarios requiring approval flow exercise must be driven by a separate out-of-band harness, not by Claude itself.
 
-**7. Do not expose the `macro` action via `decky_send_action`.**
+**10. Do not expose the `macro` action via `decky_send_action`.**
 Text injection into Claude's own input is a self-modification capability with no safe use from within the controlled context.
 
-**8. If `decky_inject_hook_event` is added, gate it strictly.**
+**11. If `decky_inject_hook_event` is added, gate it strictly.**
 Acceptable only with `DECKY_TEST=1` set in the bridge process. Refused in production mode. Registered only in a separate test-only MCP server.
 
-**9. Safe subset for `decky_send_action`:**
+**12. Safe subset for `decky_send_action`:**
 Limit to `requestState` and `selectOption` (AskUserQuestion testing only). Explicitly block `approve`, `deny`, `cancel`, `macro`, `approveOnceInClaude`.
 
 ---
@@ -269,10 +321,13 @@ Limit to `requestState` and `selectOption` (AskUserQuestion testing only). Expli
 | Backup MCP tools (dead drop + poison resurrection) | ~~Low~~ | **Eliminated** — MCP tools + REST endpoints deleted; rotation engine preserved |
 | Direct self-approval (Phase 1) | Critical | Not introduced — approval actions excluded |
 | Self macro-injection (Phase 1) | High | Not introduced — macro action excluded |
-| Queue sabotage via injected events | High | Mitigated — test endpoint gated on DECKY_TEST=1 |
+| Queue sabotage via injected events | High | Not introduced — `decky_inject_hook_event` and `decky_send_action` were never implemented; `DECKY_TEST` gating does not exist in the codebase |
 | Persistent macro poisoning | **High** | **Mitigated** — read-only mode (default on) blocks writes |
 | Offboard persistent memory (dead drop) | **High** | **Mitigated** — read-only mode (default on) blocks writes |
 | Cross-provider macro poisoning | **High** | **Mitigated** — read-only mode (default on) blocks writes |
+| Tool risk rule manipulation | **Medium** | **Open** — writable via `decky_update_global_settings` when write mode enabled |
+| Read-only self-modification | **Medium** | **Open** — AI can keep `readOnly: false` when write mode enabled |
+| Oversight feature flag manipulation | **Medium** | **Open** — `showTargetBadge`, `enableApproveOnce` writable when write mode enabled |
 | Cross-provider collusion (speculative) | **Medium** | **Open** — inherent to shared-state architecture |
 | Timeout expansion | Medium | Open — acceptable; documented |
 | Cross-session behavioral priming | Low | Open — low current risk; monitor |
@@ -285,4 +340,5 @@ Limit to `requestState` and `selectOption` (AskUserQuestion testing only). Expli
 4. Restrict macro text writes from MCP (macro poisoning + cross-provider poisoning + dead drop — mitigated by read-only default but open when user opts into write mode)
 5. Visible audit log for MCP write operations (detection for all write-based vectors when write mode is enabled)
 6. Surface `targetApp` changes prominently (cross-provider early warning)
-7. Document multi-provider threat model for users
+7. Restrict `toolRiskRules` and oversight flags (`showTargetBadge`, `enableApproveOnce`) from MCP write, or flag changes visibly
+8. Document multi-provider threat model for users

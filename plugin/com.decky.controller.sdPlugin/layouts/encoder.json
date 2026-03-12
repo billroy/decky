@@ -1,0 +1,39 @@
+{
+  "id": "decky-encoder",
+  "items": [
+    {
+      "key": "bg",
+      "type": "pixmap",
+      "rect": [0, 0, 200, 100],
+      "zOrder": 0,
+      "background": "transparent"
+    },
+    {
+      "key": "title",
+      "type": "text",
+      "rect": [8, 4, 184, 30],
+      "zOrder": 1,
+      "font": { "size": 16, "weight": 600 },
+      "alignment": "center",
+      "color": "#FFFFFF"
+    },
+    {
+      "key": "value",
+      "type": "text",
+      "rect": [8, 34, 184, 24],
+      "zOrder": 1,
+      "font": { "size": 13 },
+      "alignment": "center",
+      "color": "#AAAAAA"
+    },
+    {
+      "key": "indicator",
+      "type": "bar",
+      "rect": [12, 68, 176, 14],
+      "zOrder": 1,
+      "border_w": 1,
+      "bar_bg_c": "0:#222222",
+      "bar_fill_c": "0:#00CC66,0.6:#FFAA00,1:#FF4444"
+    }
+  ]
+}

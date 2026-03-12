@@ -17,7 +17,7 @@ type ApprovalTargetApp = "claude" | "codex";
 type LayoutDef = Record<number, SlotConfig>;
 type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";
 type ConnectionStatus = "connected" | "disconnected" | "connecting";
-type WidgetKind = "bridge-status";
+type WidgetKind = "bridge-status" | "session-activity";
 interface WidgetDef {
   kind: WidgetKind;
 }
@@ -938,17 +938,21 @@ let widgetRenderContext: {
   connectionStatus?: ConnectionStatus;
   state?: string;
   timestamp?: number;
+  sessionStats?: { approves: number; denials: number };
 } = {};
 
 export function setWidgetRenderContext(context: {
   connectionStatus?: ConnectionStatus;
   state?: string;
   timestamp?: number;
+  sessionStats?: { approves: number; denials: number };
 }): void {
   widgetRenderContext = { ...context };
 }
 
-function widgetSVG(slotIndex: number, label: string, _widget: WidgetDef): string {
+function widgetSVG(slotIndex: number, _label: string, widget: WidgetDef): string {
+  if (widget.kind === "session-activity") return sessionActivitySVG(slotIndex);
+  // Default: bridge-status
   const p = resolveThemePaletteForSlot(currentTheme, slotIndex);
   const bg = resolveColor(p.macroBg, defaultColors.bg, undefined);
   const fg = resolveColor(p.macroLabel, defaultColors.text, undefined);
@@ -958,12 +962,28 @@ function widgetSVG(slotIndex: number, label: string, _widget: WidgetDef): string
   const stamp = widgetRenderContext.timestamp ?? Date.now();
   const ageSec = Math.max(0, Math.floor((Date.now() - stamp) / 1000));
   const ageText = ageSec < 60 ? `${ageSec}s` : `${Math.floor(ageSec / 60)}m`;
+  const connected = conn === "connected";
+  const iconColor = connected ? "#22c55e" : "#ef4444";
+  const iconPath = connected ? LUCIDE_ICONS["thumbs-up"] : LUCIDE_ICONS["thumbs-down"];
+  const stateLabel = `${state} ${ageText}`;
+  const fontSize = stateLabel.length > 7 ? 26 : 32;
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <rect width="144" height="144" rx="16" fill="${bg}" />
-    <text x="72" y="28" font-size="16" font-family="sans-serif" text-anchor="middle" fill="${fg}" opacity="0.9">${label || "Widget"}</text>
-    <text x="72" y="64" font-size="18" font-family="sans-serif" text-anchor="middle" fill="${fg}">${conn === "connected" ? "Bridge:OK" : "Bridge:OFF"}</text>
-    <text x="72" y="90" font-size="16" font-family="sans-serif" text-anchor="middle" fill="${fg}">State:${state}</text>
-    <text x="72" y="116" font-size="14" font-family="sans-serif" text-anchor="middle" fill="${fg}" opacity="0.85">${ageText}</text>
+    <g transform="translate(30, 16) scale(3.5)" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconPath}</g>
+    <text x="72" y="122" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${fg}">${stateLabel}</text>
+  </svg>`;
+}
+
+function sessionActivitySVG(slotIndex: number): string {
+  const p = resolveThemePaletteForSlot(currentTheme, slotIndex);
+  const bg = resolveColor(p.macroBg, defaultColors.bg, undefined);
+  const fg = resolveColor(p.macroLabel, defaultColors.text, undefined);
+  const stats = widgetRenderContext.sessionStats ?? { approves: 0, denials: 0 };
+  return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+    <rect width="144" height="144" rx="16" fill="${bg}" />
+    <text x="72" y="40" font-size="32" font-family="sans-serif" text-anchor="middle" fill="#22c55e">${stats.approves}</text>
+    <text x="72" y="80" font-size="32" font-family="sans-serif" text-anchor="middle" fill="#ef4444">${stats.denials}</text>
+    <text x="72" y="122" font-size="32" font-family="sans-serif" text-anchor="middle" fill="${fg}">Score</text>
   </svg>`;
 }
 

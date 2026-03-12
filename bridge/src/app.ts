@@ -152,6 +152,7 @@ interface StatePayload {
   } | null;
   uptimeSeconds: number;
   deck: SlotHeartbeatPayload | null;
+  sessionStats: { approves: number; denials: number };
 }
 
 interface LogEntry {
@@ -320,6 +321,7 @@ export function createApp(): DeckyApp {
       question: pendingQuestion,
       uptimeSeconds: Math.floor((Date.now() - startedAt) / 1000),
       deck: deckEntry,
+      sessionStats: approvalTrace.getSessionStats(),
     };
   }
 

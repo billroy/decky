@@ -97,6 +97,16 @@ export class ApprovalTraceStore {
     trace.updatedAt = Date.now();
   }
 
+  getSessionStats(): { approves: number; denials: number } {
+    let approves = 0;
+    let denials = 0;
+    for (const t of this.traces) {
+      if (t.action === "approve") approves++;
+      else if (t.action === "deny") denials++;
+    }
+    return { approves, denials };
+  }
+
   list(limit = 25): ApprovalTraceRecord[] {
     const n = Number.isFinite(limit) ? Math.max(1, Math.floor(limit)) : 25;
     const start = Math.max(0, this.traces.length - n);

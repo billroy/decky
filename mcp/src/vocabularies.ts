@@ -146,6 +146,7 @@ export const SLOT_TYPES = [
 
 export const WIDGET_KINDS = [
   { kind: "bridge-status", description: "Shows bridge connection status (green/red dot)" },
+  { kind: "session-activity", description: "Displays session approve/deny counts" },
 ];
 
 export const TARGET_APPS = [

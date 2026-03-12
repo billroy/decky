@@ -131,7 +131,7 @@ export function registerConfigWriteTools(server: McpServer): void {
         submit: z.boolean().optional().describe("Auto-submit after injection"),
         colors: ColorSchema,
         widgetKind: z
-          .enum(["bridge-status", "rate-limit"])
+          .enum(["bridge-status", "rate-limit", "session-activity"])
           .optional()
           .describe("Widget kind (widget type only)"),
       }),
@@ -212,7 +212,7 @@ export function registerConfigWriteTools(server: McpServer): void {
         targetApp: z.string().optional(),
         submit: z.boolean().optional(),
         colors: ColorSchema,
-        widgetKind: z.enum(["bridge-status"]).optional(),
+        widgetKind: z.enum(["bridge-status", "session-activity"]).optional(),
       }),
     },
     async (args) => {
