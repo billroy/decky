@@ -13,6 +13,8 @@ Decky has two components that run locally on your machine:
 
 You drag **Decky Slot** actions onto your Stream Deck keys. Each slot dynamically changes its appearance and behavior based on the current state of your AI session — showing approval buttons when permission is needed, command buttons when idle, and status indicators while tools execute.
 
+An optional **MCP server** (`@decky/mcp`) gives Claude natural-language control over your Decky configuration. See [MCP Server](#mcp-server-optional) below.
+
 ## Prerequisites
 
 Install these before running the Decky installer:
@@ -77,7 +79,7 @@ node hooks/install.js
 cd plugin && streamdeck link com.decky.controller.sdPlugin
 ```
 
-### 2. Start the bridge
+### Start the bridge
 
 ```bash
 ./start.sh
@@ -85,7 +87,7 @@ cd plugin && streamdeck link com.decky.controller.sdPlugin
 
 The bridge listens on `http://localhost:9130`.
 
-### 3. Add slots to your Stream Deck
+### Add slots to your Stream Deck
 
 Open the Stream Deck app, find **Decky Slot** under Custom actions, and drag it onto every key you want Decky to control. Click each key to configure it in the Property Inspector.
 
@@ -95,11 +97,56 @@ Open the Stream Deck app, find **Decky Slot** under Custom actions, and drag it 
 node hooks/uninstall.js
 ```
 
-This removes hook scripts from `~/.decky/hooks/` and cleans Decky entries from `~/.claude/settings.json`. To fully remove:
+This removes hook scripts from `~/.decky/hooks/`, cleans Decky entries from `~/.claude/settings.json`, and removes the MCP server registration if it was installed. To fully remove:
 
 1. Delete the plugin from your Stream Deck plugins directory
 2. Restart the Stream Deck app
 3. Optionally remove `~/.decky/` (contains config and bridge token)
+
+## MCP Server (optional)
+
+Decky includes an optional MCP server that lets Claude read and write your Decky configuration through natural language. It is **not installed by default** — oversight-only mode (hooks only, no MCP) is the default and recommended configuration.
+
+### Why optional?
+
+The MCP server gives Claude write access to your Decky config. The bridge defaults to `readOnly: true`, which means write tools aren't registered at all. To use write tools you opt in explicitly. Users who only want hardware-enforced approval/deny don't need the MCP at all.
+
+### Install the MCP server
+
+```bash
+node hooks/install.js --with-mcp
+```
+
+Or register manually at any time:
+
+```bash
+claude mcp add decky --command npx -- -y @decky/mcp
+```
+
+Restart Claude Code to activate. The MCP server connects to your running bridge automatically.
+
+### Enable write tools
+
+By default the MCP server registers read-only tools (status, config inspection, logs, debug). To enable config-write tools:
+
+```bash
+# Set readOnly: false in ~/.decky/config.json
+# or set the env var when starting the bridge:
+DECKY_READONLY=0 ./start.sh
+```
+
+### What you can ask Claude with MCP enabled
+
+```
+"Is my Decky bridge connected?"
+"What themes are available?"
+"Set the theme to Dracula"
+"Set the icon on slot 2 to a stop sign and make it green"
+"Switch the Push and MakePR slots"
+"Show me the last 20 bridge log lines"
+"What's in the approval queue?"
+"Reset all colors back to the theme defaults"
+```
 
 ## User's Guide
 
@@ -293,20 +340,18 @@ Decky works with multiple AI coding assistants. The hook integration is designed
 
 ## Recovery and Backups
 
-Config writes are protected with atomic saves and rotation backups.
+Config writes are protected with atomic saves and 10 rotating backups.
 
 - **Active config:** `~/.decky/config.json`
 - **Backups:** `config.json.bak.0` (newest) through `config.json.bak.9`
 
-Restore via the bridge API:
+Restore a backup:
 ```bash
-# List backups
-curl -H "Authorization: Bearer $(cat ~/.decky/bridge-token)" http://localhost:9130/config/backups
+# Interactive restore (lists backups and prompts for index)
+node scripts/recover-config.mjs
 
-# Restore backup 0 (most recent)
-curl -X POST -H "Content-Type: application/json" \
-     -H "Authorization: Bearer $(cat ~/.decky/bridge-token)" \
-     -d '{"index": 0}' http://localhost:9130/config/restore
+# Manual restore
+cp ~/.decky/config.json.bak.0 ~/.decky/config.json
 ```
 
 ## Development
@@ -319,8 +364,9 @@ cd bridge && npm run dev
 cd plugin && npm run watch
 
 # Tests
-cd bridge && npm test          # 198 tests
-cd plugin && npm test          # 102 tests (unit)
+cd bridge && npm test          # 240 tests
+cd mcp && npm test             # 45 tests
+cd plugin && npm test          # unit tests
 cd plugin && npm run test:pi   # PI Playwright tests
 ```
 
@@ -343,10 +389,10 @@ All endpoints require authentication via `Authorization: Bearer <token>` or `X-D
 | POST   | `/hook`             | Receive Claude hook events     | 200/min    |
 | GET    | `/status`           | Current state + capabilities   | -          |
 | GET    | `/config`           | Current configuration          | 60/min     |
-| PUT    | `/config`           | Save configuration             | 60/min     |
+| PUT    | `/config`           | Save configuration (read-only mode returns 403) | 60/min |
 | POST   | `/config/reload`    | Reload config from disk        | 60/min     |
-| GET    | `/config/backups`   | List backup metadata           | 60/min     |
-| POST   | `/config/restore`   | Restore backup by index        | 60/min     |
+| GET    | `/logs`             | Recent bridge log lines        | 60/min     |
+| GET    | `/debug/approval-trace` | Approval trace history (requires DECKY_DEBUG=1) | 60/min |
 
 ## License
 
