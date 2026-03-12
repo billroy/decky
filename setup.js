@@ -66,10 +66,17 @@ if (inRepo) {
   console.log("=== Done ===");
   console.log("");
   console.log("Start the bridge:");
-  console.log("  node bridge/src/server.js");
-  console.log("");
-  console.log("Or use start.sh:");
-  console.log("  ./start.sh");
+  if (process.platform === "win32") {
+    console.log("  start.cmd");
+    console.log("");
+    console.log("Or directly:");
+    console.log("  cd bridge && npm run dev");
+  } else {
+    console.log("  ./start.sh");
+    console.log("");
+    console.log("Or directly:");
+    console.log("  cd bridge && npm run dev");
+  }
 } else {
   // ── Hooks-only install (npx from outside the repo) ──────────────────────
   console.log("Installing hooks only (bridge/plugin source not found).");
