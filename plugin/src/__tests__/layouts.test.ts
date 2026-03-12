@@ -235,29 +235,26 @@ describe("layouts", () => {
       expect(stop.data?.targetApp).toBe("claude");
     });
 
-    it("slot 3 is the Always Allow button with tool name in data", () => {
-      const config = getSlotConfig("awaiting-approval", 3, "Bash", undefined, {
-        pending: 2,
-        position: 1,
-        targetApp: "codex",
-        flow: "mirror",
-        requestId: "req-1",
-      });
-      expect(config.action).toBe("alwaysAllow");
-      expect(config.title).toBe("Always Allow");
-      expect(config.data?.tool).toBe("Bash");
-      expect(config.svg).toContain("#7c3aed"); // purple background
+    it("slot 3 is the approval info display showing tool name on provider background", () => {
+      const approval = { pending: 2, position: 1, targetApp: "codex" as const, flow: "mirror" as const, requestId: "req-1" };
+      const config = getSlotConfig("awaiting-approval", 3, "Bash", undefined, approval);
+      expect(config.action).toBeUndefined(); // display-only, no action
+      expect(config.title).toBe("Bash");
+      expect(config.svg).toContain("Bash"); // tool name in SVG
     });
 
-    it("slot 3 Always Allow has empty string tool when no tool name", () => {
+    it("slot 3 approval info uses provider palette color as background", () => {
+      const approval = { pending: 1, position: 1, targetApp: "codex" as const, flow: "mirror" as const, requestId: "req-1" };
+      const config = getSlotConfig("awaiting-approval", 3, "Read", undefined, approval);
+      // Codex palette background should be present in the SVG
+      expect(config.svg).toMatch(/fill="#[0-9a-fA-F]{6}"/);
+      expect(config.action).toBeUndefined();
+    });
+
+    it("slot 3 approval info with no tool name falls back gracefully", () => {
       const config = getSlotConfig("awaiting-approval", 3);
-      expect(config.action).toBe("alwaysAllow");
-      expect(config.data?.tool).toBe("");
-    });
-
-    it("slot 3 Always Allow shows 'Always' label", () => {
-      const config = getSlotConfig("awaiting-approval", 3, "Read");
-      expect(config.svg).toContain("Always");
+      expect(config.action).toBeUndefined();
+      expect(config.title).toBe("Tool Info");
     });
 
     it("slots beyond approval buttons (4+) show macro content instead of empty", () => {

@@ -22,9 +22,6 @@ import {
   loadConfig,
   getConfig,
   getToolRiskRules,
-  getAlwaysAllowRules,
-  addAlwaysAllowRule,
-  removeAlwaysAllowRule,
   listConfigBackups,
   normalizeTheme,
   restoreConfigBackup,
@@ -167,19 +164,6 @@ interface LogEntry {
 const LOG_BUFFER_MAX = 500;
 
 /** Classify a tool name against configured risk rules (first match wins). */
-function matchesAlwaysAllow(toolName: string | null): boolean {
-  if (!toolName) return false;
-  for (const rule of getAlwaysAllowRules()) {
-    const p = rule.pattern;
-    if (p.endsWith("*")) {
-      if (toolName.startsWith(p.slice(0, -1))) return true;
-    } else {
-      if (toolName === p) return true;
-    }
-  }
-  return false;
-}
-
 function classifyToolRisk(toolName: string | null): RiskLevel | null {
   if (!toolName) return null;
   const rules = getToolRiskRules();
@@ -392,37 +376,23 @@ export function createApp(): DeckyApp {
       // Dedup: with a nonce, dedup by exact nonce (concurrent sessions use different nonces).
       // Without a nonce (legacy/simple hooks), fall back to single-queue mode (cap at 1).
       const toolName = payload.tool ?? null;
-      // Auto-approve tools that match an alwaysAllowRule.
-      // Return early — do not enqueue and do not advance the state machine.
-      if (matchesAlwaysAllow(toolName)) {
-        console.log(`[hook] auto-approve tool=${toolName ?? "?"} (alwaysAllow match)`);
-        if (flow === "gate" && options?.nonce) {
-          writeGateFile("approve", options.nonce);
-        } else {
-          approveOnceInClaude().catch((err) => {
-            console.error("[auto-approve] approveOnceInClaude failed:", err);
+      const alreadyQueued = nonce != null
+        ? approvalQueue.some((item) => item.nonce === nonce)
+        : approvalQueue.length > 0;
+      if (!alreadyQueued) {
+        const queued = enqueueApprovalRequest({
+          flow,
+          nonce,
+          sessionId,
+          cwd,
+          tool: toolName,
+          riskLevel: classifyToolRisk(toolName),
+        });
+        // Surface the target app when this request becomes the active one
+        if (getConfig().popUpApp && currentApproval()?.id === queued.id) {
+          surfaceTargetApp("claude").catch((err) => {
+            console.error("[queue] surfaceTargetApp on arrival failed:", err);
           });
-        }
-        return sm.getSnapshot();
-      } else {
-        const alreadyQueued = nonce != null
-          ? approvalQueue.some((item) => item.nonce === nonce)
-          : approvalQueue.length > 0;
-        if (!alreadyQueued) {
-          const queued = enqueueApprovalRequest({
-            flow,
-            nonce,
-            sessionId,
-            cwd,
-            tool: toolName,
-            riskLevel: classifyToolRisk(toolName),
-          });
-          // Surface the target app when this request becomes the active one
-          if (getConfig().popUpApp && currentApproval()?.id === queued.id) {
-            surfaceTargetApp("claude").catch((err) => {
-              console.error("[queue] surfaceTargetApp on arrival failed:", err);
-            });
-          }
         }
       }
     }
@@ -653,39 +623,6 @@ export function createApp(): DeckyApp {
     }
   });
 
-  app.get("/rules", (_req, res) => {
-    res.json({ rules: getAlwaysAllowRules() });
-  });
-
-  app.post("/rules", (req, res) => {
-    const body = req.body as Record<string, unknown>;
-    const pattern = typeof body.pattern === "string" ? body.pattern.trim() : "";
-    if (!pattern) {
-      res.status(400).json({ error: "pattern must be a non-empty string" });
-      return;
-    }
-    try {
-      const rules = addAlwaysAllowRule(pattern);
-      res.json({ ok: true, rules });
-    } catch (err) {
-      if (err instanceof ConfigValidationError) {
-        res.status(400).json({ error: err.message });
-        return;
-      }
-      res.status(500).json({ error: "Failed to add rule" });
-    }
-  });
-
-  app.delete("/rules/:id", (req, res) => {
-    const { id } = req.params;
-    if (!id) {
-      res.status(400).json({ error: "id is required" });
-      return;
-    }
-    const rules = removeAlwaysAllowRule(id);
-    res.json({ ok: true, rules });
-  });
-
   // --- Socket.io connections ---
 
   io.on("connection", (socket) => {
@@ -705,7 +642,7 @@ export function createApp(): DeckyApp {
     socket.emit("configUpdate", getConfig());
 
     const ACTION_THROTTLE_MS = 200;
-    const THROTTLE_EXEMPT = new Set(["approve", "deny", "cancel", "restart", "approveOnceInClaude", "selectOption", "alwaysAllow", "requestState"]);
+    const THROTTLE_EXEMPT = new Set(["approve", "deny", "cancel", "restart", "approveOnceInClaude", "selectOption", "requestState"]);
     let lastThrottledActionTime = 0;
 
     socket.on("action", (data: { action: string; [key: string]: unknown }) => {
@@ -919,44 +856,6 @@ export function createApp(): DeckyApp {
         writeQuestionResponse(rawIndex);
         pendingQuestion = null;
         sm.forceState("idle", "option selected via StreamDeck");
-      } else if (data.action === "alwaysAllow") {
-        const tool = typeof data.tool === "string" && data.tool.trim() ? data.tool.trim() : null;
-        if (tool) {
-          try { addAlwaysAllowRule(tool); } catch { /* ignore validation errors */ }
-        }
-        // Approve the current queued request. Both flows shift the queue and
-        // force state immediately (matching the approveOnceInClaude pattern),
-        // then click the Claude dialog.
-        if (currentApproval()) {
-          const activeFlow = currentApproval()!.flow;
-          if (activeFlow !== "gate") {
-            // mirror flow: shift queue + force state first for immediate visual feedback
-            pendingGateNonce = null;
-            shiftApprovalRequest();
-            const next = currentApproval();
-            if (next) {
-              sm.forceState("awaiting-approval", "queued approval pending", next.tool);
-              surfaceActiveApproval();
-            } else {
-              sm.forceState("tool-executing", "approved via alwaysAllow");
-            }
-            withApprovalAttemptContext(actionId, () => approveOnceInClaude()).catch((err) => {
-              console.error("[io] alwaysAllow approve failed in mirror flow:", err);
-              socket.emit("error", { error: "Failed to approve in Claude" });
-            });
-          } else {
-            writeGateFile("approve", pendingGateNonce ?? undefined);
-            pendingGateNonce = null;
-            shiftApprovalRequest();
-            const next = currentApproval();
-            if (next) {
-              sm.forceState("awaiting-approval", "queued approval pending", next.tool);
-              surfaceActiveApproval();
-            } else {
-              sm.forceState("tool-executing", "approved via alwaysAllow");
-            }
-          }
-        }
       } else if (data.action === "startDictationForClaude") {
         startDictationForClaude().catch((err) => {
           console.error("[io] startDictationForClaude failed:", err);

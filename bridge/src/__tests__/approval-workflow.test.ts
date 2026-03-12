@@ -17,7 +17,7 @@ import {
   clearQuestionResponse,
   readQuestionResponse,
 } from "../approval-gate.js";
-import { saveConfig, addAlwaysAllowRule, removeAlwaysAllowRule } from "../config.js";
+import { saveConfig } from "../config.js";
 import { readFileSync } from "node:fs";
 import { getBridgeToken } from "../security.js";
 
@@ -63,7 +63,7 @@ afterEach(() => {
   clearGateFile();
   clearQuestionResponse();
   decky.sm.forceState("idle", "test cleanup");
-  saveConfig({ enableApproveOnce: true, enableDictation: true, alwaysAllowRules: [] });
+  saveConfig({ enableApproveOnce: true, enableDictation: true });
 });
 
 async function postHook(body: Record<string, unknown>, headers: Record<string, string> = {}) {
@@ -476,94 +476,3 @@ describe("AskUserQuestion — asking state + selectOption action", () => {
   });
 });
 
-describe("alwaysAllow socket action", () => {
-  beforeEach(() => {
-    decky.sm.forceState("idle", "test reset");
-    vi.mocked(mockApproveOnce).mockClear();
-  });
-
-  it("gate flow: alwaysAllow adds rule and writes approve to gate file", async () => {
-    await postHookGate({ event: "PreToolUse", tool: "Bash" });
-
-    const sock = await connectClient();
-    const statePromise = waitForState(sock, "tool-executing");
-
-    sock.emit("action", { action: "alwaysAllow", tool: "Bash" });
-    await statePromise;
-
-    expect(gateFileExists()).toBe(true);
-    expect(readFileSync(GATE_FILE_PATH, "utf-8")).toBe("approve");
-
-    // Rule should now be saved
-    const { getAlwaysAllowRules } = await import("../config.js");
-    const rules = getAlwaysAllowRules();
-    expect(rules.some((r) => r.pattern === "Bash")).toBe(true);
-
-    sock.disconnect();
-    saveConfig({ alwaysAllowRules: [] });
-  });
-
-  it("mirror flow: alwaysAllow adds rule and calls approveOnceInClaude", async () => {
-    await postHook({ event: "PermissionRequest", tool: "Read" });
-
-    const sock = await connectClient();
-    sock.emit("action", { action: "alwaysAllow", tool: "Read" });
-
-    await vi.waitFor(() => expect(vi.mocked(mockApproveOnce)).toHaveBeenCalledTimes(1));
-
-    const { getAlwaysAllowRules } = await import("../config.js");
-    const rules = getAlwaysAllowRules();
-    expect(rules.some((r) => r.pattern === "Read")).toBe(true);
-
-    sock.disconnect();
-    saveConfig({ alwaysAllowRules: [] });
-  });
-
-  it("alwaysAllow with no active approval is a no-op (no crash)", async () => {
-    const sock = await connectClient();
-    // State is idle, no pending approval
-    sock.emit("action", { action: "alwaysAllow", tool: "Bash" });
-
-    // Should not crash — just wait briefly
-    await new Promise((r) => setTimeout(r, 100));
-    expect(decky.sm.getSnapshot().state).toBe("idle");
-
-    sock.disconnect();
-    saveConfig({ alwaysAllowRules: [] });
-  });
-});
-
-describe("alwaysAllow auto-approve", () => {
-  beforeEach(() => {
-    decky.sm.forceState("idle", "test reset");
-    vi.mocked(mockApproveOnce).mockClear();
-  });
-
-  it("exact match: PermissionRequest for allowed tool calls approveOnceInClaude, state stays idle", async () => {
-    addAlwaysAllowRule("Read");
-    const { data } = await postHook({ event: "PermissionRequest", tool: "Read" });
-    expect(data.state.state).toBe("idle");
-    expect(data.state.approval).toBeNull();
-    await vi.waitFor(() => expect(vi.mocked(mockApproveOnce)).toHaveBeenCalledTimes(1));
-  });
-
-  it("wildcard match: PermissionRequest for tool with * suffix", async () => {
-    addAlwaysAllowRule("Read*");
-    const { data } = await postHook({ event: "PermissionRequest", tool: "ReadFile" });
-    expect(data.state.state).toBe("idle");
-    await vi.waitFor(() => expect(vi.mocked(mockApproveOnce)).toHaveBeenCalledTimes(1));
-  });
-
-  it("non-matching tool still queues normally", async () => {
-    addAlwaysAllowRule("Read");
-    const { data } = await postHook({ event: "PermissionRequest", tool: "Bash" });
-    expect(data.state.state).toBe("awaiting-approval");
-    expect(vi.mocked(mockApproveOnce)).not.toHaveBeenCalled();
-  });
-
-  it("empty alwaysAllowRules: all tools queue normally", async () => {
-    const { data } = await postHook({ event: "PermissionRequest", tool: "Read" });
-    expect(data.state.state).toBe("awaiting-approval");
-    expect(vi.mocked(mockApproveOnce)).not.toHaveBeenCalled();
-  });
-});

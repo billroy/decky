@@ -550,7 +550,7 @@ describe("SlotAction render path", () => {
     expect(latestSvg(row2c0)).toContain("Approve");
     expect(latestSvg(row2c1)).toContain("Deny");
     expect(latestSvg(row2c2)).toContain("Stop");
-    expect(latestSvg(row2c3)).toContain("Always");
+    expect(latestSvg(row2c3)).toContain("Bash"); // approvalInfoSlot shows tool name
     expect(latestSvg(row2c4)).toContain("•••");
   });
 

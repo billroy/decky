@@ -9,7 +9,6 @@ import { registerStatusTools } from "./tools/status.js";
 import { registerConfigReadTools } from "./tools/config-read.js";
 import { registerConfigWriteTools } from "./tools/config-write.js";
 import { registerColorTools } from "./tools/colors.js";
-import { registerRulesTools } from "./tools/rules.js";
 import { registerDebugTools } from "./tools/debug.js";
 
 const server = new McpServer({
@@ -21,7 +20,6 @@ registerStatusTools(server);
 registerConfigReadTools(server);
 registerConfigWriteTools(server);
 registerColorTools(server);
-registerRulesTools(server);
 registerDebugTools(server);
 
 const transport = new StdioServerTransport();

@@ -28,7 +28,6 @@ async function makeServer(): Promise<{ client: Client; server: McpServer }> {
   const { registerConfigReadTools } = await import("../tools/config-read.js");
   const { registerConfigWriteTools } = await import("../tools/config-write.js");
   const { registerColorTools } = await import("../tools/colors.js");
-  const { registerRulesTools } = await import("../tools/rules.js");
   const { registerDebugTools } = await import("../tools/debug.js");
 
   const server = new McpServer({ name: "test-decky", version: "0.0.1" });
@@ -36,7 +35,6 @@ async function makeServer(): Promise<{ client: Client; server: McpServer }> {
   registerConfigReadTools(server);
   registerConfigWriteTools(server);
   registerColorTools(server);
-  registerRulesTools(server);
   registerDebugTools(server);
 
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
@@ -148,7 +146,6 @@ describe("config write tools", () => {
       { label: "Push", type: "macro", text: "git push", icon: "🚀" },
       { label: "Status", type: "macro", text: "git status" },
     ],
-    alwaysAllowRules: [],
   };
 
   beforeEach(async () => {
@@ -296,61 +293,6 @@ describe("color tools", () => {
     const putCall = mockBridge.put.mock.calls[0];
     const config = putCall[1] as Record<string, unknown>;
     expect(config.colors).toBeUndefined();
-  });
-});
-
-describe("rules tools", () => {
-  let client: Client;
-
-  beforeEach(async () => {
-    vi.clearAllMocks();
-    ({ client } = await makeServer());
-  });
-
-  it("decky_list_always_allow_rules returns rules", async () => {
-    mockBridge.get.mockResolvedValue({
-      rules: [{ id: "aal-1", pattern: "Bash", createdAt: Date.now() }],
-    });
-    const text = await callTool(client, "decky_list_always_allow_rules");
-    const data = parseJson(text) as Record<string, unknown>;
-    expect(data.count).toBe(1);
-    expect(Array.isArray(data.rules)).toBe(true);
-  });
-
-  it("decky_add_always_allow_rule adds a rule", async () => {
-    mockBridge.post.mockResolvedValue({
-      ok: true,
-      rules: [{ id: "aal-1", pattern: "Read", createdAt: Date.now() }],
-    });
-    const text = await callTool(client, "decky_add_always_allow_rule", { pattern: "Read" });
-    const data = parseJson(text) as Record<string, unknown>;
-    expect(data.success).toBe(true);
-    expect(mockBridge.post).toHaveBeenCalledWith("/rules", { pattern: "Read" });
-  });
-
-  it("decky_delete_always_allow_rule deletes by id", async () => {
-    mockBridge.delete.mockResolvedValue({ ok: true, rules: [] });
-    const text = await callTool(client, "decky_delete_always_allow_rule", { id: "aal-1" });
-    const data = parseJson(text) as Record<string, unknown>;
-    expect(data.success).toBe(true);
-    expect(mockBridge.delete).toHaveBeenCalledWith("/rules/aal-1");
-  });
-
-  it("decky_delete_always_allow_rule resolves by pattern", async () => {
-    mockBridge.get.mockResolvedValue({
-      rules: [{ id: "aal-2", pattern: "Bash", createdAt: Date.now() }],
-    });
-    mockBridge.delete.mockResolvedValue({ ok: true, rules: [] });
-    const text = await callTool(client, "decky_delete_always_allow_rule", { pattern: "Bash" });
-    const data = parseJson(text) as Record<string, unknown>;
-    expect(data.success).toBe(true);
-    expect(mockBridge.delete).toHaveBeenCalledWith("/rules/aal-2");
-  });
-
-  it("decky_delete_always_allow_rule errors when pattern not found", async () => {
-    mockBridge.get.mockResolvedValue({ rules: [] });
-    const text = await callTool(client, "decky_delete_always_allow_rule", { pattern: "NotExist" });
-    expect(text).toContain("Error:");
   });
 });
 

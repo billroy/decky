@@ -765,20 +765,13 @@ function stopSlot(approval?: ApprovalUiMeta | null): SlotConfig {
   };
 }
 
-function alwaysAllowSlot(tool: string | null | undefined): SlotConfig {
-  const label = "Always";
-  const iconPath = LUCIDE_ICONS["infinity"] ?? "";
-  const bg = "#7c3aed"; // purple
-  const svg = `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
-    <rect width="144" height="144" rx="16" fill="${bg}" />
-    <g transform="translate(30, 16) scale(3.5)" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconPath}</g>
-    <text x="72" y="122" font-size="20" font-family="sans-serif" text-anchor="middle" fill="#ffffff">${label}</text>
-  </svg>`;
+function approvalInfoSlot(
+  toolName: string | null | undefined,
+  approval: ApprovalUiMeta | null | undefined,
+): SlotConfig {
   return {
-    svg,
-    title: "Always Allow",
-    action: "alwaysAllow",
-    data: { tool: tool ?? "" },
+    svg: approvalInfoSVG(toolName, approval),
+    title: toolName?.trim() || "Tool Info",
   };
 }
 
@@ -1079,7 +1072,7 @@ export function getSlotConfig(
     if (slotIndex === 0) return approveSlot(approval);
     if (slotIndex === 1) return denySlot(approval);
     if (slotIndex === 2) return stopSlot(approval);
-    if (slotIndex === 3) return alwaysAllowSlot(toolName);
+    if (slotIndex === 3) return approvalInfoSlot(toolName, approval);
     // Slots beyond the approval buttons preserve their idle/macro content
     const macroList = macros ?? DEFAULT_MACROS;
     const idleLayout = buildIdleLayout(macroList);
@@ -1099,7 +1092,7 @@ export function getLayout(state: string, macros?: MacroInput[], question?: Quest
   if (state === "awaiting-approval") {
     const idle = buildIdleLayout(macros ?? DEFAULT_MACROS);
     // Approval buttons override slots 0-3; slots 4+ keep macro content
-    return { ...idle, 0: approveSlot(approval), 1: denySlot(approval), 2: stopSlot(approval), 3: alwaysAllowSlot(null) };
+    return { ...idle, 0: approveSlot(approval), 1: denySlot(approval), 2: stopSlot(approval), 3: approvalInfoSlot(null, approval) };
   }
   if (state === "asking") {
     const options = question?.options ?? [];

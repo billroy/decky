@@ -91,9 +91,6 @@ export function registerDebugTools(server: McpServer): void {
           theme: config.theme ?? null,
           approvalTimeout: config.approvalTimeout ?? null,
           defaultTargetApp: config.defaultTargetApp ?? null,
-          alwaysAllowRuleCount: Array.isArray(config.alwaysAllowRules)
-            ? config.alwaysAllowRules.length
-            : 0,
           macroLabels: macros.map((m: Record<string, unknown>) => m.label ?? "(unlabeled)"),
         };
       } catch (e) {
@@ -136,9 +133,6 @@ export function registerDebugTools(server: McpServer): void {
           uptimeSeconds: status.uptimeSeconds ?? null,
           macroCount: macros.length,
           theme: config.theme ?? null,
-          alwaysAllowRules: Array.isArray(config.alwaysAllowRules)
-            ? config.alwaysAllowRules.length
-            : 0,
           deck: status.deck ?? null,
         });
       } catch (e) {
