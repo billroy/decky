@@ -22,9 +22,7 @@ import {
   loadConfig,
   getConfig,
   getToolRiskRules,
-  listConfigBackups,
   normalizeTheme,
-  restoreConfigBackup,
   saveConfig,
   ConfigValidationError,
   type RiskLevel,
@@ -600,27 +598,6 @@ export function createApp(): DeckyApp {
     const config = loadConfig();
     io.emit("configUpdate", config);
     res.json({ ok: true, config });
-  });
-
-  app.get("/config/backups", (_req, res) => {
-    res.json({ backups: listConfigBackups() });
-  });
-
-  app.post("/config/restore", (req, res) => {
-    const body = req.body as Record<string, unknown>;
-    const idxRaw = body?.index;
-    const index = typeof idxRaw === "number" ? Math.floor(idxRaw) : Number.NaN;
-    try {
-      const config = restoreConfigBackup(index);
-      io.emit("configUpdate", config);
-      res.json({ ok: true, config, restoredIndex: index, backups: listConfigBackups() });
-    } catch (err) {
-      if (err instanceof ConfigValidationError) {
-        res.status(400).json({ error: err.message });
-        return;
-      }
-      res.status(500).json({ error: "Failed to restore config backup" });
-    }
   });
 
   // --- Socket.io connections ---

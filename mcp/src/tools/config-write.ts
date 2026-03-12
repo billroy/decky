@@ -438,30 +438,4 @@ export function registerConfigWriteTools(server: McpServer): void {
     },
   );
 
-  // --- decky_restore_config_backup ---
-  server.registerTool(
-    "decky_restore_config_backup",
-    {
-      description:
-        "Restore a configuration backup by index. Use decky_get_config_backups to list available backups.",
-      inputSchema: z.object({
-        index: z.number().int().min(0).describe("Backup index (0 = most recent)"),
-      }),
-    },
-    async ({ index }) => {
-      try {
-        const result = await bridge.post<{ config: DeckyConfig; restoredIndex: number }>(
-          "/config/restore",
-          { index },
-        );
-        return ok({
-          success: true,
-          restoredIndex: result.restoredIndex,
-          macroCount: result.config.macros?.length ?? 0,
-        });
-      } catch (e) {
-        return fail(formatBridgeError(e));
-      }
-    },
-  );
 }

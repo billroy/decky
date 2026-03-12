@@ -38,23 +38,6 @@ export function registerConfigReadTools(server: McpServer): void {
   );
 
   server.registerTool(
-    "decky_get_config_backups",
-    {
-      description:
-        "List available configuration backups. Use decky_restore_config_backup to restore one.",
-      inputSchema: z.object({}),
-    },
-    async () => {
-      try {
-        const result = await bridge.get<{ backups: unknown[] }>("/config/backups");
-        return ok(result);
-      } catch (e) {
-        return fail(formatBridgeError(e));
-      }
-    },
-  );
-
-  server.registerTool(
     "decky_list_themes",
     {
       description: "List all available Decky themes with descriptions.",

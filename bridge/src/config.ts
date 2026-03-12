@@ -10,7 +10,6 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
-  statSync,
   unlinkSync,
   writeFileSync,
 } from "node:fs";
@@ -157,12 +156,6 @@ const ICON_ALIASES: Readonly<Record<string, string>> = {
 
 let currentConfig: DeckyConfig = { ...DEFAULT_CONFIG };
 
-export interface ConfigBackupInfo {
-  index: number;
-  path: string;
-  modifiedAt: number;
-  size: number;
-}
 
 export function normalizeTheme(value: unknown, fallback: Theme): Theme {
   return value === "light" ||
@@ -421,43 +414,6 @@ function writeConfigAtomically(raw: string): void {
   }
 }
 
-export function listConfigBackups(): ConfigBackupInfo[] {
-  ensureDir();
-  const out: ConfigBackupInfo[] = [];
-  for (let i = 0; i < CONFIG_BACKUP_COUNT; i++) {
-    const path = backupPath(i);
-    if (!existsSync(path)) continue;
-    const st = statSync(path);
-    out.push({
-      index: i,
-      path,
-      modifiedAt: st.mtimeMs,
-      size: st.size,
-    });
-  }
-  return out;
-}
-
-export function restoreConfigBackup(index: number): DeckyConfig {
-  ensureDir();
-  if (!Number.isInteger(index) || index < 0 || index >= CONFIG_BACKUP_COUNT) {
-    throw new ConfigValidationError(`backup index must be between 0 and ${CONFIG_BACKUP_COUNT - 1}`);
-  }
-  const src = backupPath(index);
-  if (!existsSync(src)) {
-    throw new ConfigValidationError(`backup index ${index} does not exist`);
-  }
-  const raw = readFileSync(src, "utf-8");
-  // Ensure backup is at least parseable before replacing live config.
-  try {
-    JSON.parse(raw);
-  } catch {
-    throw new ConfigValidationError(`backup index ${index} is not valid JSON`);
-  }
-  rotateBackups();
-  writeConfigAtomically(raw);
-  return loadConfig();
-}
 
 /** Ensure ~/.decky/ directory exists. */
 function ensureDir(): void {

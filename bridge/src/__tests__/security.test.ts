@@ -264,19 +264,6 @@ describe("HTTP authentication", () => {
     expect(res.status).toBe(401);
   });
 
-  it("rejects GET /config/backups without token (401)", async () => {
-    const res = await fetch(`${baseUrl}/config/backups`);
-    expect(res.status).toBe(401);
-  });
-
-  it("rejects POST /config/restore without token (401)", async () => {
-    const res = await fetch(`${baseUrl}/config/restore`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ index: 0 }),
-    });
-    expect(res.status).toBe(401);
-  });
 });
 
 // --- Tranche 6: Socket.io Authentication ---

@@ -130,12 +130,6 @@ describe("config read tools", () => {
     expect(typeof data.icons).toBe("object");
   });
 
-  it("decky_get_config_backups returns backups array", async () => {
-    mockBridge.get.mockResolvedValue({ backups: ["backup-1", "backup-2"] });
-    const text = await callTool(client, "decky_get_config_backups");
-    const data = parseJson(text) as Record<string, unknown>;
-    expect(Array.isArray(data.backups)).toBe(true);
-  });
 });
 
 describe("config write tools", () => {

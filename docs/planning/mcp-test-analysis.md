@@ -1,13 +1,15 @@
 # Decky Live Test Suite: MCP-Based Approach
 
+> **Last updated:** 2026-03-12. Always-allow feature removed; tool count reduced from 25 to 22. Rules-related tools (`decky_list/add/delete_always_allow_rule`) no longer exist.
+
 ## What the MCP layer already enables
 
-The 25 MCP tools give live read/write access to almost everything stateful:
+The 22 MCP tools give live read/write access to almost everything stateful:
 
 | Capability | Coverage |
 |---|---|
 | Bridge health, state, uptime | Full |
-| Config (macros, theme, colors, rules) | Full CRUD |
+| Config (macros, theme, colors) | Full CRUD |
 | Approval queue inspection | Full |
 | Debug trace + logs | Full (DECKY_DEBUG=1) |
 | Deck layout (via slotHeartbeat) | Read-only |
@@ -18,19 +20,19 @@ This is a strong foundation. Config round-trips, color/theme changes, and state 
 
 ## Gap analysis
 
-Three hard gaps prevent closed-loop testing today:
-
 ### Gap 1: No way to drive state transitions
 The bridge's state machine transitions via `POST /hook` (PreToolUse, PostToolUse, Stop, etc.), but there is no MCP tool exposing that endpoint. Without this, state can only be observed — not injected — so approval flows, AskUserQuestion handling, cancellation, etc. cannot be tested end-to-end.
 
 ### Gap 2: No way to send approval actions
 Approve/deny/cancel/macro actions go through Socket.io, not HTTP. No MCP tool exists for this. A full approval round-trip (inject PreToolUse → verify state → approve → verify idle) is not currently possible.
 
-### Gap 3: No visual verification of the deck
-The physical Stream Deck renders SVG/PNG icons per state. The `/status` endpoint returns the logical layout (slot labels, active slots, heartbeat metadata) but not a pixel image. Elgato's SDK does not expose a screenshot API. Options for visual verification:
-- **Logical layout comparison**: compare slot labels/icons/colors to expected spec (partially in place via `slotHeartbeat`)
-- **Screenshot of physical hardware**: requires camera or screen capture rig — fragile
-- **Headless icon hash**: render icons via `generate-icons.mjs`, compare checksums to baseline
+### Gap 3: Visual verification of the deck — solved
+
+The Stream Deck desktop app's preview pane is pixel-synced (or near enough) with the physical hardware. A screenshot of the app window serves as a reliable proxy for what the device displays, without requiring a camera or external capture rig.
+
+**Capture method:** macOS `screencapture -l <windowID>` can grab the Stream Deck app window programmatically. The window ID can be obtained via `osascript` or `GetWindowList`. Claude can also use browser automation tools to view/capture the app if it's visible.
+
+This means visual verification is available now — no new MCP tools or hardware needed. It tests the full rendering pipeline: plugin SVG generation → Stream Deck SDK rendering → final pixel output.
 
 ---
 
@@ -52,7 +54,7 @@ Add two new MCP tools with security constraints applied:
 
 **Security constraint:** Only available when `DECKY_TEST=1` is set in the bridge environment. The bridge refuses the endpoint in production mode. Never included in the production MCP server — a separate test-only MCP server registers this tool.
 
-**`decky_send_action`** — Emits a Socket.io `action` event, **scoped to safe actions only**: `requestState` and `selectOption` (for AskUserQuestion testing). Explicitly excludes `approve`, `deny`, `cancel`, `macro`, `alwaysAllow`, `approveOnceInClaude`.
+**`decky_send_action`** — Emits a Socket.io `action` event, **scoped to safe actions only**: `requestState` and `selectOption` (for AskUserQuestion testing). Explicitly excludes `approve`, `deny`, `cancel`, `macro`, `approveOnceInClaude`.
 
 With these two tools (and the security constraints in place), testable scenarios include:
 - State transitions (idle → awaiting-approval → idle)
@@ -66,7 +68,34 @@ With these two tools (and the security constraints in place), testable scenarios
 
 ---
 
-### Phase 2 — Layout snapshot testing (medium value, medium effort)
+### Phase 2 — Visual verification via Stream Deck app screenshots (high value, low effort)
+
+The Stream Deck app preview pane mirrors the physical device. Screenshotting the app window provides full-pipeline visual verification with no new tooling.
+
+**Approach:**
+1. Use `screencapture -l <windowID>` to capture the Stream Deck app window to a PNG
+2. Compare against baseline screenshots stored in the repo
+3. Drive state transitions (Phase 1 tools), capture after each transition, compare to expected baseline for that state
+
+**What this covers:**
+- Icon rendering correctness (SVG → PNG pipeline)
+- Layout accuracy (correct slots active per state, correct positions)
+- Color/theme application (backgrounds, icon tints, text colors)
+- State-dependent visual changes (button highlights, active/inactive appearance)
+
+**What this does not cover:**
+- Logical slot metadata (labels, types, actions) — use `decky_get_status` / `slotHeartbeat` for this
+- Pixel-perfect cross-platform rendering — tied to the macOS Stream Deck app
+
+**Baseline management:** Store baseline PNGs per state (idle, awaiting-approval, thinking, executing, ask-user) in the repo. Perceptual hashing (e.g., via ImageMagick `compare`) handles minor anti-aliasing differences. A threshold-based comparison catches real regressions without false positives from subpixel rendering.
+
+**Deliverable:** Capture script, baseline screenshots per state, comparison script with perceptual diff threshold.
+
+---
+
+### Phase 3 — Logical layout snapshots (medium value, low effort)
+
+Visual screenshots verify what the user sees; logical snapshots verify the data driving it. Both are useful — screenshots catch rendering bugs that logical checks miss, and logical checks catch metadata errors that screenshots can't express.
 
 The `/status` endpoint already returns deck layout. Formalize this into a verifiable contract.
 
@@ -76,43 +105,35 @@ Write expected-layout fixtures for each state. Each test verifies:
 - Correct slots are active per state
 - Labels and icons match the `layouts.ts` definitions
 - Color theme is applied correctly
-
-This is a logical substitute for visual screenshots: it tests what the plugin *sends* to the deck rather than what pixels appear. It catches configuration/logic errors but not SVG rendering bugs.
+- Slot types and actions are correct
 
 **Deliverable:** Layout snapshot tool, fixture files per state, comparison logic.
 
 ---
 
-### Phase 3 — Icon rendering verification (lower priority)
-
-The `generate-icons.mjs` script already produces PNG icons.
-
-**Approach (recommended):** Headless render + perceptual hash. Run `generate-icons.mjs`, hash each output, compare against baseline hashes stored in the repo. Fails if icon output changes unexpectedly. Suitable for CI.
-
-**Alternatives considered:**
-- Stream Deck simulator: no off-the-shelf option; building one is significant work
-- Camera/screen capture: fragile, requires external hardware
-
-**Deliverable:** Hash baseline file, CI step to regenerate and compare.
-
----
-
 ### Phase 4 — Scenario test scripts (high value, deferred)
 
-Once Phases 1–2 are complete, write declarative scenario tests that exercise multi-step flows end-to-end:
+Once Phases 1–3 are complete, write declarative scenario tests that exercise multi-step flows end-to-end, combining state injection, logical verification, and visual verification:
 
 ```
 scenario: state-transitions
   - inject PreToolUse (tool: Bash)
   - assert state == awaiting-approval
   - assert approval queue has 1 pending
+  - screenshot → compare to baseline/awaiting-approval.png
   - inject PostToolUse
   - assert state == idle
   - assert queue empty
+  - screenshot → compare to baseline/idle.png
 
+scenario: theme-change
+  - set theme "monokai"
+  - screenshot → compare to baseline/idle-monokai.png
+  - set theme "dark"
+  - screenshot → compare to baseline/idle-dark.png
 ```
 
-These run in a Claude session, using the Phase 1 tools, producing a pass/fail report.
+These run in a Claude session, using the Phase 1 tools + screenshot capture, producing a pass/fail report with visual diffs on failure.
 
 **Deliverable:** Scenario YAML/script format, test runner, initial scenario library.
 
@@ -123,8 +144,8 @@ These run in a Claude session, using the Phase 1 tools, producing a pass/fail re
 | Phase | What it unlocks | Effort | New infra needed |
 |---|---|---|---|
 | 1 — State-driving | State machine round-trips, AskUserQuestion | Low | Test-gated endpoint, 1–2 MCP tools |
-| 2 — Layout snapshots | Slot/icon/color verification per state | Medium | 1 MCP tool, fixture files |
-| 3 — Icon hashing | Rendering regression detection | Low–medium | Hash baseline + CI step |
-| 4 — Scenario scripts | Full scenario automation | Low (given P1+P2) | Test YAML/scripts |
+| 2 — Visual verification | Full-pipeline rendering verification per state | Low | Capture script, baseline PNGs, diff script |
+| 3 — Logical snapshots | Slot metadata verification per state | Low | 1 MCP tool, fixture files |
+| 4 — Scenario scripts | Full scenario automation with visual + logical | Low (given P1–P3) | Test YAML/scripts |
 
-Phase 1 is the highest-leverage first step — it converts the current read-only observer into a state-driving test harness. The security constraints (test-only gating, no approval actions exposed) are non-negotiable preconditions for implementing it safely.
+Phase 1 is the highest-leverage first step — it converts the current read-only observer into a state-driving test harness. Phase 2 follows immediately with minimal effort since the Stream Deck app screenshot approach requires no new MCP tools or bridge changes. The security constraints (test-only gating, no approval actions exposed) are non-negotiable preconditions for implementing Phase 1 safely.

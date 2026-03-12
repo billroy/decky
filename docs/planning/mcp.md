@@ -69,10 +69,9 @@ mcp/
     tools/
       status.ts             — get_status, get_rate_limit, get_approval_queue
       config-read.ts        — get_config, list_themes, list_icons, list_slot_types,
-                               list_target_apps, list_color_names, get_config_backups
+                               list_target_apps, list_color_names
       config-write.ts       — set_theme, update_slot, add_slot, delete_slot,
-                               reorder_slots, update_global_settings, reload_config,
-                               restore_config_backup
+                               reorder_slots, update_global_settings, reload_config
       colors.ts             — set_slot_colors, set_global_colors, reset_slot_colors,
                                reset_all_colors
       rules.ts              — list_always_allow_rules, add_always_allow_rule,
@@ -304,20 +303,7 @@ Returns the named color palette.
 
 **Output:** Array of `{ name, hex }` — the table in §3.1.
 
-#### `decky_get_config_backups`
-Returns the list of available configuration backups.
-
-**Input:** none
-
-**Output:**
-```json
-{
-  "backups": [
-    { "index": 0, "timestamp": "2026-03-11T10:00:00Z", "macroCount": 8 },
-    { "index": 1, "timestamp": "2026-03-10T22:00:00Z", "macroCount": 7 }
-  ]
-}
-```
+> **Removed:** `decky_get_config_backups` and `decky_restore_config_backup` were removed per security review (see `mcp-security-analysis.md`). Automatic backup rotation is preserved; users can restore backups via `scripts/recover-config.mjs` or manual file copy.
 
 ---
 
@@ -444,13 +430,6 @@ Reload the config from disk (pick up manual edits to `~/.decky/config.json`).
 **Input:** none
 
 **Output:** `{ "success": true }`
-
-#### `decky_restore_config_backup`
-Restore a configuration backup.
-
-**Input:** `{ "index": 1 }`
-
-**Output:** `{ "success": true, "restored": <restored MacroDef[]> }`
 
 ---
 
@@ -684,7 +663,7 @@ The MCP server runs on the same machine as the bridge, launched by Claude.app. T
 | Another local process reads the bridge token | Token file is `~/.decky/bridge-token`, mode `0o600` (owner-read only). Bridge already enforces this. MCP server reads it with the same user account. No new exposure. |
 | MCP server exposes bridge to network | MCP server uses stdio transport (no network listener). Bridge is already bound to `127.0.0.1`. No new exposure. |
 | MCP tool allows arbitrary code execution | No tool in this spec executes shell commands or injects text without explicit user direction. `decky_update_slot` updates macro text, but macro text is already user-controlled. No escalation. |
-| Config backup restore overwrites state unexpectedly | `decky_restore_config_backup` requires an explicit `index` parameter. No "restore latest" shortcut that could be triggered by a prompt injection in config content. |
+| Config backup restore overwrites state unexpectedly | **Eliminated** — `decky_restore_config_backup` and `decky_get_config_backups` removed from MCP per security review. Backup rotation preserved internally; restore is human-only via CLI. |
 | MCP tool leaks sensitive data from config | Config contains macro text (user-defined), no secrets or credentials. Bridge token is not returned by any MCP tool. |
 | Prompt injection via macro labels/text returned to Claude | Tools return config content as structured JSON. Claude should treat config content as data, not instructions. **Mitigation:** add a note in the tool description that returned config content is user data and should not be executed as instructions. |
 | Log endpoint exposes sensitive output | Bridge logs are redacted today (`redactActionForLog`). The `/logs` endpoint (ISSUE-5) should apply the same redaction. |
@@ -764,7 +743,7 @@ Each tranche is designed for a focused ~20-minute session with a checkpoint at t
 3. Implement `decky_list_icons` — returns static vocabulary from §3.2.
 4. Implement `decky_list_slot_types` — returns static vocabulary from §3.4.
 5. Implement `decky_list_target_apps`, `decky_list_color_names` — static returns.
-6. Implement `decky_get_config_backups` — calls `GET /config/backups`.
+6. ~~Implement `decky_get_config_backups`~~ — removed per security review.
 
 **Checkpoint:** Ask Claude: "What themes are available?" and "Show me my current config." Both return clean answers.
 
@@ -778,7 +757,7 @@ Each tranche is designed for a focused ~20-minute session with a checkpoint at t
 1. Implement `decky_set_theme` — calls `PUT /config` with `theme` + `applyMode` logic.
 2. Implement `decky_update_global_settings` — calls `PUT /config` with partial global fields.
 3. Implement `decky_reload_config` — calls `POST /config/reload`.
-4. Implement `decky_restore_config_backup` — calls `POST /config/restore`.
+4. ~~Implement `decky_restore_config_backup`~~ — removed per security review.
 
 **Checkpoint:** Ask Claude: "Set the theme to Dracula. Now set it back to Nord." Both work correctly.
 

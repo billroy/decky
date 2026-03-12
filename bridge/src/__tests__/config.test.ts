@@ -72,12 +72,6 @@ describe("config endpoints", () => {
     expect(data.config).toHaveProperty("macros");
   });
 
-  it("GET /config/backups returns backup metadata", async () => {
-    const res = await fetch(`${baseUrl}/config/backups`, { headers: { "x-decky-token": token } });
-    expect(res.status).toBe(200);
-    const data = await res.json();
-    expect(Array.isArray(data.backups)).toBe(true);
-  });
 
   it("PUT /config saves updated macros", async () => {
     const newMacros = [
@@ -357,6 +351,8 @@ describe("config endpoints", () => {
   });
 
   it("rotates config backups in 0..9 range", async () => {
+    const { dirname } = await import("node:path");
+    const configDir = dirname(CONFIG_PATH_VALUE);
     for (let i = 0; i < 12; i++) {
       const res = await fetch(`${baseUrl}/config`, {
         method: "PUT",
@@ -365,46 +361,16 @@ describe("config endpoints", () => {
       });
       expect(res.status).toBe(200);
     }
-    const backupsRes = await fetch(`${baseUrl}/config/backups`, { headers: { "x-decky-token": token } });
-    expect(backupsRes.status).toBe(200);
-    const backupsData = await backupsRes.json();
-    const indices = (backupsData.backups as Array<{ index: number }>).map((b) => b.index).sort((a, b) => a - b);
-    expect(indices[0]).toBe(0);
-    expect(indices[indices.length - 1]).toBe(9);
-    expect(indices).not.toContain(10);
-  });
-
-  it("POST /config/restore restores a previous backup", async () => {
-    const first = await fetch(`${baseUrl}/config`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", "x-decky-token": token },
-      body: JSON.stringify({ macros: [{ label: "Before", text: "before" }] }),
-    });
-    expect(first.status).toBe(200);
-    const second = await fetch(`${baseUrl}/config`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json", "x-decky-token": token },
-      body: JSON.stringify({ macros: [{ label: "After", text: "after" }] }),
-    });
-    expect(second.status).toBe(200);
-
-    const restoreRes = await fetch(`${baseUrl}/config/restore`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-decky-token": token },
-      body: JSON.stringify({ index: 0 }),
-    });
-    expect(restoreRes.status).toBe(200);
-    const restoreData = await restoreRes.json();
-    expect(restoreData.config.macros[0].label).toBe("Before");
-  });
-
-  it("POST /config/restore validates index", async () => {
-    const restoreRes = await fetch(`${baseUrl}/config/restore`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-decky-token": token },
-      body: JSON.stringify({ index: 999 }),
-    });
-    expect(restoreRes.status).toBe(400);
+    const { join } = await import("node:path");
+    const presentIndices: number[] = [];
+    for (let i = 0; i < 11; i++) {
+      if (existsSync(join(configDir, `config.json.bak.${i}`))) {
+        presentIndices.push(i);
+      }
+    }
+    expect(presentIndices[0]).toBe(0);
+    expect(presentIndices[presentIndices.length - 1]).toBe(9);
+    expect(presentIndices).not.toContain(10);
   });
 
   it("rejects oversized macro arrays", async () => {
