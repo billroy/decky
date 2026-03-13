@@ -60,9 +60,27 @@ cd decky
 npx @decky/setup
 ```
 
-`npx @decky/setup` installs npm dependencies, builds the plugin, copies hook scripts to `~/.decky/hooks/`, registers hooks in `~/.claude/settings.json`, and links the plugin into the Stream Deck app.
+`npx @decky/setup` installs npm dependencies, builds the plugin, copies hook scripts to `~/.decky/hooks/`, registers hooks in `~/.claude/settings.json`, and links the plugin into the Stream Deck app. This works on all platforms (macOS, Windows, Linux).
 
 ### Option B — manual
+
+**macOS / Linux:**
+
+```bash
+git clone https://github.com/billroy/decky.git
+cd decky
+./install.sh
+```
+
+**Windows (Command Prompt or PowerShell):**
+
+```cmd
+git clone https://github.com/billroy/decky.git
+cd decky
+install.cmd
+```
+
+**Any platform:**
 
 ```bash
 git clone https://github.com/billroy/decky.git
@@ -81,8 +99,22 @@ cd plugin && streamdeck link com.decky.controller.sdPlugin
 
 ### Start the bridge
 
+**macOS / Linux:**
+
 ```bash
 ./start.sh
+```
+
+**Windows:**
+
+```cmd
+start.cmd
+```
+
+**Any platform:**
+
+```bash
+cd bridge && npm run dev
 ```
 
 The bridge listens on `http://localhost:9130`.
@@ -132,7 +164,8 @@ By default the MCP server registers read-only tools (status, config inspection, 
 ```bash
 # Set readOnly: false in ~/.decky/config.json
 # or set the env var when starting the bridge:
-DECKY_READONLY=0 ./start.sh
+DECKY_READONLY=0 ./start.sh          # macOS/Linux
+set DECKY_READONLY=0 && start.cmd     # Windows
 ```
 
 ### What you can ask Claude with MCP enabled
