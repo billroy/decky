@@ -579,7 +579,7 @@ export function createApp(): DeckyApp {
   });
 
   app.get("/config", (_req, res) => {
-    res.json(getConfig());
+    res.json({ ...getConfig(), readOnly: isReadOnly() });
   });
 
   app.put("/config", (req, res) => {

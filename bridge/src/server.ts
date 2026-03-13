@@ -5,6 +5,7 @@
  */
 
 import { createApp } from "./app.js";
+import { isReadOnly } from "./config.js";
 import { isLoopbackAddress, rotateBridgeToken } from "./security.js";
 
 const PORT = parseInt(process.env.DECKY_PORT ?? "9130", 10);
@@ -33,4 +34,5 @@ httpServer.listen(PORT, HOST, () => {
   console.log(`[decky] POST /hook   — receive Claude Code hook events`);
   console.log(`[decky] GET  /status — current state snapshot`);
   console.log(`[decky] Socket.io    — stateChange events on connect`);
+  console.log(`[decky] MCP mode     — ${isReadOnly() ? "read-only" : "read-write"}`);
 });
