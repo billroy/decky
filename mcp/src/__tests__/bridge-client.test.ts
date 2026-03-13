@@ -16,9 +16,9 @@ describe("formatBridgeError", () => {
     expect(formatBridgeError(err)).toContain("token mismatch");
   });
 
-  it("handles BridgeError 403 with DECKY_DEBUG=1 hint", () => {
-    const err = new BridgeError(403, "Forbidden");
-    expect(formatBridgeError(err)).toContain("DECKY_DEBUG=1");
+  it("handles BridgeError 403 by forwarding the bridge message", () => {
+    const err = new BridgeError(403, "Bridge is in read-only mode.");
+    expect(formatBridgeError(err)).toContain("read-only mode");
   });
 
   it("handles generic BridgeError with the error message", () => {

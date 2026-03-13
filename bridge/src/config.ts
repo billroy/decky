@@ -507,11 +507,12 @@ export function getToolRiskRules(): ToolRiskRule[] {
 /**
  * Check if the bridge is in read-only mode.
  * Read-only blocks config writes via REST/MCP while keeping hooks operational.
- * Override with DECKY_READONLY=0 environment variable.
+ * Override with DECKY_READONLY=1 to force read-only, or DECKY_READONLY=0 to force read-write.
  */
 export function isReadOnly(): boolean {
   const envOverride = process.env.DECKY_READONLY;
   if (envOverride === "0" || envOverride === "false") return false;
+  if (envOverride === "1" || envOverride === "true") return true;
   return currentConfig.readOnly;
 }
 

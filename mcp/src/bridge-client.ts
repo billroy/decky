@@ -116,7 +116,7 @@ export function formatBridgeError(err: unknown): string {
   if (err instanceof BridgeError) {
     if (err.status === 401) return "Unauthorized — bridge token mismatch. Restart the bridge.";
     if (err.status === 403)
-      return "Forbidden — this endpoint requires DECKY_DEBUG=1 on the bridge.";
+      return `Forbidden — ${err.message}`;
     return `Bridge returned error: ${err.message}`;
   }
   return `Unexpected error: ${String(err)}`;
