@@ -196,7 +196,7 @@ Every Decky key is a **slot**. Each slot has a **type** that determines what the
 | **Restart**                | Resets bridge state to idle                                     |
 | **Approve Once (Claude)**  | Clicks the approval button directly in the Claude app           |
 | **Talk to Claude**         | Starts voice dictation in Claude (macOS only)                   |
-| **Widget**                 | Displays live status information (bridge connection state)      |
+| **Widget**                 | Displays live status information or interactive tools (see [Widgets](#widgets)) |
 
 ### Configuring Command Slots
 
@@ -256,9 +256,24 @@ Set the default target in **Global Behavior > Default Target App**. Override per
 
 ### Widgets
 
-Widget slots display live information. Currently available:
+Widget slots display live information or interactive tools. Set a slot's type to "Widget" and choose a widget kind.
 
-- **Bridge status** — shows connection state (connected/disconnected/error) with a colored indicator. Refresh mode can be "On click" or on a timed interval (1-60 minutes).
+| Widget             | Description                                                                  |
+|:-------------------|:-----------------------------------------------------------------------------|
+| **Bridge status**  | Connection state (connected/disconnected) with colored indicator and age     |
+| **Session activity** | Running tally of approvals and denials for the current session             |
+| **Pomodoro timer** | Countdown timer — each press adds 10 minutes; counts down with green background, flashes on completion |
+
+#### Pomodoro Timer
+
+The Pomodoro timer is a simple countdown widget for focus sessions:
+
+- **Idle:** shows `00:00` with a clock icon and configurable label (default "Timer")
+- **Press:** each press adds 10 minutes to the timer (presses accumulate)
+- **Running:** green background with `MM:SS` countdown updating every second
+- **Done:** flashes alternating green/dark with "Done!" text, then returns to idle
+
+Each Pomodoro widget slot has its own independent timer, so you can run multiple timers simultaneously (e.g., "Focus" and "Break"). Set the display label in the Property Inspector under "Widget label".
 
 ### Themes
 
@@ -397,7 +412,7 @@ cd bridge && npm run dev
 cd plugin && npm run watch
 
 # Tests
-cd bridge && npm test          # 240 tests
+cd bridge && npm test          # 243 tests
 cd mcp && npm test             # 45 tests
 cd plugin && npm test          # unit tests
 cd plugin && npm run test:pi   # PI Playwright tests
