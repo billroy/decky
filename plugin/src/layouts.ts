@@ -1013,22 +1013,21 @@ function countUpSVG(slotIndex: number, widgetLabel?: string): string {
   const p = resolveThemePaletteForSlot(currentTheme, slotIndex);
   const themeBg = resolveColor(p.macroBg, defaultColors.bg, undefined);
   const themeFg = resolveColor(p.macroLabel, defaultColors.text, undefined);
-  const label = widgetLabel ?? "Time";
+  const label = widgetLabel ?? "Label";
+  const displayLabel = label.length > 10 ? label.slice(0, 9) + "\u2026" : label;
+  const fontSize = resolveLabelFontSize(displayLabel);
+  const labelY = fontSize >= 36 ? 126 : 122;
   const cuState = countUpRenderStates.get(slotIndex);
 
   const elapsed = cuState?.elapsedSeconds ?? 0;
   const running = cuState?.isRunning ?? false;
   const timeStr = formatMMSS(elapsed);
-
-  // Running: show a small "▶" indicator in the label; Paused (non-zero): show "⏸"
-  const statusSuffix = running ? " ▶" : (elapsed > 0 ? " ⏸" : "");
-  const displayLabel = label + statusSuffix;
   const timeFg = elapsed === 0 && !running ? themeFg + "99" : themeFg; // muted when idle
 
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <rect width="144" height="144" rx="16" fill="${themeBg}" />
     <text x="72" y="72" font-size="48" font-weight="bold" font-family="monospace" text-anchor="middle" dominant-baseline="central" fill="${timeFg}">${timeStr}</text>
-    <text x="72" y="126" font-size="22" font-family="sans-serif" text-anchor="middle" fill="${themeFg}">${displayLabel}</text>
+    <text x="72" y="${labelY}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${themeFg}">${displayLabel}</text>
   </svg>`;
 }
 
