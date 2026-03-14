@@ -107,7 +107,7 @@ let encoderInstance: EncoderAction | null = null;
 export class EncoderAction extends SingletonAction {
   constructor() {
     super();
-    encoderInstance = this;
+    encoderInstance = this; // eslint-disable-line @typescript-eslint/no-this-alias
   }
 
   override onWillAppear(ev: WillAppearEvent): void {

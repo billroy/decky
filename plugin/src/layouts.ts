@@ -955,7 +955,7 @@ function macroSlot(index: number, macro: MacroInput): SlotConfig {
 }
 
 const pomodoroRenderStates = new Map<number, PomodoroRenderState>();
-let pomodoroFlashFrameCounters = new Map<number, number>();
+const pomodoroFlashFrameCounters = new Map<number, number>();
 
 export function setPomodoroState(slotIndex: number, state: {
   remainingSeconds: number;

@@ -292,6 +292,7 @@ function runAppleScript(script: string): Promise<string> {
  */
 function appleScriptString(value: string): string {
   // Strip control characters that have no valid representation in AppleScript strings
+  // eslint-disable-next-line no-control-regex
   const sanitized = value.replace(/[\x00-\x1f]/g, "");
   return `"${sanitized.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }

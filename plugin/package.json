@@ -9,13 +9,15 @@
     "icons": "node scripts/generate-icons.mjs",
     "test": "vitest run src/__tests__",
     "test:pi": "playwright test",
-    "test:pi:coverage-map": "node scripts/check-pi-coverage-map.mjs"
+    "test:pi:coverage-map": "node scripts/check-pi-coverage-map.mjs",
+    "lint": "eslint src/"
   },
   "dependencies": {
     "@elgato/streamdeck": "^2.0.2",
     "socket.io-client": "^4.8.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.58.2",
     "@rollup/plugin-commonjs": "^29.0.2",
     "@rollup/plugin-json": "^6.1.0",
@@ -23,9 +25,11 @@
     "@rollup/plugin-typescript": "^12.1.0",
     "@types/node": "^25.3.5",
     "@types/ws": "^8.18.1",
+    "eslint": "^10.0.3",
     "rollup": "^4.24.0",
     "tslib": "^2.7.0",
     "typescript": "^5.6.0",
+    "typescript-eslint": "^8.57.0",
     "vitest": "^4.0.18",
     "ws": "^8.19.0"
   }
