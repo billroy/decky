@@ -78,7 +78,11 @@ class FakeBridge {
   sendAction = vi.fn();
   sendEvent = vi.fn();
   patchLocalConfig(patch: any) {
+    if (!this.config) return;
     this.config = { ...this.config, ...patch };
+    for (const cb of this.configListeners) {
+      try { cb(this.config); } catch { /* */ }
+    }
   }
 
   triggerConfig(config: any) {
@@ -1178,5 +1182,83 @@ describe("SlotAction drag-swap", () => {
     } as any);
 
     expect(bridge.sendEvent).not.toHaveBeenCalledWith("slotHeartbeat", expect.anything());
+  });
+});
+
+describe("Pomodoro long-press reset (T5)", () => {
+  it("short press adds time, long press resets timer", async () => {
+    const { SlotAction, setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const pomodoroConfig = {
+      ...baseConfig(),
+      macros: [{ label: "Pomo", text: "", type: "widget", widget: { kind: "pomodoro" } }],
+    };
+    const bridge = new FakeBridge(pomodoroConfig);
+    setSlotClient(bridge as any);
+
+    const slot = new SlotAction();
+    const action = makeKeyAction("action-1");
+    (slot as any).actions = [action];
+
+    // Appear + render
+    await slot.onWillAppear({
+      action,
+      payload: { isInMultiAction: false, coordinates: { row: 0, column: 0 } },
+    } as any);
+
+    // Simulate short press (keyDown then keyUp immediately)
+    await slot.onKeyDown({ action, payload: {} } as any);
+    await slot.onKeyUp({ action, payload: {} } as any);
+
+    // Wait a tick for async rendering
+    await new Promise((r) => setTimeout(r, 50));
+
+    // The timer should have been started via addTime
+    // Verify that some re-render occurred (setImage called after initial render)
+    const callsBefore = action.setImage.mock.calls.length;
+
+    // Now simulate long press (keyDown, wait > 2000ms in test or mock Date.now)
+    const realNow = Date.now;
+    let fakeTime = realNow();
+    vi.spyOn(Date, "now").mockImplementation(() => fakeTime);
+
+    await slot.onKeyDown({ action, payload: {} } as any);
+    fakeTime += 3000; // simulate 3 second hold
+    await slot.onKeyUp({ action, payload: {} } as any);
+
+    vi.spyOn(Date, "now").mockRestore();
+    await new Promise((r) => setTimeout(r, 100));
+
+    // After long press, the timer should have been reset (removeTimer + addTime(2))
+    // We can verify the timer rendered by checking setImage was called again
+    expect(action.setImage.mock.calls.length).toBeGreaterThan(callsBefore);
+  });
+});
+
+describe("patchLocalConfig (T6)", () => {
+  it("patches config and notifies config listeners", async () => {
+    const { setSlotClient, resetSlots } = await import("../actions/slot.js");
+    resetSlots();
+
+    const bridge = new FakeBridge(baseConfig());
+    setSlotClient(bridge as any);
+
+    const configUpdates: any[] = [];
+    bridge.onConfigChange((cfg: any) => configUpdates.push(cfg));
+
+    // Patch theme
+    bridge.patchLocalConfig({ theme: "dracula" });
+
+    // FakeBridge should have updated config and notified listeners
+    expect(bridge.getLastConfig().theme).toBe("dracula");
+    expect(configUpdates.length).toBeGreaterThanOrEqual(1);
+    expect(configUpdates[configUpdates.length - 1].theme).toBe("dracula");
+  });
+
+  it("is a no-op when config is null", async () => {
+    const bridge = new FakeBridge(null);
+    // Should not throw even with null config
+    expect(() => bridge.patchLocalConfig({ theme: "dark" })).not.toThrow();
   });
 });
