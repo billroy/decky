@@ -1063,13 +1063,11 @@ function pomodoroSVG(slotIndex: number, widgetLabel?: string): string {
     </svg>`;
   }
 
-  // Idle — theme background with clock icon
-  const clockIcon = LUCIDE_ICONS["clock-3"];
+  // Idle — theme background, same font/position as running state
   const mutedFg = themeFg + "99"; // 60% opacity via hex alpha
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <rect width="144" height="144" rx="16" fill="${themeBg}" />
-    <g transform="translate(42, 8) scale(2.5)" fill="none" stroke="${mutedFg}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${clockIcon}</g>
-    <text x="72" y="94" font-size="36" font-family="monospace" text-anchor="middle" fill="${mutedFg}">00:00</text>
+    <text x="72" y="72" font-size="48" font-weight="bold" font-family="monospace" text-anchor="middle" dominant-baseline="central" fill="${mutedFg}">00:00</text>
     <text x="72" y="126" font-size="22" font-family="sans-serif" text-anchor="middle" fill="${themeFg}">${label}</text>
   </svg>`;
 }

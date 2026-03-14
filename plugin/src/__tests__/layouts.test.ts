@@ -731,11 +731,13 @@ describe("layouts", () => {
       clearPomodoroState(0);
     });
 
-    it("renders idle state with 00:00 and clock icon", () => {
+    it("renders idle state with 00:00 matching running typography", () => {
       setTheme("dark");
       const config = getSlotConfig("idle", 0, null, pomodoroMacro);
       expect(config.svg).toContain("00:00");
-      expect(config.svg).toContain('<circle cx="12" cy="12" r="10"'); // clock-3 Lucide icon
+      expect(config.svg).toContain('font-size="48"');
+      expect(config.svg).toContain('font-family="monospace"');
+      expect(config.svg).toContain('font-weight="bold"');
       expect(config.svg).toContain("Timer");
       expect(config.action).toBe("pomodoro-add");
     });
