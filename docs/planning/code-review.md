@@ -323,7 +323,7 @@ Each chunk targets ~20 minutes. Checkpoint (commit + update this plan) at the en
 | Q2 | Quality | Medium | confirmed-by-code | `bridge/src/config.ts`, `app.ts` | Open |
 | Q3 | Quality | Low | confirmed-by-code | `plugin/src/actions/slot.ts:726` | Done |
 | Q4 | Quality | Low | confirmed-by-code | `plugin/src/actions/slot.ts:861,1069` | Done |
-| Q5 | Quality | Low | confirmed-by-code | `plugin/src/actions/slot.ts:805-1102` | Open |
+| Q5 | Quality | Low | confirmed-by-code | `plugin/src/actions/slot.ts:805-1102` | Done |
 | Q6 | Quality | Medium | confirmed-by-code | `bridge/src/app.ts:848` | Done |
 | Q7 | Quality | Medium | confirmed-by-code | `bridge/src/state-machine.ts:45` | Done |
 | Q8 | Quality | Medium | confirmed-by-code | `bridge/src/app.ts:167` | Done |

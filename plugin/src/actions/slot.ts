@@ -72,6 +72,48 @@ function easeInCubic(t: number): number {
   return t * t * t;
 }
 
+interface AnimationSlot {
+  instance: WillAppearEvent["action"];
+  svg: string;
+  slotIndex: number;
+}
+
+/**
+ * Run a staggered frame animation over the given slots.
+ * `computeFrame` returns the SVG string for a slot at the given eased progress (0→1).
+ */
+async function runFrameAnimation(
+  abort: AbortController,
+  slots: AnimationSlot[],
+  params: { duration: number; frames: number; stagger: number },
+  computeFrame: (slot: AnimationSlot, eased: number) => string,
+): Promise<void> {
+  const { duration, frames, stagger } = params;
+  const interval = duration / frames;
+
+  for (let frame = 0; frame <= frames; frame++) {
+    if (abort.signal.aborted) return;
+    const frameStart = Date.now();
+
+    await Promise.all(
+      slots.map(async (slot) => {
+        if (abort.signal.aborted) return;
+        const progress = frame / frames - (slot.slotIndex * stagger) / duration;
+        const clamped = Math.max(0, Math.min(1, progress));
+        const svg = computeFrame(slot, clamped);
+        const imageData = `data:image/svg+xml,${encodeURIComponent(svg)}`;
+        try { await slot.instance.setImage(imageData); } catch { /* */ }
+      }),
+    );
+
+    if (frame < frames) {
+      const elapsed = Date.now() - frameStart;
+      const wait = Math.max(0, interval - elapsed);
+      if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+    }
+  }
+}
+
 function debugSummary(): JsonObject {
   const cfg = bridgeRef?.getLastConfig();
   return {
@@ -781,6 +823,31 @@ export class SlotAction extends SingletonAction {
   }
 
   /**
+   * Collect animation slots for a given state and layout slot range.
+   * `getSvg` returns the SVG for a layout slot index, or null to skip.
+   */
+  private collectLayoutSlots(
+    allActions: Map<string, WillAppearEvent["action"]>,
+    state: string,
+    minSlot: number,
+    maxSlot: number,
+    getSvg: (layoutSlotIndex: number) => string | null,
+  ): AnimationSlot[] {
+    const result: AnimationSlot[] = [];
+    for (const [actionId, instance] of allActions) {
+      const slotIndex = getSlotIndex(actionId);
+      if (slotIndex < 0) continue;
+      const deviceKey = getDeviceKey(actionId);
+      const layoutSlotIndex = resolveLayoutSlotIndex(state, slotIndex, deviceKey);
+      if (layoutSlotIndex >= minSlot && layoutSlotIndex <= maxSlot) {
+        const svg = getSvg(layoutSlotIndex);
+        if (svg) result.push({ instance, svg, slotIndex: layoutSlotIndex });
+      }
+    }
+    return result;
+  }
+
+  /**
    * Animated slide-in for approval buttons (slots 0-3).
    * Phase 1: Clear only the approval slots (0-3) to black; slots 4+ keep macro content.
    * Phase 2: Slide each approval button in from the right over ~500ms.
@@ -789,7 +856,6 @@ export class SlotAction extends SingletonAction {
     snapshot: StateSnapshot | null,
     macros: MacroInput[] | undefined,
   ): Promise<void> {
-    // Cancel any in-progress animation
     this.animationAbort?.abort();
     const abort = new AbortController();
     this.animationAbort = abort;
@@ -798,7 +864,7 @@ export class SlotAction extends SingletonAction {
     const toolName = snapshot?.tool;
     const allActions = this.getRenderableActions();
 
-    // --- Phase 1: Clear only the approval slots (layout 0-3) to black ---
+    // Phase 1: Clear approval slots (0-3) to black
     const blackImg = `data:image/svg+xml,${encodeURIComponent(blackSVG())}`;
     await Promise.all(
       [...allActions.entries()].map(async ([actionId, instance]) => {
@@ -818,58 +884,20 @@ export class SlotAction extends SingletonAction {
     await new Promise((r) => setTimeout(r, 50));
     if (abort.signal.aborted) return;
 
-    // --- Phase 2: Slide-in for slots 0-3 ---
-    const approvalSlots: Array<{
-      instance: WillAppearEvent["action"];
-      finalSvg: string;
-      slotIndex: number;
-    }> = [];
+    // Phase 2: Slide-in for slots 0-3
+    const slots = this.collectLayoutSlots(allActions, "awaiting-approval", 0, 3, (li) => {
+      const config = getSlotConfig("awaiting-approval", li, toolName, macros, approval);
+      return config.svg;
+    });
 
-    for (const [actionId, instance] of allActions) {
-      const slotIndex = getSlotIndex(actionId);
-      if (slotIndex < 0) continue;
-      const deviceKey = getDeviceKey(actionId);
-      const layoutSlotIndex = resolveLayoutSlotIndex("awaiting-approval", slotIndex, deviceKey);
-      if (layoutSlotIndex >= 0 && layoutSlotIndex <= 3) {
-        const config = getSlotConfig("awaiting-approval", layoutSlotIndex, toolName, macros, approval);
-        approvalSlots.push({ instance, finalSvg: config.svg, slotIndex: layoutSlotIndex });
-      }
-    }
-
-    const TOTAL_DURATION = 500;
-    const FRAME_COUNT = 8;
-    const STAGGER_DELAY = 40; // ms between each slot starting
-    const FRAME_INTERVAL = TOTAL_DURATION / FRAME_COUNT;
-
-    for (let frame = 0; frame <= FRAME_COUNT; frame++) {
-      if (abort.signal.aborted) return;
-      const frameStart = Date.now();
-
-      await Promise.all(
-        approvalSlots.map(async ({ instance, finalSvg, slotIndex }) => {
-          if (abort.signal.aborted) return;
-
-          const slotProgress = frame / FRAME_COUNT - (slotIndex * STAGGER_DELAY) / TOTAL_DURATION;
-          const clamped = Math.max(0, Math.min(1, slotProgress));
-          const eased = easeOutCubic(clamped);
-          const xOffset = Math.round(144 * (1 - eased));
-
-          const svg = xOffset === 0 ? finalSvg : slideInFrame(finalSvg, xOffset);
-          const imageData = `data:image/svg+xml,${encodeURIComponent(svg)}`;
-          try { await instance.setImage(imageData); } catch { /* */ }
-        }),
-      );
-
-      if (frame < FRAME_COUNT) {
-        const elapsed = Date.now() - frameStart;
-        const wait = Math.max(0, FRAME_INTERVAL - elapsed);
-        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-      }
-    }
+    await runFrameAnimation(abort, slots, { duration: 500, frames: 8, stagger: 40 }, (slot, eased) => {
+      const xOffset = Math.round(144 * (1 - easeOutCubic(eased)));
+      return xOffset === 0 ? slot.svg : slideInFrame(slot.svg, xOffset);
+    });
 
     if (abort.signal.aborted) return;
 
-    // --- Restore non-approval slots (4+) to their proper state ---
+    // Restore non-approval slots (4+)
     await Promise.all(
       [...allActions.entries()]
         .filter(([id]) => {
@@ -910,54 +938,15 @@ export class SlotAction extends SingletonAction {
     const toolName = prevApprovalSnapshot.tool;
     const allActions = this.getRenderableActions();
 
-    // Collect current approval button SVGs for the departure animation
-    const approvalSlots: Array<{
-      instance: WillAppearEvent["action"];
-      currentSvg: string;
-      slotIndex: number;
-    }> = [];
+    const slots = this.collectLayoutSlots(allActions, "awaiting-approval", 0, 3, (li: number) => {
+      const config = getSlotConfig("awaiting-approval", li, toolName, macros, approval);
+      return config.svg;
+    });
 
-    for (const [actionId, instance] of allActions) {
-      const slotIndex = getSlotIndex(actionId);
-      if (slotIndex < 0) continue;
-      const deviceKey = getDeviceKey(actionId);
-      const layoutSlotIndex = resolveLayoutSlotIndex("awaiting-approval", slotIndex, deviceKey);
-      if (layoutSlotIndex >= 0 && layoutSlotIndex <= 3) {
-        const config = getSlotConfig("awaiting-approval", layoutSlotIndex, toolName, macros, approval);
-        approvalSlots.push({ instance, currentSvg: config.svg, slotIndex: layoutSlotIndex });
-      }
-    }
-
-    const TOTAL_DURATION = 300;
-    const FRAME_COUNT = 6;
-    const STAGGER_DELAY = 30;
-    const FRAME_INTERVAL = TOTAL_DURATION / FRAME_COUNT;
-
-    for (let frame = 0; frame <= FRAME_COUNT; frame++) {
-      if (abort.signal.aborted) return;
-      const frameStart = Date.now();
-
-      await Promise.all(
-        approvalSlots.map(async ({ instance, currentSvg, slotIndex }) => {
-          if (abort.signal.aborted) return;
-
-          const slotProgress = frame / FRAME_COUNT - (slotIndex * STAGGER_DELAY) / TOTAL_DURATION;
-          const clamped = Math.max(0, Math.min(1, slotProgress));
-          const eased = easeInCubic(clamped);
-          const yOffset = Math.round(-144 * eased);
-
-          const svg = yOffset === 0 ? currentSvg : slideOutFrame(currentSvg, yOffset);
-          const imageData = `data:image/svg+xml,${encodeURIComponent(svg)}`;
-          try { await instance.setImage(imageData); } catch { /* */ }
-        }),
-      );
-
-      if (frame < FRAME_COUNT) {
-        const elapsed = Date.now() - frameStart;
-        const wait = Math.max(0, FRAME_INTERVAL - elapsed);
-        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-      }
-    }
+    await runFrameAnimation(abort, slots, { duration: 300, frames: 6, stagger: 30 }, (slot, eased) => {
+      const yOffset = Math.round(-144 * easeInCubic(eased));
+      return yOffset === 0 ? slot.svg : slideOutFrame(slot.svg, yOffset);
+    });
 
     if (abort.signal.aborted) return;
 
@@ -996,7 +985,7 @@ export class SlotAction extends SingletonAction {
     const question = snapshot?.question ?? null;
     const allActions = this.getRenderableActions();
 
-    // --- Phase 1: Clear option slots (0-3) to black ---
+    // Phase 1: Clear option slots (0-3) to black
     const blackImg = `data:image/svg+xml,${encodeURIComponent(blackSVG())}`;
     await Promise.all(
       [...allActions.entries()].map(async ([actionId, instance]) => {
@@ -1016,56 +1005,16 @@ export class SlotAction extends SingletonAction {
     await new Promise((r) => setTimeout(r, 50));
     if (abort.signal.aborted) return;
 
-    // --- Phase 2: Slide-in for option slots ---
-    const askingSlots: Array<{
-      instance: WillAppearEvent["action"];
-      finalSvg: string;
-      slotIndex: number;
-    }> = [];
+    // Phase 2: Slide-in for option slots
+    const slots = this.collectLayoutSlots(allActions, "asking", 0, 3, (li: number) => {
+      const config = getSlotConfig("asking", li, null, macros, null, question);
+      return config.svg && config.action ? config.svg : null;
+    });
 
-    for (const [actionId, instance] of allActions) {
-      const slotIndex = getSlotIndex(actionId);
-      if (slotIndex < 0) continue;
-      const deviceKey = getDeviceKey(actionId);
-      const layoutSlotIndex = resolveLayoutSlotIndex("asking", slotIndex, deviceKey);
-      if (layoutSlotIndex >= 0 && layoutSlotIndex <= 3) {
-        const config = getSlotConfig("asking", layoutSlotIndex, null, macros, null, question);
-        if (config.svg && config.action) {
-          askingSlots.push({ instance, finalSvg: config.svg, slotIndex: layoutSlotIndex });
-        }
-      }
-    }
-
-    const TOTAL_DURATION = 500;
-    const FRAME_COUNT = 8;
-    const STAGGER_DELAY = 40;
-    const FRAME_INTERVAL = TOTAL_DURATION / FRAME_COUNT;
-
-    for (let frame = 0; frame <= FRAME_COUNT; frame++) {
-      if (abort.signal.aborted) return;
-      const frameStart = Date.now();
-
-      await Promise.all(
-        askingSlots.map(async ({ instance, finalSvg, slotIndex }) => {
-          if (abort.signal.aborted) return;
-
-          const slotProgress = frame / FRAME_COUNT - (slotIndex * STAGGER_DELAY) / TOTAL_DURATION;
-          const clamped = Math.max(0, Math.min(1, slotProgress));
-          const eased = easeOutCubic(clamped);
-          const xOffset = Math.round(144 * (1 - eased));
-
-          const svg = xOffset === 0 ? finalSvg : slideInFrame(finalSvg, xOffset);
-          const imageData = `data:image/svg+xml,${encodeURIComponent(svg)}`;
-          try { await instance.setImage(imageData); } catch { /* */ }
-        }),
-      );
-
-      if (frame < FRAME_COUNT) {
-        const elapsed = Date.now() - frameStart;
-        const wait = Math.max(0, FRAME_INTERVAL - elapsed);
-        if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-      }
-    }
+    await runFrameAnimation(abort, slots, { duration: 500, frames: 8, stagger: 40 }, (slot, eased) => {
+      const xOffset = Math.round(144 * (1 - easeOutCubic(eased)));
+      return xOffset === 0 ? slot.svg : slideInFrame(slot.svg, xOffset);
+    });
 
     if (this.animationAbort === abort) {
       this.animationAbort = null;
