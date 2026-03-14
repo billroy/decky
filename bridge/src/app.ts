@@ -164,16 +164,32 @@ interface LogEntry {
 
 const LOG_BUFFER_MAX = 500;
 
+/** Pre-compiled tool risk rules. Rebuilt when config changes. */
+let compiledToolRiskRules: { re: RegExp; risk: RiskLevel }[] | null = null;
+let lastToolRiskRulesJson = "";
+
+function getCompiledToolRiskRules(): { re: RegExp; risk: RiskLevel }[] {
+  const rules = getToolRiskRules();
+  const json = JSON.stringify(rules);
+  if (json !== lastToolRiskRulesJson) {
+    lastToolRiskRulesJson = json;
+    compiledToolRiskRules = [];
+    for (const rule of rules) {
+      try {
+        compiledToolRiskRules.push({ re: new RegExp(rule.pattern, "i"), risk: rule.risk });
+      } catch {
+        // Invalid regex — skip
+      }
+    }
+  }
+  return compiledToolRiskRules!;
+}
+
 /** Classify a tool name against configured risk rules (first match wins). */
 function classifyToolRisk(toolName: string | null): RiskLevel | null {
   if (!toolName) return null;
-  const rules = getToolRiskRules();
-  for (const rule of rules) {
-    try {
-      if (new RegExp(rule.pattern, "i").test(toolName)) return rule.risk;
-    } catch {
-      // Invalid regex — skip
-    }
+  for (const { re, risk } of getCompiledToolRiskRules()) {
+    if (re.test(toolName)) return risk;
   }
   return null;
 }
@@ -183,6 +199,65 @@ function normalizeActionId(value: unknown): string | null {
   const trimmed = value.trim();
   if (!trimmed) return null;
   return /^[A-Za-z0-9._:-]{6,120}$/.test(trimmed) ? trimmed : null;
+}
+
+/**
+ * Build a config update object from socket/REST data.
+ * Handles themeApplyMode side-effects (seed regeneration, color clearing).
+ * Validation is deferred to saveConfig().
+ */
+function buildConfigUpdate(data: Record<string, unknown>): Record<string, unknown> {
+  const currentConfig = getConfig();
+  const theme = typeof data.theme === "string"
+    ? normalizeTheme(data.theme, currentConfig.theme)
+    : undefined;
+  let themeSeed =
+    typeof data.themeSeed === "number" && Number.isFinite(data.themeSeed)
+      ? Math.floor(data.themeSeed)
+      : undefined;
+  let colors = data.colors && typeof data.colors === "object" ? data.colors : undefined;
+  let macros = Array.isArray(data.macros) ? data.macros : undefined;
+  const themeApplyMode =
+    data.themeApplyMode === "keep" ||
+    data.themeApplyMode === "clear-page" ||
+    data.themeApplyMode === "clear-all"
+      ? data.themeApplyMode
+      : undefined;
+
+  const effectiveTheme = theme ?? currentConfig.theme;
+  if (
+    themeApplyMode &&
+    (effectiveTheme === "random" || effectiveTheme === "rainbow")
+  ) {
+    themeSeed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) & 0x7fffffff;
+  }
+  if (themeApplyMode === "clear-page" || themeApplyMode === "clear-all") {
+    colors = {};
+  }
+  if (themeApplyMode === "clear-all") {
+    const source = Array.isArray(macros) ? macros : currentConfig.macros;
+    macros = source.map((m) => {
+      if (!m || typeof m !== "object") return m;
+      const clone = { ...(m as Record<string, unknown>) };
+      delete clone.colors;
+      return clone;
+    });
+  }
+
+  const update: Record<string, unknown> = {};
+  if (macros) update.macros = macros;
+  if (data.approvalTimeout !== undefined) update.approvalTimeout = data.approvalTimeout;
+  if (theme) update.theme = theme;
+  if (themeSeed !== undefined) update.themeSeed = themeSeed;
+  if (colors) update.colors = colors;
+  if (typeof data.defaultTargetApp === "string" && VALID_TARGET_APPS.has(data.defaultTargetApp)) {
+    update.defaultTargetApp = data.defaultTargetApp;
+  }
+  if (typeof data.showTargetBadge === "boolean") update.showTargetBadge = data.showTargetBadge;
+  if (typeof data.popUpApp === "boolean") update.popUpApp = data.popUpApp;
+  if (typeof data.enableApproveOnce === "boolean") update.enableApproveOnce = data.enableApproveOnce;
+  if (typeof data.enableDictation === "boolean") update.enableDictation = data.enableDictation;
+  return update;
 }
 
 function createActionId(prefix = "bridge"): string {
@@ -527,7 +602,7 @@ export function createApp(): DeckyApp {
       input: body.input,
       ...(event === "AskUserQuestion" ? { question: questionText ?? undefined, options: normalizedOptions } : {}),
       // Pass usage through for Stop/SubagentStop so rate limit tracking can read it.
-      ...(body.usage && typeof body.usage === "object" ? { usage: body.usage } : {}),
+      ...(body.usage && typeof body.usage === "object" ? { usage: body.usage as Record<string, unknown> } : {}),
     };
 
     console.log(
@@ -867,67 +942,7 @@ export function createApp(): DeckyApp {
           typeof data.requestId === "string" && data.requestId.trim().length > 0
             ? data.requestId.trim()
             : undefined;
-        let macros = Array.isArray(data.macros) ? data.macros : undefined;
-        const timeout = typeof data.approvalTimeout === "number" ? data.approvalTimeout : undefined;
-        const currentConfig = getConfig();
-        const theme = typeof data.theme === "string"
-          ? normalizeTheme(data.theme, currentConfig.theme)
-          : undefined;
-        let themeSeed =
-          typeof data.themeSeed === "number" && Number.isFinite(data.themeSeed)
-            ? Math.floor(data.themeSeed)
-            : undefined;
-        let colors = data.colors && typeof data.colors === "object" ? data.colors : undefined;
-        const defaultTargetApp =
-          typeof data.defaultTargetApp === "string" && VALID_TARGET_APPS.has(data.defaultTargetApp)
-            ? data.defaultTargetApp
-            : undefined;
-        const showTargetBadge =
-          typeof data.showTargetBadge === "boolean" ? data.showTargetBadge : undefined;
-        const popUpApp =
-          typeof data.popUpApp === "boolean" ? data.popUpApp : undefined;
-        const enableApproveOnce =
-          typeof data.enableApproveOnce === "boolean" ? data.enableApproveOnce : undefined;
-        const enableDictation =
-          typeof data.enableDictation === "boolean" ? data.enableDictation : undefined;
-        const themeApplyMode =
-          data.themeApplyMode === "keep" ||
-          data.themeApplyMode === "clear-page" ||
-          data.themeApplyMode === "clear-all"
-            ? data.themeApplyMode
-            : undefined;
-        const effectiveTheme = theme ?? getConfig().theme;
-        if (
-          themeApplyMode &&
-          (effectiveTheme === "random" || effectiveTheme === "rainbow")
-        ) {
-          // Guarantee a fresh distribution for each explicit theme apply,
-          // even if the PI sent a stale/missing seed.
-          themeSeed = (Date.now() ^ Math.floor(Math.random() * 0x7fffffff)) & 0x7fffffff;
-        }
-        if (themeApplyMode === "clear-page" || themeApplyMode === "clear-all") {
-          colors = {};
-        }
-        if (themeApplyMode === "clear-all") {
-          const source = Array.isArray(macros) ? macros : getConfig().macros;
-          macros = source.map((m) => {
-            if (!m || typeof m !== "object") return m;
-            const clone = { ...(m as Record<string, unknown>) };
-            delete clone.colors;
-            return clone;
-          });
-        }
-        const update: Record<string, unknown> = {};
-        if (macros) update.macros = macros;
-        if (timeout !== undefined) update.approvalTimeout = timeout;
-        if (theme) update.theme = theme;
-        if (themeSeed !== undefined) update.themeSeed = themeSeed;
-        if (colors) update.colors = colors;
-        if (defaultTargetApp) update.defaultTargetApp = defaultTargetApp;
-        if (showTargetBadge !== undefined) update.showTargetBadge = showTargetBadge;
-        if (popUpApp !== undefined) update.popUpApp = popUpApp;
-        if (enableApproveOnce !== undefined) update.enableApproveOnce = enableApproveOnce;
-        if (enableDictation !== undefined) update.enableDictation = enableDictation;
+        const update = buildConfigUpdate(data);
         if (Object.keys(update).length > 0) {
           try {
             const config = saveConfig(update);

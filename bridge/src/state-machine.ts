@@ -42,7 +42,7 @@ export interface HookPayload {
   input?: unknown;
   question?: string;
   options?: QuestionOption[];
-  [key: string]: unknown;
+  usage?: Record<string, unknown>;
 }
 
 interface StateSnapshot {
