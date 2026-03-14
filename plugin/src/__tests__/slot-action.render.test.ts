@@ -77,6 +77,9 @@ class FakeBridge {
 
   sendAction = vi.fn();
   sendEvent = vi.fn();
+  patchLocalConfig(patch: any) {
+    this.config = { ...this.config, ...patch };
+  }
 
   triggerConfig(config: any) {
     this.config = config;

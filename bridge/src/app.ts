@@ -205,7 +205,8 @@ export function createApp(): DeckyApp {
 
   function pushLog(level: string, msg: string): void {
     if (logBuffer.length >= LOG_BUFFER_MAX) logBuffer.shift();
-    logBuffer.push({ ts: Date.now(), level, msg });
+    const capped = msg.length > 4096 ? msg.slice(0, 4096) + "…[truncated]" : msg;
+    logBuffer.push({ ts: Date.now(), level, msg: capped });
   }
 
   // Intercept console output so bridge log lines appear in GET /logs.
@@ -528,8 +529,8 @@ export function createApp(): DeckyApp {
       typeof nonceHeader === "string" && nonceHeader.trim().length > 0
         ? nonceHeader.trim()
         : null;
-    const sessionId = typeof body.session_id === "string" ? body.session_id : null;
-    const cwd = typeof body.cwd === "string" ? body.cwd : null;
+    const sessionId = typeof body.session_id === "string" ? body.session_id.slice(0, 256) : null;
+    const cwd = typeof body.cwd === "string" ? body.cwd.slice(0, 1024) : null;
     const snapshot = applyHookPayload(payload, { approvalFlow, nonce, sessionId, cwd });
     res.json({ ok: true, state: statePayload(snapshot) });
   });

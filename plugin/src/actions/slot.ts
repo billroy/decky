@@ -465,7 +465,7 @@ export class SlotAction extends SingletonAction {
 
     // Optimistically update the local config cache so immediate renders
     // (onWillAppear, PI snapshots) use swapped macros before bridge round-trip.
-    cfg.macros = macros;
+    bridgeRef.patchLocalConfig({ macros });
 
     bridgeRef.sendAction("updateConfig", { macros });
 
