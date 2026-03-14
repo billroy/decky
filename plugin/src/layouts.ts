@@ -17,9 +17,18 @@ type ApprovalTargetApp = "claude" | "codex";
 type LayoutDef = Record<number, SlotConfig>;
 type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";
 type ConnectionStatus = "connected" | "disconnected" | "connecting";
-type WidgetKind = "bridge-status" | "session-activity";
+type WidgetKind = "bridge-status" | "session-activity" | "pomodoro";
 interface WidgetDef {
   kind: WidgetKind;
+  label?: string;
+}
+
+interface PomodoroRenderState {
+  remainingSeconds: number;
+  isRunning: boolean;
+  isFlashing: boolean;
+  /** Incremented on each flash frame to alternate colors. */
+  flashFrame: number;
 }
 type Theme =
   | "light"
@@ -940,6 +949,31 @@ function macroSlot(index: number, macro: MacroInput): SlotConfig {
   };
 }
 
+const pomodoroRenderStates = new Map<number, PomodoroRenderState>();
+let pomodoroFlashFrameCounters = new Map<number, number>();
+
+export function setPomodoroState(slotIndex: number, state: {
+  remainingSeconds: number;
+  isRunning: boolean;
+  isFlashing: boolean;
+}): void {
+  // Track flash frame count to alternate colors
+  let flashFrame = 0;
+  if (state.isFlashing) {
+    const prev = pomodoroFlashFrameCounters.get(slotIndex) ?? 0;
+    flashFrame = prev + 1;
+    pomodoroFlashFrameCounters.set(slotIndex, flashFrame);
+  } else {
+    pomodoroFlashFrameCounters.delete(slotIndex);
+  }
+  pomodoroRenderStates.set(slotIndex, { ...state, flashFrame });
+}
+
+export function clearPomodoroState(slotIndex: number): void {
+  pomodoroRenderStates.delete(slotIndex);
+  pomodoroFlashFrameCounters.delete(slotIndex);
+}
+
 let widgetRenderContext: {
   connectionStatus?: ConnectionStatus;
   state?: string;
@@ -957,6 +991,7 @@ export function setWidgetRenderContext(context: {
 }
 
 function widgetSVG(slotIndex: number, _label: string, widget: WidgetDef): string {
+  if (widget.kind === "pomodoro") return pomodoroSVG(slotIndex, widget.label);
   if (widget.kind === "session-activity") return sessionActivitySVG(slotIndex);
   // Default: bridge-status
   const p = resolveThemePaletteForSlot(currentTheme, slotIndex);
@@ -993,12 +1028,59 @@ function sessionActivitySVG(slotIndex: number): string {
   </svg>`;
 }
 
+function formatMMSS(totalSeconds: number): string {
+  const m = Math.floor(totalSeconds / 60);
+  const s = totalSeconds % 60;
+  return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+}
+
+function pomodoroSVG(slotIndex: number, widgetLabel?: string): string {
+  const p = resolveThemePaletteForSlot(currentTheme, slotIndex);
+  const themeBg = resolveColor(p.macroBg, defaultColors.bg, undefined);
+  const themeFg = resolveColor(p.macroLabel, defaultColors.text, undefined);
+  const label = widgetLabel ?? "Timer";
+  const pState = pomodoroRenderStates.get(slotIndex);
+
+  // Flashing — completion animation
+  if (pState?.isFlashing) {
+    const bright = pState.flashFrame % 2 === 1;
+    const bg = bright ? "#4ade80" : "#0f172a";
+    const fg = bright ? "#0f172a" : "#4ade80";
+    return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+      <rect width="144" height="144" rx="16" fill="${bg}" />
+      <text x="72" y="70" font-size="42" font-weight="bold" font-family="sans-serif" text-anchor="middle" fill="${fg}">Done!</text>
+      <text x="72" y="110" font-size="22" font-family="sans-serif" text-anchor="middle" fill="${fg}">${label}</text>
+    </svg>`;
+  }
+
+  // Running — green background with countdown
+  if (pState && pState.isRunning && pState.remainingSeconds > 0) {
+    const timeStr = formatMMSS(pState.remainingSeconds);
+    return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+      <rect width="144" height="144" rx="16" fill="#16a34a" />
+      <text x="72" y="72" font-size="48" font-weight="bold" font-family="monospace" text-anchor="middle" dominant-baseline="central" fill="#ffffff">${timeStr}</text>
+      <text x="72" y="126" font-size="22" font-family="sans-serif" text-anchor="middle" fill="#bbf7d0">${label}</text>
+    </svg>`;
+  }
+
+  // Idle — theme background with clock icon
+  const clockIcon = LUCIDE_ICONS["clock-3"];
+  const mutedFg = themeFg + "99"; // 60% opacity via hex alpha
+  return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+    <rect width="144" height="144" rx="16" fill="${themeBg}" />
+    <g transform="translate(42, 8) scale(2.5)" fill="none" stroke="${mutedFg}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${clockIcon}</g>
+    <text x="72" y="94" font-size="36" font-family="monospace" text-anchor="middle" fill="${mutedFg}">00:00</text>
+    <text x="72" y="126" font-size="22" font-family="sans-serif" text-anchor="middle" fill="${themeFg}">${label}</text>
+  </svg>`;
+}
+
 function widgetSlot(index: number, macro: MacroInput): SlotConfig {
   const widget = macro.widget ?? { kind: "bridge-status" };
+  const action = widget.kind === "pomodoro" ? "pomodoro-add" : "widget-refresh";
   return {
     svg: widgetSVG(index, macro.label, widget),
     title: macro.label,
-    action: "widget-refresh",
+    action,
     data: { widgetKind: widget.kind },
   };
 }

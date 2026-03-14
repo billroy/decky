@@ -23,13 +23,14 @@ interface ColorOverrides {
   icon?: string;
 }
 
-type WidgetKind = "bridge-status" | "rate-limit" | "session-activity";
+type WidgetKind = "bridge-status" | "rate-limit" | "session-activity" | "pomodoro";
 type WidgetRefreshMode = "onClick" | "interval";
 
 interface WidgetDef {
   kind: WidgetKind;
   refreshMode?: WidgetRefreshMode;
   intervalMinutes?: number;
+  label?: string;
 }
 
 export type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";
@@ -258,9 +259,14 @@ function normalizeWidget(value: unknown): WidgetDef | undefined {
     obj.kind === "bridge-status" ? "bridge-status" :
     obj.kind === "rate-limit" ? "rate-limit" :
     obj.kind === "session-activity" ? "session-activity" :
+    obj.kind === "pomodoro" ? "pomodoro" :
     undefined;
   if (!kind) return undefined;
   const out: WidgetDef = { kind };
+  if (typeof obj.label === "string") {
+    const trimmed = obj.label.trim().slice(0, 20);
+    if (trimmed) out.label = trimmed;
+  }
   if (obj.refreshMode === "onClick" || obj.refreshMode === "interval") {
     out.refreshMode = obj.refreshMode;
   }

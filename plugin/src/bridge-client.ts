@@ -52,10 +52,11 @@ export interface ColorOverrides {
   icon?: string;
 }
 
-export type WidgetKind = "bridge-status" | "session-activity";
+export type WidgetKind = "bridge-status" | "session-activity" | "pomodoro";
 
 export interface WidgetDef {
   kind: WidgetKind;
+  label?: string;
 }
 
 export type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";

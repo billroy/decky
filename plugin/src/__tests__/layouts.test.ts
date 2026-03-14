@@ -12,6 +12,8 @@ import {
   setDefaultColors,
   setTargetBadgeOptions,
   setWidgetRenderContext,
+  setPomodoroState,
+  clearPomodoroState,
   type MacroInput,
   type QuestionUiMeta,
 } from "../layouts.js";
@@ -718,6 +720,59 @@ describe("layouts", () => {
       expect(config.svg).toContain(">0<");
     });
 
+  });
+
+  describe("pomodoro widget", () => {
+    const pomodoroMacro: MacroInput[] = [
+      { label: "Timer", text: "", type: "widget", widget: { kind: "pomodoro" } },
+    ];
+
+    afterEach(() => {
+      clearPomodoroState(0);
+    });
+
+    it("renders idle state with 00:00 and clock icon", () => {
+      setTheme("dark");
+      const config = getSlotConfig("idle", 0, null, pomodoroMacro);
+      expect(config.svg).toContain("00:00");
+      expect(config.svg).toContain('<circle cx="12" cy="12" r="10"'); // clock-3 Lucide icon
+      expect(config.svg).toContain("Timer");
+      expect(config.action).toBe("pomodoro-add");
+    });
+
+    it("renders custom label from widget config", () => {
+      setTheme("dark");
+      const macros: MacroInput[] = [
+        { label: "Focus", text: "", type: "widget", widget: { kind: "pomodoro", label: "Focus" } },
+      ];
+      const config = getSlotConfig("idle", 0, null, macros);
+      expect(config.svg).toContain("Focus");
+    });
+
+    it("renders running state with green background and countdown", () => {
+      setTheme("dark");
+      setPomodoroState(0, { remainingSeconds: 305, isRunning: true, isFlashing: false });
+      const config = getSlotConfig("idle", 0, null, pomodoroMacro);
+      expect(config.svg).toContain("#16a34a"); // green bg
+      expect(config.svg).toContain("05:05"); // 305 seconds = 5:05
+      expect(config.svg).toContain("Timer");
+    });
+
+    it("renders flashing state with Done! text", () => {
+      setTheme("dark");
+      setPomodoroState(0, { remainingSeconds: 0, isRunning: false, isFlashing: true });
+      const config = getSlotConfig("idle", 0, null, pomodoroMacro);
+      expect(config.svg).toContain("Done!");
+      // Should have one of the flash colors
+      expect(config.svg).toMatch(/#4ade80|#0f172a/);
+    });
+
+    it("returns pomodoro-add action", () => {
+      setTheme("dark");
+      const config = getSlotConfig("idle", 0, null, pomodoroMacro);
+      expect(config.action).toBe("pomodoro-add");
+      expect(config.data).toEqual({ widgetKind: "pomodoro" });
+    });
   });
 
   describe("animation frame helpers", () => {

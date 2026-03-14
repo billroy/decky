@@ -28,8 +28,11 @@ import {
   setDefaultColors,
   setTargetBadgeOptions,
   setWidgetRenderContext,
+  setPomodoroState,
+  clearPomodoroState,
   type MacroInput,
 } from "../layouts.js";
+import { pomodoroRegistry, ADD_SECONDS } from "../pomodoro.js";
 import { PI_PROTOCOL_VERSION } from "../protocol.js";
 
 let bridgeRef: BridgeClient | null = null;
@@ -181,6 +184,7 @@ export class SlotAction extends SingletonAction {
   private unsubState?: () => void;
   private unsubConfig?: () => void;
   private unsubBridgeEvent?: () => void;
+  private unsubPomodoro?: () => void;
   private activePiActionId?: string;
   private animationAbort: AbortController | null = null;
   private lastRenderedState: string = "";
@@ -287,6 +291,12 @@ export class SlotAction extends SingletonAction {
         } as JsonObject).catch(() => {});
       });
     }
+
+    if (!this.unsubPomodoro) {
+      this.unsubPomodoro = pomodoroRegistry.subscribe((timerId, state) => {
+        this.renderPomodoroSlots(timerId, state).catch(() => {});
+      });
+    }
   }
 
   override async onWillDisappear(ev: WillDisappearEvent): Promise<void> {
@@ -308,10 +318,12 @@ export class SlotAction extends SingletonAction {
       this.unsubState?.();
       this.unsubConfig?.();
       this.unsubBridgeEvent?.();
+      this.unsubPomodoro?.();
       this.unsubConnection = undefined;
       this.unsubState = undefined;
       this.unsubConfig = undefined;
       this.unsubBridgeEvent = undefined;
+      this.unsubPomodoro = undefined;
     }
   }
 
@@ -327,6 +339,12 @@ export class SlotAction extends SingletonAction {
     const layoutSlotIndex = resolveLayoutSlotIndex(state, slotIndex, deviceKey);
     const macros = this.getMacros();
     const config = getSlotConfig(state, layoutSlotIndex, snapshot?.tool, macros, snapshot?.approval ?? null, snapshot?.question ?? null);
+
+    if (config.action === "pomodoro-add") {
+      const physicalSlot = getSlotIndex(ev.action.id);
+      pomodoroRegistry.addTime(String(physicalSlot), ADD_SECONDS);
+      return;
+    }
 
     if (config.action === "widget-refresh") {
       bridgeRef.sendAction("requestState");
@@ -642,6 +660,45 @@ export class SlotAction extends SingletonAction {
       } catch {
         pushDebug("renderAll:setImage:err", instance.id, slotIndex, { state });
         // SDK may throw if the action disappeared mid-render; safe to ignore.
+      }
+    }
+  }
+
+  /**
+   * Targeted re-render for Pomodoro widget slots only.
+   * Called by the pomodoroRegistry subscription on every tick/flash frame.
+   */
+  private async renderPomodoroSlots(timerId: string, state: { remainingSeconds: number; isRunning: boolean; isFlashing: boolean }): Promise<void> {
+    const slotIndex = Number(timerId);
+    if (!Number.isFinite(slotIndex)) return;
+
+    // Update the render context for this slot
+    setPomodoroState(slotIndex, state);
+
+    const macros = this.getMacros();
+
+    for (const instance of this.getRenderableActions().values()) {
+      const assignedSlot = getSlotIndex(instance.id);
+      if (assignedSlot === -1) continue;
+
+      // Only update slots that are Pomodoro widgets at this slot index
+      const macro = macros?.[assignedSlot];
+      if (macro?.type !== "widget" || macro.widget?.kind !== "pomodoro") continue;
+      if (assignedSlot !== slotIndex) continue;
+
+      const snapshot = bridgeRef?.getLastSnapshot() ?? null;
+      const connStatus = bridgeRef?.getConnectionStatus() ?? "disconnected";
+      const currentState = connStatus === "connected" ? (snapshot?.state ?? "idle") : "stopped";
+      const deviceKey = getDeviceKey(instance.id);
+      const layoutSlotIndex = resolveLayoutSlotIndex(currentState, assignedSlot, deviceKey);
+      const config = getSlotConfig(currentState, layoutSlotIndex, snapshot?.tool, macros, snapshot?.approval ?? null, snapshot?.question ?? null);
+      const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
+
+      try {
+        await instance.setImage(imageData);
+        await instance.setTitle("");
+      } catch {
+        // Action may have disappeared mid-render; safe to ignore.
       }
     }
   }
