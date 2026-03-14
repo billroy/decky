@@ -525,9 +525,10 @@ export function createApp(): DeckyApp {
       typeof flowHeader === "string" && flowHeader.trim().toLowerCase() === "gate"
         ? "gate"
         : "mirror";
+    const rawNonce = typeof nonceHeader === "string" ? nonceHeader.trim() : "";
     const nonce =
-      typeof nonceHeader === "string" && nonceHeader.trim().length > 0
-        ? nonceHeader.trim()
+      rawNonce.length > 0 && rawNonce.length <= 128 && /^[a-zA-Z0-9_-]+$/.test(rawNonce)
+        ? rawNonce
         : null;
     const sessionId = typeof body.session_id === "string" ? body.session_id.slice(0, 256) : null;
     const cwd = typeof body.cwd === "string" ? body.cwd.slice(0, 1024) : null;

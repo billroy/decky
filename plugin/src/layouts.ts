@@ -5,6 +5,11 @@
  * send to the bridge when pressed.
  */
 
+/** Escape XML-special characters for safe interpolation into SVG text nodes. */
+function escapeXml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+}
+
 interface SlotConfig {
   svg: string;
   title: string;
@@ -561,7 +566,7 @@ function macroSVG(
     return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
       <rect width="144" height="144" rx="16" fill="${bg}" />
       <g transform="translate(30, 16) scale(3.5)" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${LUCIDE_ICONS[normalizedIcon]}</g>
-      <text x="72" y="${labelY}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${textColor}">${displayLabel}</text>
+      <text x="72" y="${labelY}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${textColor}">${escapeXml(displayLabel)}</text>
       ${targetBadge(targetApp)}
     </svg>`;
   }
@@ -574,8 +579,8 @@ function macroSVG(
     const fontWeight = normalizedIcon === "exclamation" ? ' font-weight="bold"' : "";
     return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
       <rect width="144" height="144" rx="16" fill="${bg}" />
-      <text x="72" y="82" font-size="100" font-family="sans-serif" text-anchor="middle" fill="${resolvedIcon}"${fontWeight}>${symbol}</text>
-      <text x="72" y="${labelY}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${textColor}">${displayLabel}</text>
+      <text x="72" y="82" font-size="100" font-family="sans-serif" text-anchor="middle" fill="${resolvedIcon}"${fontWeight}>${escapeXml(symbol)}</text>
+      <text x="72" y="${labelY}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${textColor}">${escapeXml(displayLabel)}</text>
       ${targetBadge(targetApp)}
     </svg>`;
   }
@@ -588,7 +593,7 @@ function macroSVG(
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <rect width="144" height="144" rx="16" fill="${resolvedBg}" />
     <text x="72" y="72" font-size="60" font-family="sans-serif" text-anchor="middle" fill="${resolvedIcon}">\u25B6</text>
-    <text x="72" y="${labelY}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${resolvedText}">${displayLabel}</text>
+    <text x="72" y="${labelY}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${resolvedText}">${escapeXml(displayLabel)}</text>
     ${targetBadge(targetApp)}
   </svg>`;
 }
@@ -598,7 +603,7 @@ function toolInfoSVG(toolName: string): string {
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <rect width="144" height="144" rx="16" fill="#1e293b" />
     <text x="72" y="48" font-size="20" font-family="sans-serif" text-anchor="middle" fill="#94a3b8">Tool</text>
-    <text x="72" y="86" font-size="32" font-family="sans-serif" text-anchor="middle" fill="#e2e8f0">${displayName}</text>
+    <text x="72" y="86" font-size="32" font-family="sans-serif" text-anchor="middle" fill="#e2e8f0">${escapeXml(displayName)}</text>
   </svg>`;
 }
 
@@ -625,8 +630,8 @@ function optionButtonSVG(optionLabel: string, slotLetter: string): string {
   const display = optionLabel.length > 9 ? `${optionLabel.slice(0, 8)}\u2026` : optionLabel;
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <rect width="144" height="144" rx="16" fill="${OPTION_BG}" />
-    <text x="72" y="38" font-size="18" font-family="sans-serif" text-anchor="middle" fill="#ffffff" opacity="0.85">${slotLetter}</text>
-    <text x="72" y="82" font-size="22" font-family="sans-serif" text-anchor="middle" fill="#ffffff">${display}</text>
+    <text x="72" y="38" font-size="18" font-family="sans-serif" text-anchor="middle" fill="#ffffff" opacity="0.85">${escapeXml(slotLetter)}</text>
+    <text x="72" y="82" font-size="22" font-family="sans-serif" text-anchor="middle" fill="#ffffff">${escapeXml(display)}</text>
   </svg>`;
 }
 
@@ -655,9 +660,9 @@ function approvalInfoSVG(toolName: string | null | undefined, approval: Approval
       : "Info";
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <rect width="144" height="144" rx="16" fill="${palette.bg}" />
-    <text x="72" y="34" font-size="14" font-family="sans-serif" text-anchor="middle" fill="#ffffff" opacity="0.95">${TARGET_CODES[app]} · ${summary}</text>
-    <text x="72" y="80" font-size="24" font-family="sans-serif" text-anchor="middle" fill="#ffffff">${display}</text>
-    <text x="72" y="114" font-size="14" font-family="sans-serif" text-anchor="middle" fill="#ffffff" opacity="0.9">${project}</text>
+    <text x="72" y="34" font-size="14" font-family="sans-serif" text-anchor="middle" fill="#ffffff" opacity="0.95">${escapeXml(TARGET_CODES[app])} · ${escapeXml(summary)}</text>
+    <text x="72" y="80" font-size="24" font-family="sans-serif" text-anchor="middle" fill="#ffffff">${escapeXml(display)}</text>
+    <text x="72" y="114" font-size="14" font-family="sans-serif" text-anchor="middle" fill="#ffffff" opacity="0.9">${escapeXml(project)}</text>
   </svg>`;
 }
 
@@ -736,7 +741,7 @@ function approvalButtonSVG(bg: string, iconName: string, label: string): string 
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
       <rect width="144" height="144" rx="16" fill="${bg}" />
       <g transform="translate(30, 16) scale(3.5)" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconPath}</g>
-      <text x="72" y="${labelY}" font-size="${labelFontSize}" font-family="sans-serif" text-anchor="middle" fill="#ffffff">${label}</text>
+      <text x="72" y="${labelY}" font-size="${labelFontSize}" font-family="sans-serif" text-anchor="middle" fill="#ffffff">${escapeXml(label)}</text>
     </svg>`;
 }
 
@@ -1027,7 +1032,7 @@ function countUpSVG(slotIndex: number, widgetLabel?: string): string {
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <rect width="144" height="144" rx="16" fill="${themeBg}" />
     <text x="72" y="72" font-size="48" font-weight="bold" font-family="monospace" text-anchor="middle" dominant-baseline="central" fill="${timeFg}">${timeStr}</text>
-    <text x="72" y="${labelY}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${themeFg}">${displayLabel}</text>
+    <text x="72" y="${labelY}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${themeFg}">${escapeXml(displayLabel)}</text>
   </svg>`;
 }
 
@@ -1053,7 +1058,7 @@ function widgetSVG(slotIndex: number, _label: string, widget: WidgetDef): string
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <rect width="144" height="144" rx="16" fill="${bg}" />
     <g transform="translate(30, 16) scale(3.5)" fill="none" stroke="${iconColor}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${iconPath}</g>
-    <text x="72" y="122" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${fg}">${stateLabel}</text>
+    <text x="72" y="122" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${fg}">${escapeXml(stateLabel)}</text>
   </svg>`;
 }
 
@@ -1094,7 +1099,7 @@ function pomodoroSVG(slotIndex: number, widgetLabel?: string): string {
     return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
       <rect width="144" height="144" rx="16" fill="${bg}" />
       <text x="72" y="70" font-size="42" font-weight="bold" font-family="sans-serif" text-anchor="middle" fill="${fg}">Done!</text>
-      <text x="72" y="110" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${fg}">${displayLabel}</text>
+      <text x="72" y="110" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${fg}">${escapeXml(displayLabel)}</text>
     </svg>`;
   }
 
@@ -1104,7 +1109,7 @@ function pomodoroSVG(slotIndex: number, widgetLabel?: string): string {
     return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
       <rect width="144" height="144" rx="16" fill="#16a34a" />
       <text x="72" y="72" font-size="48" font-weight="bold" font-family="monospace" text-anchor="middle" dominant-baseline="central" fill="#ffffff">${timeStr}</text>
-      <text x="72" y="${labelY}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="#bbf7d0">${displayLabel}</text>
+      <text x="72" y="${labelY}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="#bbf7d0">${escapeXml(displayLabel)}</text>
     </svg>`;
   }
 
@@ -1113,7 +1118,7 @@ function pomodoroSVG(slotIndex: number, widgetLabel?: string): string {
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <rect width="144" height="144" rx="16" fill="${themeBg}" />
     <text x="72" y="72" font-size="48" font-weight="bold" font-family="monospace" text-anchor="middle" dominant-baseline="central" fill="${mutedFg}">00:00</text>
-    <text x="72" y="${labelY}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${themeFg}">${displayLabel}</text>
+    <text x="72" y="${labelY}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${themeFg}">${escapeXml(displayLabel)}</text>
   </svg>`;
 }
 
