@@ -22,7 +22,8 @@ const APPROVAL_FLOW = (process.env.DECKY_APPROVAL_FLOW || "mirror").toLowerCase(
 const DECKY_HOME = process.env.DECKY_HOME || path.join(os.homedir(), ".decky");
 const TOKEN_FILE = path.join(DECKY_HOME, "bridge-token");
 const GATE_FILE = path.join(DECKY_HOME, "approval-gate");
-const TIMEOUT = parseInt(process.env.DECKY_TIMEOUT || "30", 10) || 30;
+const parsedTimeout = parseInt(process.env.DECKY_TIMEOUT ?? "", 10);
+const TIMEOUT = Number.isFinite(parsedTimeout) && parsedTimeout > 0 ? parsedTimeout : 30;
 const POLL_INTERVAL_MS = 200;
 
 let nonce;

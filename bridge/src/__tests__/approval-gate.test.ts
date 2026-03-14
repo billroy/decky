@@ -58,4 +58,24 @@ describe("approval-gate", () => {
     writeGateFile("approve");
     expect(gateFileExists()).toBe(true);
   });
+
+  it("writes nonce-prefixed format when nonce is provided", () => {
+    writeGateFile("approve", "abc123");
+    expect(readFileSync(GATE_FILE_PATH, "utf-8")).toBe("abc123:approve");
+  });
+
+  it("writes nonce-prefixed deny", () => {
+    writeGateFile("deny", "nonce-42");
+    expect(readFileSync(GATE_FILE_PATH, "utf-8")).toBe("nonce-42:deny");
+  });
+
+  it("writes plain result when nonce is undefined", () => {
+    writeGateFile("cancel");
+    expect(readFileSync(GATE_FILE_PATH, "utf-8")).toBe("cancel");
+  });
+
+  it("writes plain result when nonce is empty string", () => {
+    writeGateFile("approve", "");
+    expect(readFileSync(GATE_FILE_PATH, "utf-8")).toBe("approve");
+  });
 });

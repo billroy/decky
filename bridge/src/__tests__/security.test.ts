@@ -5,7 +5,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { io as ioClient, type Socket as ClientSocket } from "socket.io-client";
-import { isLoopbackAddress, getBridgeToken, rotateBridgeToken } from "../security.js";
+import { isLoopbackAddress, getBridgeToken, rotateBridgeToken, redactActionForLog, validateToken } from "../security.js";
 
 // --- Pure unit tests (no server needed) ---
 
@@ -53,6 +53,67 @@ describe("isLoopbackAddress", () => {
 
   it("returns false for empty string", () => {
     expect(isLoopbackAddress("")).toBe(false);
+  });
+});
+
+describe("redactActionForLog", () => {
+  it("redacts text field with length", () => {
+    const result = redactActionForLog({ action: "macro", text: "secret-stuff" });
+    expect(result.action).toBe("macro");
+    expect(result.text).toBe("[redacted:12]");
+  });
+
+  it("redacts text inside macros array entries", () => {
+    const result = redactActionForLog({
+      action: "updateConfig",
+      macros: [
+        { label: "Greet", text: "Hello world", icon: "star", colors: { bg: "#fff" } },
+        { label: "Empty", text: "" },
+      ],
+    });
+    const macros = result.macros as Array<Record<string, unknown>>;
+    expect(macros[0].label).toBe("Greet");
+    expect(macros[0].text).toBe("[redacted:11]");
+    expect(macros[0].icon).toBe("star");
+    expect(macros[0].hasColors).toBe(true);
+    expect(macros[1].text).toBe("[redacted:0]");
+    expect(macros[1].hasColors).toBe(false);
+  });
+
+  it("passes through non-sensitive fields unchanged", () => {
+    const result = redactActionForLog({ action: "approve", theme: "ocean" });
+    expect(result.action).toBe("approve");
+    expect(result.theme).toBe("ocean");
+  });
+
+  it("handles non-object macros entries gracefully", () => {
+    const result = redactActionForLog({ macros: [null, 42, "str"] });
+    const macros = result.macros as unknown[];
+    expect(macros[0]).toBeNull();
+    expect(macros[1]).toBe(42);
+    expect(macros[2]).toBe("str");
+  });
+});
+
+describe("validateToken", () => {
+  it("returns true for matching tokens", () => {
+    expect(validateToken("abc123", "abc123")).toBe(true);
+  });
+
+  it("returns false for mismatched tokens", () => {
+    expect(validateToken("abc123", "xyz789")).toBe(false);
+  });
+
+  it("returns false for empty candidate", () => {
+    expect(validateToken("", "abc123")).toBe(false);
+  });
+
+  it("returns false for empty expected", () => {
+    expect(validateToken("abc123", "")).toBe(false);
+  });
+
+  it("returns false for different-length tokens", () => {
+    expect(validateToken("short", "muchlongertoken")).toBe(false);
   });
 });
 
