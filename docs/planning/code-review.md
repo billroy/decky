@@ -328,7 +328,7 @@ Each chunk targets ~20 minutes. Checkpoint (commit + update this plan) at the en
 | Q7 | Quality | Medium | confirmed-by-code | `bridge/src/state-machine.ts:45` | Done |
 | Q8 | Quality | Medium | confirmed-by-code | `bridge/src/app.ts:167` | Done |
 | Q9 | Quality | Low | confirmed-by-code | `plugin/src/actions/slot.ts:614` | Done |
-| Q10 | Quality | Medium | confirmed-by-code | `bridge/src/macro-exec-darwin.ts:236` | Open |
+| Q10 | Quality | Medium | confirmed-by-code | `bridge/src/macro-exec-darwin.ts:236` | Done |
 | Q11 | Quality | Low | confirmed-by-code | `plugin/src/actions/encoder.ts:35` | Open |
 | Q12 | Quality | Low | confirmed-by-code | `plugin/src/actions/encoder.ts:135` | Open |
 | Q13 | Quality | Low | confirmed-by-code | `bridge/src/app.ts` | Deferred |

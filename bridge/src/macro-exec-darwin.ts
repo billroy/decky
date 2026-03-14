@@ -6,6 +6,7 @@
  * regardless of special characters in the macro text.
  */
 
+import { AsyncLocalStorage } from "node:async_hooks";
 import { execFile } from "node:child_process";
 import type { TargetApp } from "./config.js";
 
@@ -233,17 +234,12 @@ interface ApprovalAttempt {
 type ApprovalAttemptLogger = (attempt: ApprovalAttempt) => void;
 
 let approvalAttemptLogger: ApprovalAttemptLogger | null = null;
-const approvalAttemptContextStack: string[] = [];
-
-function currentAttemptContextId(): string | null {
-  const idx = approvalAttemptContextStack.length - 1;
-  return idx >= 0 ? approvalAttemptContextStack[idx] : null;
-}
+const attemptContextAls = new AsyncLocalStorage<string>();
 
 function reportApprovalAttempt(attempt: Omit<ApprovalAttempt, "timestamp" | "contextId">): void {
   approvalAttemptLogger?.({
     timestamp: Date.now(),
-    contextId: currentAttemptContextId(),
+    contextId: attemptContextAls.getStore() ?? null,
     ...attempt,
   });
 }
@@ -256,12 +252,7 @@ export async function withApprovalAttemptContext<T>(
   actionId: string,
   fn: () => Promise<T>,
 ): Promise<T> {
-  approvalAttemptContextStack.push(actionId);
-  try {
-    return await fn();
-  } finally {
-    approvalAttemptContextStack.pop();
-  }
+  return attemptContextAls.run(actionId, fn);
 }
 
 const CODEX_BUNDLE_ID = "com.openai.codex";
