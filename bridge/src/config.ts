@@ -457,7 +457,7 @@ export function loadConfig(): DeckyConfig {
       macros: Array.isArray(parsed.macros) ? parsedMacros : DEFAULT_CONFIG.macros,
       approvalTimeout:
         typeof parsed.approvalTimeout === "number"
-          ? parsed.approvalTimeout
+          ? Math.max(MIN_APPROVAL_TIMEOUT, Math.min(MAX_APPROVAL_TIMEOUT, parsed.approvalTimeout))
           : DEFAULT_CONFIG.approvalTimeout,
       theme: normalizeTheme(raw_obj.theme, DEFAULT_CONFIG.theme),
       themeSeed:

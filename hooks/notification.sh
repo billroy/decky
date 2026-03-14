@@ -23,4 +23,4 @@ curl -s -o /dev/null -X POST "$BRIDGE_URL/hook" \
   -H "Content-Type: application/json" \
   -H "x-decky-event: Notification" \
   "${AUTH_ARGS[@]}" \
-  -d "$PAYLOAD" 2>/dev/null || true
+  --data-raw "$PAYLOAD" 2>/dev/null || true

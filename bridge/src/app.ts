@@ -37,7 +37,7 @@ import {
   surfaceTargetApp,
   withApprovalAttemptContext,
 } from "./macro-exec.js";
-import { getBridgeToken, readRequestToken, redactActionForLog } from "./security.js";
+import { getBridgeToken, readRequestToken, validateToken, redactActionForLog } from "./security.js";
 import { ApprovalTraceStore } from "./approval-trace.js";
 
 const MAX_MACRO_ACTION_TEXT = 2000;
@@ -447,7 +447,7 @@ export function createApp(): DeckyApp {
 
   app.use(express.json({ limit: "5mb" }));
   app.use((req, res, next) => {
-    if (readRequestToken(req) !== bridgeToken) {
+    if (!validateToken(readRequestToken(req), bridgeToken)) {
       res.status(401).json({ error: "Unauthorized" });
       return;
     }
@@ -615,7 +615,7 @@ export function createApp(): DeckyApp {
       (typeof socket.handshake.headers["x-decky-token"] === "string"
         ? socket.handshake.headers["x-decky-token"].trim()
         : "");
-    if (token !== bridgeToken) {
+    if (!validateToken(token, bridgeToken)) {
       socket.emit("error", { error: "Unauthorized" });
       socket.disconnect(true);
       return;

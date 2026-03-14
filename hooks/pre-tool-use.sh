@@ -59,7 +59,7 @@ HTTP_CODE="$(
     -H "x-decky-approval-flow: $APPROVAL_FLOW" \
     -H "x-decky-nonce: $NONCE" \
     "${AUTH_ARGS[@]}" \
-    -d "$PAYLOAD" || echo "000"
+    --data-raw "$PAYLOAD" || echo "000"
 )"
 if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
   echo "{\"decision\":\"block\",\"reason\":\"Decky bridge unavailable or unauthorized (HTTP $HTTP_CODE)\"}"

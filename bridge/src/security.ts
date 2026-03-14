@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { randomBytes } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { Request } from "express";
 
 const DECKY_DIR = process.env.DECKY_HOME || join(homedir(), ".decky");
@@ -67,6 +67,18 @@ export function rotateBridgeToken(): string {
 export function readRequestToken(req: Request): string {
   const h = req.header("x-decky-token");
   return typeof h === "string" ? h.trim() : "";
+}
+
+/**
+ * Timing-safe token comparison. Prevents timing side-channel attacks
+ * by ensuring constant-time comparison regardless of where tokens differ.
+ */
+export function validateToken(candidate: string, expected: string): boolean {
+  if (!candidate || !expected) return false;
+  const a = Buffer.from(candidate, "utf-8");
+  const b = Buffer.from(expected, "utf-8");
+  if (a.length !== b.length) return false;
+  return timingSafeEqual(a, b);
 }
 
 /**

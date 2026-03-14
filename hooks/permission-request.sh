@@ -40,7 +40,7 @@ curl -sS -o /dev/null -w '' -X POST "$BRIDGE_URL/hook" \
   -H "x-decky-event: PermissionRequest" \
   -H "x-decky-approval-flow: mirror" \
   "${AUTH_ARGS[@]}" \
-  -d "$PAYLOAD" 2>/dev/null || true
+  --data-raw "$PAYLOAD" 2>/dev/null || true
 
 # Always exit 0 — let Claude show its own permission dialog.
 exit 0
