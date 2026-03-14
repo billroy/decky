@@ -15,6 +15,8 @@ export function portableRenameSync(src: string, dest: string): void {
     renameSync(src, dest);
   } catch (err: unknown) {
     if ((err as NodeJS.ErrnoException).code === "EPERM" && process.platform === "win32") {
+      // Non-atomic: dest is briefly absent between unlink and rename.
+      // Acceptable for gate files (polled) and config (rare writes).
       unlinkSync(dest);
       renameSync(src, dest);
     } else {

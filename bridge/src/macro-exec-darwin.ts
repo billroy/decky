@@ -296,12 +296,13 @@ function runAppleScript(script: string): Promise<string> {
 /**
  * Escape a string for AppleScript double-quoted context.
  *
- * SECURITY: Only escapes \ and ". Safe ONLY for non-user-input values.
+ * Escapes backslash, double-quote, and control characters (U+0000–U+001F).
  * Currently called with hardcoded app names and OS-provided process/window names.
- * If user input ever reaches this function, harden the escaping or use stdin.
  */
 function appleScriptString(value: string): string {
-  return `"${value.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
+  // Strip control characters that have no valid representation in AppleScript strings
+  const sanitized = value.replace(/[\x00-\x1f]/g, "");
+  return `"${sanitized.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
 }
 
 async function getFrontmostBundleId(): Promise<string | null> {

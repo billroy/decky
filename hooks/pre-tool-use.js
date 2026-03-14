@@ -95,7 +95,9 @@ function pollGateFile() {
     if (!fs.existsSync(GATE_FILE)) return;
     clearInterval(timer);
 
-    // Integrity check: owner and permissions
+    // Integrity check: owner and permissions.
+    // NOTE: stat-then-read is a TOCTOU pattern, but acceptable here because
+    // both processes (bridge writer + hook reader) run as the same local user.
     try {
       const stat = fs.statSync(GATE_FILE);
       const myUid = process.getuid ? process.getuid() : -1;
