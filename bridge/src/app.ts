@@ -24,6 +24,7 @@ import {
   getToolRiskRules,
   isReadOnly,
   normalizeTheme,
+  VALID_TARGET_APPS,
   saveConfig,
   ConfigValidationError,
   type RiskLevel,
@@ -878,11 +879,7 @@ export function createApp(): DeckyApp {
             : undefined;
         let colors = data.colors && typeof data.colors === "object" ? data.colors : undefined;
         const defaultTargetApp =
-          data.defaultTargetApp === "claude" ||
-          data.defaultTargetApp === "codex" ||
-          data.defaultTargetApp === "chatgpt" ||
-          data.defaultTargetApp === "cursor" ||
-          data.defaultTargetApp === "windsurf"
+          typeof data.defaultTargetApp === "string" && VALID_TARGET_APPS.has(data.defaultTargetApp)
             ? data.defaultTargetApp
             : undefined;
         const showTargetBadge =

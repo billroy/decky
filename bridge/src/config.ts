@@ -160,32 +160,21 @@ const ICON_ALIASES: Readonly<Record<string, string>> = {
 let currentConfig: DeckyConfig = { ...DEFAULT_CONFIG };
 
 
+export const VALID_THEMES: ReadonlySet<string> = new Set<Theme>([
+  "light", "dark", "dracula", "monokai", "solarized-dark", "solarized-light",
+  "nord", "github-dark", "candy-cane", "gradient-blue", "wormhole", "rainbow", "random",
+]);
+
+export const VALID_TARGET_APPS: ReadonlySet<string> = new Set<TargetApp>([
+  "claude", "codex", "chatgpt", "cursor", "windsurf",
+]);
+
 export function normalizeTheme(value: unknown, fallback: Theme): Theme {
-  return value === "light" ||
-    value === "dark" ||
-    value === "dracula" ||
-    value === "monokai" ||
-    value === "solarized-dark" ||
-    value === "solarized-light" ||
-    value === "nord" ||
-    value === "github-dark" ||
-    value === "candy-cane" ||
-    value === "gradient-blue" ||
-    value === "wormhole" ||
-    value === "rainbow" ||
-    value === "random"
-    ? value
-    : fallback;
+  return typeof value === "string" && VALID_THEMES.has(value) ? (value as Theme) : fallback;
 }
 
 function normalizeTargetApp(value: unknown, fallback: TargetApp): TargetApp {
-  return value === "claude" ||
-    value === "codex" ||
-    value === "chatgpt" ||
-    value === "cursor" ||
-    value === "windsurf"
-    ? value
-    : fallback;
+  return typeof value === "string" && VALID_TARGET_APPS.has(value) ? (value as TargetApp) : fallback;
 }
 
 function normalizeIcon(value: unknown): string | undefined {

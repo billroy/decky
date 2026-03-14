@@ -32,10 +32,6 @@ let previewOffset = 0; // rotation-driven queue preview index
 let pendingTheme: string | null = null;  // non-null while press-rotating
 let originalTheme: string | null = null; // theme when press started
 
-export function setEncoderClient(client: BridgeClient): void {
-  bridgeRef = client;
-}
-
 function stateLabel(snapshot: StateSnapshot): string {
   switch (snapshot.state) {
     case "idle":          return "Idle";
@@ -127,12 +123,11 @@ export class EncoderAction extends SingletonAction {
     // Nothing to clean up per-dial
   }
 
-  override onDialDown(ev: DialDownEvent): void {
+  override onDialDown(_ev: DialDownEvent): void {
     if (lastSnapshot?.state === "awaiting-approval") {
       bridgeRef?.sendAction("approve");
       previewOffset = 0;
     }
-    void ev; // suppress unused warning
   }
 
   override onDialUp(_ev: DialUpEvent): void {
