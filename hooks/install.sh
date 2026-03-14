@@ -50,9 +50,15 @@ if ! command -v jq &>/dev/null; then
 fi
 
 if [ -f "$SETTINGS" ]; then
-  # Deep-merge decky hooks into existing hooks, preserving other hook entries
+  # Per-entry merge: remove old Decky entries (identified by ".decky/hooks/" in command),
+  # then append new Decky entries, preserving non-Decky hooks under the same event keys.
   MERGED=$(jq --argjson decky "$DECKY_HOOKS" '
-    .hooks = ((.hooks // {}) * $decky)
+    .hooks = reduce ($decky | keys[]) as $event (
+      (.hooks // {});
+      .[$event] = ([(.[$event] // [])[] |
+        select([.hooks[]?.command // "" | contains(".decky/hooks/")] | any | not)
+      ] + $decky[$event])
+    )
   ' "$SETTINGS")
   echo "$MERGED" > "$SETTINGS"
   echo ""

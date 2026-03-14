@@ -13,7 +13,7 @@ for hook in "${HOOKS[@]}"; do
   if [ -f "$DEST/$hook" ]; then
     rm "$DEST/$hook"
     echo "  removed $DEST/$hook"
-    ((removed++))
+    removed=$((removed + 1))
   fi
 done
 if [ "$removed" -eq 0 ]; then
@@ -41,7 +41,12 @@ fi
 
 CLEANED=$(jq '
   if .hooks then
-    .hooks |= del(.PermissionRequest, .PostToolUse, .Stop, .Notification)
+    .hooks |= with_entries(
+      if .key == "PermissionRequest" or .key == "PostToolUse" or .key == "Stop" or .key == "Notification" then
+        .value = [.value[] | select([.hooks[]?.command // "" | contains(".decky/hooks/")] | any | not)]
+      else . end
+    )
+    | .hooks |= with_entries(select(.value | length > 0))
     | if (.hooks | length) == 0 then del(.hooks) else . end
   else . end
 ' "$SETTINGS")

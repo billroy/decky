@@ -62,7 +62,14 @@ try {
 
 if (settings.hooks && typeof settings.hooks === "object") {
   for (const event of HOOK_EVENTS) {
-    delete settings.hooks[event];
+    if (!Array.isArray(settings.hooks[event])) continue;
+    // Keep only non-Decky entries (those whose commands don't reference .decky/hooks/)
+    settings.hooks[event] = settings.hooks[event].filter(
+      (entry) => !(entry.hooks && entry.hooks.some((h) => h.command && h.command.includes(".decky/hooks/")))
+    );
+    if (settings.hooks[event].length === 0) {
+      delete settings.hooks[event];
+    }
   }
   if (Object.keys(settings.hooks).length === 0) {
     delete settings.hooks;
