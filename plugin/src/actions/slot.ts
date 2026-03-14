@@ -13,6 +13,7 @@ import streamDeck, {
   type WillAppearEvent,
   type WillDisappearEvent,
   type KeyDownEvent,
+  type KeyUpEvent,
   type PropertyInspectorDidAppearEvent,
   type SendToPluginEvent,
 } from "@elgato/streamdeck";
@@ -37,6 +38,8 @@ import { PI_PROTOCOL_VERSION } from "../protocol.js";
 
 let bridgeRef: BridgeClient | null = null;
 const activeKeyActions = new Map<string, WillAppearEvent["action"]>();
+const keyDownTimestamps = new Map<string, number>();
+const LONG_PRESS_MS = 500;
 
 interface DebugEntry extends JsonObject {
   ts: number;
@@ -341,8 +344,8 @@ export class SlotAction extends SingletonAction {
     const config = getSlotConfig(state, layoutSlotIndex, snapshot?.tool, macros, snapshot?.approval ?? null, snapshot?.question ?? null);
 
     if (config.action === "pomodoro-add") {
-      const physicalSlot = getSlotIndex(ev.action.id);
-      pomodoroRegistry.addTime(String(physicalSlot), ADD_SECONDS);
+      // Record timestamp; actual action happens in onKeyUp (short vs long press)
+      keyDownTimestamps.set(ev.action.id, Date.now());
       return;
     }
 
@@ -358,6 +361,25 @@ export class SlotAction extends SingletonAction {
         action: config.action,
         actionId,
       });
+    }
+  }
+
+  override async onKeyUp(ev: KeyUpEvent): Promise<void> {
+    const downTime = keyDownTimestamps.get(ev.action.id);
+    keyDownTimestamps.delete(ev.action.id);
+    if (downTime === undefined) return; // Not a tracked pomodoro press
+
+    const slotIndex = getSlotIndex(ev.action.id);
+    if (slotIndex === -1) return;
+
+    const held = Date.now() - downTime;
+    if (held >= LONG_PRESS_MS) {
+      // Long press: reset timer to 2 seconds for testing completion visuals
+      pomodoroRegistry.removeTimer(String(slotIndex));
+      pomodoroRegistry.addTime(String(slotIndex), 2);
+    } else {
+      // Short press: add 10 minutes
+      pomodoroRegistry.addTime(String(slotIndex), ADD_SECONDS);
     }
   }
 
