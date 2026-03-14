@@ -1081,6 +1081,9 @@ function pomodoroSVG(slotIndex: number, widgetLabel?: string): string {
   const themeBg = resolveColor(p.macroBg, defaultColors.bg, undefined);
   const themeFg = resolveColor(p.macroLabel, defaultColors.text, undefined);
   const label = widgetLabel ?? "Timer";
+  const displayLabel = label.length > 10 ? label.slice(0, 9) + "\u2026" : label;
+  const fontSize = resolveLabelFontSize(displayLabel);
+  const labelY = fontSize >= 36 ? 126 : 122;
   const pState = pomodoroRenderStates.get(slotIndex);
 
   // Flashing — completion animation
@@ -1091,7 +1094,7 @@ function pomodoroSVG(slotIndex: number, widgetLabel?: string): string {
     return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
       <rect width="144" height="144" rx="16" fill="${bg}" />
       <text x="72" y="70" font-size="42" font-weight="bold" font-family="sans-serif" text-anchor="middle" fill="${fg}">Done!</text>
-      <text x="72" y="110" font-size="22" font-family="sans-serif" text-anchor="middle" fill="${fg}">${label}</text>
+      <text x="72" y="110" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${fg}">${displayLabel}</text>
     </svg>`;
   }
 
@@ -1101,7 +1104,7 @@ function pomodoroSVG(slotIndex: number, widgetLabel?: string): string {
     return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
       <rect width="144" height="144" rx="16" fill="#16a34a" />
       <text x="72" y="72" font-size="48" font-weight="bold" font-family="monospace" text-anchor="middle" dominant-baseline="central" fill="#ffffff">${timeStr}</text>
-      <text x="72" y="126" font-size="22" font-family="sans-serif" text-anchor="middle" fill="#bbf7d0">${label}</text>
+      <text x="72" y="${labelY}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="#bbf7d0">${displayLabel}</text>
     </svg>`;
   }
 
@@ -1110,7 +1113,7 @@ function pomodoroSVG(slotIndex: number, widgetLabel?: string): string {
   return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
     <rect width="144" height="144" rx="16" fill="${themeBg}" />
     <text x="72" y="72" font-size="48" font-weight="bold" font-family="monospace" text-anchor="middle" dominant-baseline="central" fill="${mutedFg}">00:00</text>
-    <text x="72" y="126" font-size="22" font-family="sans-serif" text-anchor="middle" fill="${themeFg}">${label}</text>
+    <text x="72" y="${labelY}" font-size="${fontSize}" font-family="sans-serif" text-anchor="middle" fill="${themeFg}">${displayLabel}</text>
   </svg>`;
 }
 
