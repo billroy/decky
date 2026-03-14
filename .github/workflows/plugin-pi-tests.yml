@@ -33,10 +33,14 @@ jobs:
           cache: 'npm'
           cache-dependency-path: bridge/package-lock.json
       - run: npm ci
+      - run: npx tsc --noEmit
       - run: npm test
 
   plugin-tests:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
     defaults:
       run:
         working-directory: plugin
@@ -51,7 +55,9 @@ jobs:
             bridge/package-lock.json
       - run: npm ci
       - run: npm --prefix ../bridge ci
+      - run: npx tsc --noEmit
       - run: npm run test:pi:coverage-map
       - run: npm test
       - run: npx playwright install --with-deps chromium
-      - run: npm run test:pi
+      - if: matrix.os == 'ubuntu-latest'
+        run: npm run test:pi

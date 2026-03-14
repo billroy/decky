@@ -7,5 +7,10 @@ export default defineConfig({
     setupFiles: ["./src/__tests__/setup-env.ts"],
     pool: "forks",
     maxWorkers: 1,
+    coverage: {
+      provider: "v8",
+      include: ["src/**/*.ts"],
+      exclude: ["src/__tests__/**", "src/server.ts"],
+    },
   },
 });

@@ -343,7 +343,7 @@ Each chunk targets ~20 minutes. Checkpoint (commit + update this plan) at the en
 | T5 | Testing | Low | confirmed-by-code | `plugin/src/actions/slot.ts:401` | Done |
 | T6 | Testing | Low | confirmed-by-code | `plugin/src/bridge-client.ts` | Done |
 | T7 | Testing | Low | confirmed-by-code | `hooks/pre-tool-use.js:25` | Done |
-| T8 | Testing | Medium | confirmed-by-code | `.github/workflows/plugin-pi-tests.yml` | Open |
+| T8 | Testing | Medium | confirmed-by-code | `.github/workflows/plugin-pi-tests.yml` | Done |
 | T9 | Testing | Low | confirmed-by-code | project-wide | Open |
-| T10 | Testing | Low | confirmed-by-code | vitest configs | Open |
-| T11 | Testing | Low | confirmed-by-code | `.github/workflows/plugin-pi-tests.yml:38` | Open |
+| T10 | Testing | Low | confirmed-by-code | vitest configs | Done |
+| T11 | Testing | Low | confirmed-by-code | `.github/workflows/plugin-pi-tests.yml:38` | Done |
