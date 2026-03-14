@@ -304,23 +304,23 @@ Each chunk targets ~20 minutes. Checkpoint (commit + update this plan) at the en
 
 | ID | Type | Severity | Evidence | Location | Status |
 |----|------|----------|----------|----------|--------|
-| S1 | Security | Medium | confirmed-by-code | `plugin/src/layouts.ts` (10 sites) | Open |
-| S2 | Security | Medium | hypothesis | `bridge/src/macro-exec-darwin.ts:95` | Open |
-| S3 | Security | High | confirmed-by-code | `bridge/src/app.ts:450,618` | Open |
-| S4 | Security | Medium | confirmed-by-code | All `.sh` hooks | Open |
-| S5 | Security | Medium | confirmed-by-code | `bridge/src/app.ts:531-532` | Open |
-| S6 | Security | Medium | confirmed-by-code | `bridge/src/app.ts:206` | Open |
-| S7 | Security | Medium | confirmed-by-code | `bridge/src/app.ts:231` | Open |
-| S8 | Security | Low | confirmed-by-code | `bridge/src/app.ts:527` | Open |
-| S9 | Security | Low | confirmed-by-code | hooks TOCTOU | Open |
-| S10 | Security | Low | confirmed-by-code | `bridge/src/fs-compat.ts:17` | Open |
-| B1 | Bug | High | confirmed-by-code | `hooks/uninstall.sh:16` | Open |
-| B2 | Bug | High | confirmed-by-code | `hooks/install.sh:55` | Open |
-| B3 | Bug | Medium | confirmed-by-code | `hooks/uninstall.js:64`, `uninstall.sh:44` | Open |
-| B4 | Bug | Medium | confirmed-by-code | `plugin/src/actions/slot.ts:468` | Open |
-| B5 | Bug | Medium | confirmed-by-code | `bridge/src/config.ts:458` | Open |
-| Q1 | Quality | Medium | confirmed-by-code | `plugin/src/layouts.ts`, `bridge-client.ts` | Open |
-| Q2 | Quality | Medium | confirmed-by-code | `bridge/src/config.ts`, `app.ts` | Open |
+| S1 | Security | Medium | confirmed-by-code | `plugin/src/layouts.ts` (10 sites) | Done |
+| S2 | Security | Medium | hypothesis | `bridge/src/macro-exec-darwin.ts:95` | Done |
+| S3 | Security | High | confirmed-by-code | `bridge/src/app.ts:450,618` | Done |
+| S4 | Security | Medium | confirmed-by-code | All `.sh` hooks | Done |
+| S5 | Security | Medium | confirmed-by-code | `bridge/src/app.ts:531-532` | Done |
+| S6 | Security | Medium | confirmed-by-code | `bridge/src/app.ts:206` | Done |
+| S7 | Security | Medium | confirmed-by-code | `bridge/src/app.ts:231` | Done |
+| S8 | Security | Low | confirmed-by-code | `bridge/src/app.ts:527` | Done |
+| S9 | Security | Low | confirmed-by-code | hooks TOCTOU | Done |
+| S10 | Security | Low | confirmed-by-code | `bridge/src/fs-compat.ts:17` | Done |
+| B1 | Bug | High | confirmed-by-code | `hooks/uninstall.sh:16` | Done |
+| B2 | Bug | High | confirmed-by-code | `hooks/install.sh:55` | Done |
+| B3 | Bug | Medium | confirmed-by-code | `hooks/uninstall.js:64`, `uninstall.sh:44` | Done |
+| B4 | Bug | Medium | confirmed-by-code | `plugin/src/actions/slot.ts:468` | Done |
+| B5 | Bug | Medium | confirmed-by-code | `bridge/src/config.ts:458` | Done |
+| Q1 | Quality | Medium | confirmed-by-code | `plugin/src/layouts.ts`, `bridge-client.ts` | Done |
+| Q2 | Quality | Medium | confirmed-by-code | `bridge/src/config.ts`, `app.ts` | Done |
 | Q3 | Quality | Low | confirmed-by-code | `plugin/src/actions/slot.ts:726` | Done |
 | Q4 | Quality | Low | confirmed-by-code | `plugin/src/actions/slot.ts:861,1069` | Done |
 | Q5 | Quality | Low | confirmed-by-code | `plugin/src/actions/slot.ts:805-1102` | Done |
@@ -329,8 +329,8 @@ Each chunk targets ~20 minutes. Checkpoint (commit + update this plan) at the en
 | Q8 | Quality | Medium | confirmed-by-code | `bridge/src/app.ts:167` | Done |
 | Q9 | Quality | Low | confirmed-by-code | `plugin/src/actions/slot.ts:614` | Done |
 | Q10 | Quality | Medium | confirmed-by-code | `bridge/src/macro-exec-darwin.ts:236` | Done |
-| Q11 | Quality | Low | confirmed-by-code | `plugin/src/actions/encoder.ts:35` | Open |
-| Q12 | Quality | Low | confirmed-by-code | `plugin/src/actions/encoder.ts:135` | Open |
+| Q11 | Quality | Low | confirmed-by-code | `plugin/src/actions/encoder.ts:35` | Done |
+| Q12 | Quality | Low | confirmed-by-code | `plugin/src/actions/encoder.ts:135` | Done |
 | Q13 | Quality | Low | confirmed-by-code | `bridge/src/app.ts` | Deferred |
 | Q14 | Quality | Low | confirmed-by-code | `bridge/src/config.ts:160` | Deferred |
 | Q15 | Quality | Low | confirmed-by-code | `bridge/src/app.ts:213` | Deferred |
