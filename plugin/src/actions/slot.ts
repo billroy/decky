@@ -64,6 +64,14 @@ function recentDebug(): DebugEntry[] {
   return debugLog.slice(-80);
 }
 
+function easeOutCubic(t: number): number {
+  return 1 - Math.pow(1 - t, 3);
+}
+
+function easeInCubic(t: number): number {
+  return t * t * t;
+}
+
 function debugSummary(): JsonObject {
   const cfg = bridgeRef?.getLastConfig();
   return {
@@ -251,7 +259,7 @@ export class SlotAction extends SingletonAction {
       const deviceKey = getDeviceKey(ev.action.id);
       const layoutSlotIndex = resolveLayoutSlotIndex(state, assignedSlot, deviceKey);
       const anchorSlot = state === "awaiting-approval" ? getApprovalAnchorSlot(deviceKey) : null;
-      const macros = this.getMacros();
+      const macros = this.syncThemeAndGetMacros();
       const config = getSlotConfig(state, layoutSlotIndex, snapshot?.tool, macros, snapshot?.approval ?? null, snapshot?.question ?? null);
       const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
       pushDebug("initialRender", ev.action.id, assignedSlot, {
@@ -352,7 +360,7 @@ export class SlotAction extends SingletonAction {
     const state = snapshot?.state ?? "idle";
     const deviceKey = getDeviceKey(ev.action.id);
     const layoutSlotIndex = resolveLayoutSlotIndex(state, slotIndex, deviceKey);
-    const macros = this.getMacros();
+    const macros = this.syncThemeAndGetMacros();
     const config = getSlotConfig(state, layoutSlotIndex, snapshot?.tool, macros, snapshot?.approval ?? null, snapshot?.question ?? null);
 
     if (config.action === "pomodoro-add" || config.action === "count-up-toggle") {
@@ -390,7 +398,7 @@ export class SlotAction extends SingletonAction {
     const state = snapshot?.state ?? "idle";
     const deviceKey = getDeviceKey(ev.action.id);
     const layoutSlotIndex = resolveLayoutSlotIndex(state, slotIndex, deviceKey);
-    const macros = this.getMacros();
+    const macros = this.syncThemeAndGetMacros();
     const config = getSlotConfig(state, layoutSlotIndex, snapshot?.tool, macros, snapshot?.approval ?? null, snapshot?.question ?? null);
 
     const held = Date.now() - downTime;
@@ -611,7 +619,7 @@ export class SlotAction extends SingletonAction {
     }
   }
 
-  private getMacros(): MacroInput[] | undefined {
+  private syncThemeAndGetMacros(): MacroInput[] | undefined {
     const cfg = bridgeRef?.getLastConfig();
     if (cfg?.theme) setTheme(cfg.theme);
     setThemeSeed(cfg?.themeSeed ?? 0);
@@ -644,7 +652,7 @@ export class SlotAction extends SingletonAction {
   private async renderAll(connStatus: ConnectionStatus, snapshot: StateSnapshot | null): Promise<void> {
     const state = connStatus === "connected" ? (snapshot?.state ?? "idle") : "stopped";
     const toolName = snapshot?.tool;
-    const macros = this.getMacros();
+    const macros = this.syncThemeAndGetMacros();
 
     // Detect transition INTO awaiting-approval → run slide-in animation
     const isNewApproval =
@@ -720,25 +728,21 @@ export class SlotAction extends SingletonAction {
   }
 
   /**
-   * Targeted re-render for Pomodoro widget slots only.
-   * Called by the pomodoroRegistry subscription on every tick/flash frame.
+   * Shared re-render for timer widget slots (pomodoro or count-up).
+   * Filters to slots matching the given widget kind and re-renders them.
    */
-  private async renderPomodoroSlots(timerId: string, state: { remainingSeconds: number; isRunning: boolean; isFlashing: boolean }): Promise<void> {
+  private async renderTimerSlots(timerId: string, widgetKind: string): Promise<void> {
     const slotIndex = Number(timerId);
     if (!Number.isFinite(slotIndex)) return;
 
-    // Update the render context for this slot
-    setPomodoroState(slotIndex, state);
-
-    const macros = this.getMacros();
+    const macros = this.syncThemeAndGetMacros();
 
     for (const instance of this.getRenderableActions().values()) {
       const assignedSlot = getSlotIndex(instance.id);
       if (assignedSlot === -1) continue;
 
-      // Only update slots that are Pomodoro widgets at this slot index
       const macro = macros?.[assignedSlot];
-      if (macro?.type !== "widget" || macro.widget?.kind !== "pomodoro") continue;
+      if (macro?.type !== "widget" || macro.widget?.kind !== widgetKind) continue;
       if (assignedSlot !== slotIndex) continue;
 
       const snapshot = bridgeRef?.getLastSnapshot() ?? null;
@@ -759,42 +763,21 @@ export class SlotAction extends SingletonAction {
   }
 
   /**
+   * Targeted re-render for Pomodoro widget slots only.
+   * Called by the pomodoroRegistry subscription on every tick/flash frame.
+   */
+  private async renderPomodoroSlots(timerId: string, state: { remainingSeconds: number; isRunning: boolean; isFlashing: boolean }): Promise<void> {
+    setPomodoroState(Number(timerId), state);
+    return this.renderTimerSlots(timerId, "pomodoro");
+  }
+
+  /**
    * Targeted re-render for count-up timer widget slots only.
    * Called by the countUpRegistry subscription on every tick.
    */
   private async renderCountUpSlots(timerId: string, state: { elapsedSeconds: number; isRunning: boolean }): Promise<void> {
-    const slotIndex = Number(timerId);
-    if (!Number.isFinite(slotIndex)) return;
-
-    // Update the render context for this slot
-    setCountUpState(slotIndex, state);
-
-    const macros = this.getMacros();
-
-    for (const instance of this.getRenderableActions().values()) {
-      const assignedSlot = getSlotIndex(instance.id);
-      if (assignedSlot === -1) continue;
-
-      // Only update slots that are count-up widgets at this slot index
-      const macro = macros?.[assignedSlot];
-      if (macro?.type !== "widget" || macro.widget?.kind !== "count-up") continue;
-      if (assignedSlot !== slotIndex) continue;
-
-      const snapshot = bridgeRef?.getLastSnapshot() ?? null;
-      const connStatus = bridgeRef?.getConnectionStatus() ?? "disconnected";
-      const currentState = connStatus === "connected" ? (snapshot?.state ?? "idle") : "stopped";
-      const deviceKey = getDeviceKey(instance.id);
-      const layoutSlotIndex = resolveLayoutSlotIndex(currentState, assignedSlot, deviceKey);
-      const config = getSlotConfig(currentState, layoutSlotIndex, snapshot?.tool, macros, snapshot?.approval ?? null, snapshot?.question ?? null);
-      const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
-
-      try {
-        await instance.setImage(imageData);
-        await instance.setTitle("");
-      } catch {
-        // Action may have disappeared mid-render; safe to ignore.
-      }
-    }
+    setCountUpState(Number(timerId), state);
+    return this.renderTimerSlots(timerId, "count-up");
   }
 
   /**
@@ -857,10 +840,6 @@ export class SlotAction extends SingletonAction {
     const FRAME_COUNT = 8;
     const STAGGER_DELAY = 40; // ms between each slot starting
     const FRAME_INTERVAL = TOTAL_DURATION / FRAME_COUNT;
-
-    function easeOutCubic(t: number): number {
-      return 1 - Math.pow(1 - t, 3);
-    }
 
     for (let frame = 0; frame <= FRAME_COUNT; frame++) {
       if (abort.signal.aborted) return;
@@ -953,10 +932,6 @@ export class SlotAction extends SingletonAction {
     const FRAME_COUNT = 6;
     const STAGGER_DELAY = 30;
     const FRAME_INTERVAL = TOTAL_DURATION / FRAME_COUNT;
-
-    function easeInCubic(t: number): number {
-      return t * t * t;
-    }
 
     for (let frame = 0; frame <= FRAME_COUNT; frame++) {
       if (abort.signal.aborted) return;
@@ -1065,10 +1040,6 @@ export class SlotAction extends SingletonAction {
     const FRAME_COUNT = 8;
     const STAGGER_DELAY = 40;
     const FRAME_INTERVAL = TOTAL_DURATION / FRAME_COUNT;
-
-    function easeOutCubic(t: number): number {
-      return 1 - Math.pow(1 - t, 3);
-    }
 
     for (let frame = 0; frame <= FRAME_COUNT; frame++) {
       if (abort.signal.aborted) return;
