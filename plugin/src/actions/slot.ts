@@ -31,9 +31,12 @@ import {
   setWidgetRenderContext,
   setPomodoroState,
   clearPomodoroState,
+  setCountUpState,
+  clearCountUpState,
   type MacroInput,
 } from "../layouts.js";
 import { pomodoroRegistry, ADD_SECONDS } from "../pomodoro.js";
+import { countUpRegistry } from "../countup.js";
 import { PI_PROTOCOL_VERSION } from "../protocol.js";
 
 let bridgeRef: BridgeClient | null = null;
@@ -188,6 +191,7 @@ export class SlotAction extends SingletonAction {
   private unsubConfig?: () => void;
   private unsubBridgeEvent?: () => void;
   private unsubPomodoro?: () => void;
+  private unsubCountUp?: () => void;
   private activePiActionId?: string;
   private animationAbort: AbortController | null = null;
   private lastRenderedState: string = "";
@@ -300,6 +304,12 @@ export class SlotAction extends SingletonAction {
         this.renderPomodoroSlots(timerId, state).catch(() => {});
       });
     }
+
+    if (!this.unsubCountUp) {
+      this.unsubCountUp = countUpRegistry.subscribe((timerId, state) => {
+        this.renderCountUpSlots(timerId, state).catch(() => {});
+      });
+    }
   }
 
   override async onWillDisappear(ev: WillDisappearEvent): Promise<void> {
@@ -322,11 +332,13 @@ export class SlotAction extends SingletonAction {
       this.unsubConfig?.();
       this.unsubBridgeEvent?.();
       this.unsubPomodoro?.();
+      this.unsubCountUp?.();
       this.unsubConnection = undefined;
       this.unsubState = undefined;
       this.unsubConfig = undefined;
       this.unsubBridgeEvent = undefined;
       this.unsubPomodoro = undefined;
+      this.unsubCountUp = undefined;
     }
   }
 
@@ -343,7 +355,7 @@ export class SlotAction extends SingletonAction {
     const macros = this.getMacros();
     const config = getSlotConfig(state, layoutSlotIndex, snapshot?.tool, macros, snapshot?.approval ?? null, snapshot?.question ?? null);
 
-    if (config.action === "pomodoro-add") {
+    if (config.action === "pomodoro-add" || config.action === "count-up-toggle") {
       // Record timestamp; actual action happens in onKeyUp (short vs long press)
       keyDownTimestamps.set(ev.action.id, Date.now());
       return;
@@ -367,19 +379,40 @@ export class SlotAction extends SingletonAction {
   override async onKeyUp(ev: KeyUpEvent): Promise<void> {
     const downTime = keyDownTimestamps.get(ev.action.id);
     keyDownTimestamps.delete(ev.action.id);
-    if (downTime === undefined) return; // Not a tracked pomodoro press
+    if (downTime === undefined) return; // Not a tracked timer press
 
+    if (!bridgeRef) return;
     const slotIndex = getSlotIndex(ev.action.id);
     if (slotIndex === -1) return;
 
+    // Re-resolve config to determine which timer type this is
+    const snapshot = bridgeRef.getLastSnapshot();
+    const state = snapshot?.state ?? "idle";
+    const deviceKey = getDeviceKey(ev.action.id);
+    const layoutSlotIndex = resolveLayoutSlotIndex(state, slotIndex, deviceKey);
+    const macros = this.getMacros();
+    const config = getSlotConfig(state, layoutSlotIndex, snapshot?.tool, macros, snapshot?.approval ?? null, snapshot?.question ?? null);
+
     const held = Date.now() - downTime;
-    if (held >= LONG_PRESS_MS) {
-      // Long press: reset timer to 2 seconds for testing completion visuals
-      pomodoroRegistry.removeTimer(String(slotIndex));
-      pomodoroRegistry.addTime(String(slotIndex), 2);
-    } else {
-      // Short press: add 10 minutes
-      pomodoroRegistry.addTime(String(slotIndex), ADD_SECONDS);
+    const timerId = String(slotIndex);
+
+    if (config.action === "pomodoro-add") {
+      if (held >= LONG_PRESS_MS) {
+        // Long press: reset timer to 2 seconds for testing completion visuals
+        pomodoroRegistry.removeTimer(timerId);
+        pomodoroRegistry.addTime(timerId, 2);
+      } else {
+        // Short press: add 10 minutes
+        pomodoroRegistry.addTime(timerId, ADD_SECONDS);
+      }
+    } else if (config.action === "count-up-toggle") {
+      if (held >= LONG_PRESS_MS) {
+        // Long press: reset to 00:00
+        countUpRegistry.reset(timerId);
+      } else {
+        // Short press: toggle start/pause
+        countUpRegistry.toggle(timerId);
+      }
     }
   }
 
@@ -706,6 +739,45 @@ export class SlotAction extends SingletonAction {
       // Only update slots that are Pomodoro widgets at this slot index
       const macro = macros?.[assignedSlot];
       if (macro?.type !== "widget" || macro.widget?.kind !== "pomodoro") continue;
+      if (assignedSlot !== slotIndex) continue;
+
+      const snapshot = bridgeRef?.getLastSnapshot() ?? null;
+      const connStatus = bridgeRef?.getConnectionStatus() ?? "disconnected";
+      const currentState = connStatus === "connected" ? (snapshot?.state ?? "idle") : "stopped";
+      const deviceKey = getDeviceKey(instance.id);
+      const layoutSlotIndex = resolveLayoutSlotIndex(currentState, assignedSlot, deviceKey);
+      const config = getSlotConfig(currentState, layoutSlotIndex, snapshot?.tool, macros, snapshot?.approval ?? null, snapshot?.question ?? null);
+      const imageData = `data:image/svg+xml,${encodeURIComponent(config.svg)}`;
+
+      try {
+        await instance.setImage(imageData);
+        await instance.setTitle("");
+      } catch {
+        // Action may have disappeared mid-render; safe to ignore.
+      }
+    }
+  }
+
+  /**
+   * Targeted re-render for count-up timer widget slots only.
+   * Called by the countUpRegistry subscription on every tick.
+   */
+  private async renderCountUpSlots(timerId: string, state: { elapsedSeconds: number; isRunning: boolean }): Promise<void> {
+    const slotIndex = Number(timerId);
+    if (!Number.isFinite(slotIndex)) return;
+
+    // Update the render context for this slot
+    setCountUpState(slotIndex, state);
+
+    const macros = this.getMacros();
+
+    for (const instance of this.getRenderableActions().values()) {
+      const assignedSlot = getSlotIndex(instance.id);
+      if (assignedSlot === -1) continue;
+
+      // Only update slots that are count-up widgets at this slot index
+      const macro = macros?.[assignedSlot];
+      if (macro?.type !== "widget" || macro.widget?.kind !== "count-up") continue;
       if (assignedSlot !== slotIndex) continue;
 
       const snapshot = bridgeRef?.getLastSnapshot() ?? null;

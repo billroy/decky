@@ -52,7 +52,7 @@ export interface ColorOverrides {
   icon?: string;
 }
 
-export type WidgetKind = "bridge-status" | "session-activity" | "pomodoro";
+export type WidgetKind = "bridge-status" | "session-activity" | "pomodoro" | "count-up";
 
 export interface WidgetDef {
   kind: WidgetKind;

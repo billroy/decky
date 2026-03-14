@@ -17,7 +17,7 @@ type ApprovalTargetApp = "claude" | "codex";
 type LayoutDef = Record<number, SlotConfig>;
 type TargetApp = "claude" | "codex" | "chatgpt" | "cursor" | "windsurf";
 type ConnectionStatus = "connected" | "disconnected" | "connecting";
-type WidgetKind = "bridge-status" | "session-activity" | "pomodoro";
+type WidgetKind = "bridge-status" | "session-activity" | "pomodoro" | "count-up";
 interface WidgetDef {
   kind: WidgetKind;
   label?: string;
@@ -974,6 +974,25 @@ export function clearPomodoroState(slotIndex: number): void {
   pomodoroFlashFrameCounters.delete(slotIndex);
 }
 
+// --- Count-Up Timer render state ---
+interface CountUpRenderState {
+  elapsedSeconds: number;
+  isRunning: boolean;
+}
+
+const countUpRenderStates = new Map<number, CountUpRenderState>();
+
+export function setCountUpState(slotIndex: number, state: {
+  elapsedSeconds: number;
+  isRunning: boolean;
+}): void {
+  countUpRenderStates.set(slotIndex, { ...state });
+}
+
+export function clearCountUpState(slotIndex: number): void {
+  countUpRenderStates.delete(slotIndex);
+}
+
 let widgetRenderContext: {
   connectionStatus?: ConnectionStatus;
   state?: string;
@@ -990,7 +1009,31 @@ export function setWidgetRenderContext(context: {
   widgetRenderContext = { ...context };
 }
 
+function countUpSVG(slotIndex: number, widgetLabel?: string): string {
+  const p = resolveThemePaletteForSlot(currentTheme, slotIndex);
+  const themeBg = resolveColor(p.macroBg, defaultColors.bg, undefined);
+  const themeFg = resolveColor(p.macroLabel, defaultColors.text, undefined);
+  const label = widgetLabel ?? "Time";
+  const cuState = countUpRenderStates.get(slotIndex);
+
+  const elapsed = cuState?.elapsedSeconds ?? 0;
+  const running = cuState?.isRunning ?? false;
+  const timeStr = formatMMSS(elapsed);
+
+  // Running: show a small "▶" indicator in the label; Paused (non-zero): show "⏸"
+  const statusSuffix = running ? " ▶" : (elapsed > 0 ? " ⏸" : "");
+  const displayLabel = label + statusSuffix;
+  const timeFg = elapsed === 0 && !running ? themeFg + "99" : themeFg; // muted when idle
+
+  return `<svg width="144" height="144" xmlns="http://www.w3.org/2000/svg">
+    <rect width="144" height="144" rx="16" fill="${themeBg}" />
+    <text x="72" y="72" font-size="48" font-weight="bold" font-family="monospace" text-anchor="middle" dominant-baseline="central" fill="${timeFg}">${timeStr}</text>
+    <text x="72" y="126" font-size="22" font-family="sans-serif" text-anchor="middle" fill="${themeFg}">${displayLabel}</text>
+  </svg>`;
+}
+
 function widgetSVG(slotIndex: number, _label: string, widget: WidgetDef): string {
+  if (widget.kind === "count-up") return countUpSVG(slotIndex, widget.label);
   if (widget.kind === "pomodoro") return pomodoroSVG(slotIndex, widget.label);
   if (widget.kind === "session-activity") return sessionActivitySVG(slotIndex);
   // Default: bridge-status
@@ -1074,7 +1117,9 @@ function pomodoroSVG(slotIndex: number, widgetLabel?: string): string {
 
 function widgetSlot(index: number, macro: MacroInput): SlotConfig {
   const widget = macro.widget ?? { kind: "bridge-status" };
-  const action = widget.kind === "pomodoro" ? "pomodoro-add" : "widget-refresh";
+  const action = widget.kind === "pomodoro" ? "pomodoro-add"
+    : widget.kind === "count-up" ? "count-up-toggle"
+    : "widget-refresh";
   return {
     svg: widgetSVG(index, macro.label, widget),
     title: macro.label,

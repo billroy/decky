@@ -23,7 +23,7 @@ interface ColorOverrides {
   icon?: string;
 }
 
-type WidgetKind = "bridge-status" | "rate-limit" | "session-activity" | "pomodoro";
+type WidgetKind = "bridge-status" | "rate-limit" | "session-activity" | "pomodoro" | "count-up";
 type WidgetRefreshMode = "onClick" | "interval";
 
 interface WidgetDef {
@@ -260,6 +260,7 @@ function normalizeWidget(value: unknown): WidgetDef | undefined {
     obj.kind === "rate-limit" ? "rate-limit" :
     obj.kind === "session-activity" ? "session-activity" :
     obj.kind === "pomodoro" ? "pomodoro" :
+    obj.kind === "count-up" ? "count-up" :
     undefined;
   if (!kind) return undefined;
   const out: WidgetDef = { kind };
