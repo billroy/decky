@@ -738,6 +738,7 @@
     const WIDGET_KINDS = [
       { value: "bridge-status", label: "Bridge status" },
       { value: "session-activity", label: "Session activity" },
+      { value: "pomodoro", label: "Pomodoro timer" },
     ];
     const SLOT_ACTION_TYPES = {
       approve: true,
@@ -881,6 +882,7 @@
             o.widget = {
               kind: (m.widget && m.widget.kind) || "bridge-status",
             };
+            if (m.widget && m.widget.label) o.widget.label = m.widget.label;
           } else if (macroType !== "macro") {
             o.type = macroType;
             o.text = "";
@@ -1374,7 +1376,13 @@
                   "<label>Widget</label>" +
                   '<select data-widget-kind="' + i + '">' + widgetKindOptions + "</select>" +
                 "</div>" +
-              "</div>"
+              "</div>" +
+              (widgetKind === "pomodoro"
+                ? '<div class="field-row"><div class="field-group">' +
+                    "<label>Widget label</label>" +
+                    '<input type="text" data-widget-label="' + i + '" maxlength="20" placeholder="Timer" value="' + esc((macro.widget && macro.widget.label) || "") + '" />' +
+                  "</div></div>"
+                : "")
             : (macroType === "macro"
               ? '<div class="field-row"><div class="field-group">' +
                   "<label>Prompt</label>" +
@@ -1477,6 +1485,16 @@
           if (!Number.isFinite(idx) || !macros[idx]) return;
           if (!macros[idx].widget) macros[idx].widget = {};
           macros[idx].widget.kind = e.target.value || "bridge-status";
+          renderMacros();
+          markDirty();
+        });
+      });
+      list.querySelectorAll("[data-widget-label]").forEach(function (el) {
+        el.addEventListener("input", function (e) {
+          var idx = parseInt(e.target.dataset.widgetLabel, 10);
+          if (!Number.isFinite(idx) || !macros[idx]) return;
+          if (!macros[idx].widget) macros[idx].widget = {};
+          macros[idx].widget.label = e.target.value.trim() || undefined;
           markDirty();
         });
       });
