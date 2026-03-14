@@ -23,15 +23,15 @@ Method: Full README review, source-code inspection where available, cross-refere
 
 ### 1.2 Niche / Lightweight Entries
 
-| Repo | Stars | Lang | Core Concept |
-|:-----|------:|:-----|:-------------|
-| alt-core/cc-streamdeck | 0 | Python | hidapi direct (no Elgato app), risk-level coloring, multi-instance, AskUserQuestion |
-| keiya/stream-deck-claude-code | 0 | TypeScript | Stream Deck+ status monitor, iTerm2 tab switching, state persistence |
-| chfields/GhostyThemeStreamDeck | 0 | TypeScript | Ghostty terminal focus by Claude state, window priority |
-| sohumsuthar/stream-deck-mcp | 0 | TypeScript | Inverse architecture: Claude controls the Stream Deck via MCP |
-| fortunto2/streamdeck-claude | 0 | Python | Unrelated — general dashboard built *with* Claude, not an AI control surface |
-| script-repo/Claude-StreamDeck | 0 | — | Empty repository |
-| jonwraymond/claude-code-stream-deck | 0 | — | Stub only (3 files, GPL-3.0) |
+| Repo                                | Stars | Lang       | Core Concept                                                                        |
+| :---------------------------------- | ----: | :--------- | :---------------------------------------------------------------------------------- |
+| alt-core/cc-streamdeck              |     0 | Python     | hidapi direct (no Elgato app), risk-level coloring, multi-instance, AskUserQuestion |
+| keiya/stream-deck-claude-code       |     0 | TypeScript | Stream Deck+ status monitor, iTerm2 tab switching, state persistence                |
+| chfields/GhostyThemeStreamDeck      |     0 | TypeScript | Ghostty terminal focus by Claude state, window priority                             |
+| sohumsuthar/stream-deck-mcp         |     0 | TypeScript | Inverse architecture: Claude controls the Stream Deck via MCP                       |
+| fortunto2/streamdeck-claude         |     0 | Python     | Unrelated — general dashboard built *with* Claude, not an AI control surface        |
+| script-repo/Claude-StreamDeck       |     0 | —          | Empty repository                                                                    |
+| jonwraymond/claude-code-stream-deck |     0 | —          | Stub only (3 files, GPL-3.0)                                                        |
 
 ---
 
